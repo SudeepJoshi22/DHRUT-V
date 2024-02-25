@@ -1,0 +1,27 @@
+
+programs/program.o:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00000000 <reset>:
+   0:	00006393          	ori	x7,x0,0
+   4:	00106293          	ori	x5,x0,1
+   8:	00a06613          	ori	x12,x0,10
+   c:	00006513          	ori	x10,x0,0
+
+00000010 <loop>:
+  10:	00a28533          	add	x10,x5,x10
+  14:	00a3a023          	sw	x10,0(x7)
+  18:	00128293          	addi	x5,x5,1
+  1c:	00438393          	addi	x7,x7,4
+  20:	fec2c8e3          	blt	x5,x12,10 <loop>
+  24:	ffc3a303          	lw	x6,-4(x7)
+  28:	02d00593          	addi	x11,x0,45
+  2c:	00b30463          	beq	x6,x11,34 <pass>
+
+00000030 <fail>:
+  30:	000585b3          	add	x11,x11,x0
+
+00000034 <pass>:
+  34:	00030333          	add	x6,x6,x0
