@@ -37,7 +37,7 @@ reg [7:0] memory[`INSTR_MEM_SIZE-1:0];
 
 initial
 begin
-	$readmemh("programs/memory.mem",memory); // read instruction from the .mem file (byte wise)
+	$readmemh("programs/instr_mem.mem",memory); // read instruction from the .mem file (byte wise)
 	o_data <= 32'd0;
 	o_ack <= 1'b0;
 end

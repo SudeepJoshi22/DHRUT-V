@@ -92,11 +92,14 @@ begin
     	
     	`ifdef SIM
     	//only for simulation
-    	fd = $fopen("base_register_file.log","ab+");
-	$fdisplay(fd,"At time: %t\n",$time);
+    	fd = $fopen("rtl.dump","ab+");
+	$fdisplay(fd,"time: %t\t",$time);
 	for(i=0;i<32;i=i+1)
-	begin
-		$fdisplay(fd,"\tRegister %d: %h\n",i,base_reg[i]);
+	begin	
+		if(i == i_rd)
+		begin
+			$fdisplay(fd,"\tx%d: %h\n",i[4:0],base_reg[i]);
+		end
 	end
 	$fclose(fd);
 	`endif 
