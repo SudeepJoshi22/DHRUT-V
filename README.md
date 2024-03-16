@@ -31,7 +31,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/SudeepJoshi22/DHRUT-V">
-    <img src="logo.jpeg" alt="Logo" width="80" height="80">
+    <img src="logo.jpeg" alt="Logo" width="180" height="180">
   </a>
 
 <h3 align="center">DHRUT-V</h3>
