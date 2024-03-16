@@ -3,7 +3,7 @@
 `define PC_RESET 32'h00000000
 `define NOP 32'h00000013 // addi x0,x0,0
 `define MEM_DEPTH 32768
-`define SIM 1
+`define SIM 
 
 // Opcodes
 `define R  7'b0110011

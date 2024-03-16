@@ -22,6 +22,7 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
+`include "rtl/parameters.vh"
 
 module reg_file (
 	input wire clk,
@@ -90,7 +91,7 @@ begin
     begin
     	base_reg[i_rd] <= i_write_data; //synchronous write
     	
-    	`ifdef SIM
+`ifdef SIM
     	//only for simulation
     	fd = $fopen("rtl.dump","ab+");
 	$fdisplay(fd,"time: %t\t",$time);
@@ -102,7 +103,7 @@ begin
 		end
 	end
 	$fclose(fd);
-	`endif 
+`endif 
 	
     end
     
