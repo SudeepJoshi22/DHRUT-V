@@ -93,7 +93,6 @@ This is a custom designed RISC-V core, fouced on easy understading of the RISC-V
 
 ### Designed and Verified with
 
-## * [![Next][Next.js]][Next-url]
 * [![Verilog][Verilog HDL]][verilog-url]
 * [![RISCV][RISC-V]][riscv-url]
 
