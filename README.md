@@ -31,7 +31,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/SudeepJoshi22/DHRUT-V">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
+    <img src="logo.jpeg" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">DHRUT-V</h3>
@@ -154,7 +154,7 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 - [ ] Add Coverage Features, Formal Verification and Lint checks
 - [ ] Synthesize and Run on FPGA
 
-See the [open issues](https://github.com/github_username/repo_name/issues) for a full list of proposed features (and known issues).
+See the [open issues](https://github.com/SudeepJoshi22/DHRUT-V) for a full list of proposed features (and known issues).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
