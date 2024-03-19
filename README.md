@@ -83,9 +83,11 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
+<!--
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
+-->
 
-This is a custom designed RISC-V core, fouced on easy understading of the RISC-V ISA, RISC-V microarchitecture design and verified using open-source tools and RISC-V tool chains.
+This is a custom designed RISC-V core, fouced on easy understading of the RISC-V ISA, RISC-V microarchitecture design and verified using open-source and RISC-V tool chains.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -103,38 +105,36 @@ This is a custom designed RISC-V core, fouced on easy understading of the RISC-V
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+The project uses riscv-gcc cross-compiler to compile and link the tests. Spike simulator as the Instruction Set Simulator. The verilog files are compiled using iverilog and waveform is run using gtkwave tool.
+(lint checking and formal verification yet to be added, verilator and symbi-yosys to be used). Makefile has been used to run different tasks and install toolchains.
+ 
+### Install toolchains
 
-### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
 * npm
   ```sh
-  npm install npm@latest -g
+  make init
   ```
 
-### Installation
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```sh
-   git clone https://github.com/SudeepJoshi22/DHRUT-V.git
-   ```
-3. Install NPM packages
-   ```sh
-   npm install
-   ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
-   ```
+### Simulating a program on the core and Spike
 
+1. This will take the program ![test.S](https://github.com/SudeepJoshi22/DHRUT-V/blob/main/programs/test.S) as the default program to run on the core
+ ```sh
+ make core
+ ```
+2. To run your own custom program on the core
+ ```sh
+ make core TEST_PROGRAM=<your_test_name>
+ ```
+3. To run a single verilog file(test bench should be in ![test_bench](https://github.com/SudeepJoshi22/DHRUT-V/tree/main/test_bench) and verilog design should be in ![rtl](https://github.com/SudeepJoshi22/DHRUT-V/tree/main/rtl)
+ ```sh
+ make compile TB=<test_bench_name> DESIGN=<module_name>
+ ```
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 
-<!-- USAGE EXAMPLES -->
+<!-- USAGE EXAMPLES 
 ## Usage
 
 Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
@@ -143,7 +143,7 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
+-->
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -160,7 +160,7 @@ See the [open issues](https://github.com/SudeepJoshi22/DHRUT-V) for a full list 
 
 
 
-<!-- CONTRIBUTING -->
+<!-- CONTRIBUTING 
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
@@ -176,12 +176,12 @@ Don't forget to give the project a star! Thanks again!
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
+-->
 
 <!-- LICENSE -->
 ## License
 
-Distributed under the MIT License. See `LICENSE.txt` for more information.
+Distributed under the Apache License 2.0. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -198,7 +198,7 @@ Project Link: [https://github.com/SudeepJoshi22/DHRUT-V](https://github.com/Sude
 
 
 
-<!-- ACKNOWLEDGMENTS -->
+<!-- ACKNOWLEDGMENTS 
 ## Acknowledgments
 
 * []()
@@ -207,7 +207,7 @@ Project Link: [https://github.com/SudeepJoshi22/DHRUT-V](https://github.com/Sude
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
+-->
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->

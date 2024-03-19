@@ -1,6 +1,7 @@
 # Variables
 RTL_DIR := rtl/
 PROGRAMS_DIR := programs/
+TESTBENCH_DIR := test_bench/
 TEST_PROGRAM := test
 PYTHON_SCRIPT := programs/extract.py
 
@@ -30,12 +31,12 @@ $(PROGRAMS_DIR)memory.hex:
 	riscv64-unknown-elf-objdump -D $(PROGRAMS_DIR)$(TEST_PROGRAM).elf > $(PROGRAMS_DIR)$(TEST_PROGRAM).dis
 	riscv64-unknown-elf-objcopy -O verilog $(PROGRAMS_DIR)$(TEST_PROGRAM).elf $(PROGRAMS_DIR)memory.hex
 	
-compile: $(TB) $(DESIGN)
+compile: $(TESTBENCH_DIR)$(TB).v $(RTL_DIR)$(DESIGN).v
 	@echo "Compiling Verilog files..."
-	iverilog -o output.vvp $(TB) $(DESIGN)
+	iverilog -o output.vvp $(TESTBENCH_DIR)$(TB).v $(RTL_DIR)$(DESIGN).v
 	vvp output.vvp
 	@echo "Generating waveform..."
-	gtkwave waveform.vcd
+	gtkwave waveform.vcd &
 
 clean:
 	@echo "Cleaning up..."
