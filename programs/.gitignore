@@ -1,0 +1,4 @@
+*.mem
+*.elf
+*.hex
+*.dis
