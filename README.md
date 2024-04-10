@@ -110,10 +110,9 @@ The project uses riscv-gcc cross-compiler to compile and link the tests. Spike s
  
 ### Install toolchains
 
-* npm
-  ```sh
-  make init
-  ```
+ ```sh
+ make init
+ ```
 
 
 ### Simulating a program on the core and Spike
