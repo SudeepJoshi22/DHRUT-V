@@ -1,4 +1,5 @@
 *.vcd
 *.dump
 *.vvp
-
+*.txt
+*.xoj

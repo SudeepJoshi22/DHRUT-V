@@ -14,6 +14,14 @@ init:
 	
 
 core: $(PROGRAMS_DIR)memory.hex
+	@echo "YOUR PROGRAM IS EXECUTING UNDER THE SYMPHONY OF"
+	@echo "---______ _   _ ______ _   _ _____      _   _---"
+	@echo "---|  _  \ | | || ___ \ | | |_   _|    | | | |---"
+	@echo "---| | | | |_| || |_/ / | | | | |______| | | |---"
+	@echo "---| | | |  _  ||    /| | | | | |______| | | |---"
+	@echo "---| |/ /| | | || |\ \| |_| | | |      \ \_/ /---"
+	@echo "---|___/ \_| |_/\_| \_|\___/  \_/       \___/---"
+
 	@echo "Cleaning the log files..."
 	@echo "Dividing the memory file into instructon memory and data memory file"
 	python3 $(PYTHON_SCRIPT)
