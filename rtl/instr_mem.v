@@ -33,7 +33,7 @@ output reg o_ack, // acknowledge signal
 output reg [31:0] o_data //instruction code
 );
 
-reg [7:0] memory[`INSTR_MEM_SIZE-1:0];
+reg [7:0] memory[`PC_RESET + `INSTR_MEM_SIZE : `PC_RESET];
 
 initial
 begin

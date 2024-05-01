@@ -22,13 +22,11 @@ loop:
 	add a0, t0, a0    # out += cnt
 	sw a0, 0(t2)      # store out at *store_addr
 	addi t0, t0, 1    # cnt++
-	addi t2, t2, 4    # store_addr++
 
 	# Check loop condition
 	blt t0, a2, loop  # branch back if cnt < 10
 
 	# Result should be 0x2d.
-	add t2, t2, -4
 	lw t1, 0(t2)      # load the final value
 	addi a1, zero, 0x2d  # expected result (0x2d)
 	beq t1, a1, pass  # pass if as expected
@@ -50,7 +48,6 @@ pass:
 
 .align 4
 .data
-    result: .dword 0
-    tohost: .dword 0
-    fromhost: .dword 0
-
+    tohost: .word 0
+    fromhost: .word 0
+    result: .word 0

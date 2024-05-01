@@ -1,9 +1,14 @@
 `define N 32
-`define INSTR_MEM_SIZE 4000 //in bytes
-`define PC_RESET 32'h00000000
 `define NOP 32'h00000013 // addi x0,x0,0
-`define MEM_DEPTH 32768
 `define SIM 
+
+// Instruction Memory
+`define INSTR_MEM_SIZE 20'h1000 //in bytes
+`define PC_RESET 32'h80002000
+
+// Data Memory
+`define DATA_MEM_SIZE 20'h1000 //in bytes
+`define DATA_START 32'h80000000
 
 // Opcodes
 `define R  7'b0110011
@@ -58,3 +63,6 @@
 `define SRAI 3'b101 
 `define ORI 3'b110
 `define ANDI 3'b111
+
+////  CSR-Registers ////
+

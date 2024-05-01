@@ -22,6 +22,7 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
+`include "rtl/parameters.vh"
 
 module data_mem(
 input wire clk,
@@ -34,7 +35,7 @@ output wire o_rd_ack,
 output wire [31:0] o_read_data
 );
 
-reg [7:0] memory[0:`MEM_DEPTH-1]; // byte adressable
+reg [7:0] memory[`DATA_START + `DATA_MEM_SIZE : `DATA_START]; // byte adressable
 
 integer fd;
 
@@ -55,35 +56,7 @@ begin
 		$fclose(fd);
 	end
 end 
-/*
-always @(*)
-begin
-	if(~rst_n) 
-	begin
-		o_rd_ack <= 1'b0;
-		o_read_data <= 32'd0;
-	end
-	else if(i_stb)
-	begin
-		o_rd_ack <= 1'b1; // acknowledge that the data is on the bus
-    		o_read_data <= {memory[i_addr+3],memory[i_addr+2],memory[i_addr+1],memory[i_addr]}; // data is present byte wise and in little-endian format
-    		
-    		fd = $fopen("data_memory.log","ab+");
-    		if( (i_addr & 2'b11) != 2'b00 ) begin
-			$display("\nDATA MEMORY: Address %h is not 4-byte aligned!",i_addr);
-		end 	
-    		$fdisplay(fd, "Data 0x%h Read from address 0x%h", {memory[i_addr+3],memory[i_addr+2],memory[i_addr+1],memory[i_addr]}, i_addr);
-		$fclose(fd);
-	end
-	else
-	begin
-		o_rd_ack <= 1'b0;
-		o_read_data <= 32'd0;
-	end
-end
-*/
 
-// Writing
 always @(posedge clk)
 begin
 	if(i_wr_en & rst_n) // if the write enable signal is high and reset is not pressed, write to the data memory
