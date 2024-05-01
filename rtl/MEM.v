@@ -46,6 +46,10 @@ output wire [31:0] o_wr_data
 wire [31:0] is_pc_4, is_load_data;
 wire is_stall;
 
+`ifdef SIM
+integer fd;
+`endif
+
 assign is_stall = ~i_rd_ack & rst_n;
 
 assign is_pc_4 = i_pc + 32'd4; // for jal and jalr instrction, pc+4 must be stored in rd
@@ -60,5 +64,25 @@ assign o_stb = (i_opcode == `LD) ? 1'b1 : 1'b0;
 assign o_wr_en = (i_opcode == `S) ? 1'b1 : 1'b0;
 assign o_addr = (o_stb | o_wr_en | ~rst_n) ? i_result : 32'd0;
 assign o_wr_data = (i_func3[1:0] == 2'b00) ? {24'd0,i_data_store[7:0]} : ((i_func3[1:0] == 2'b01) ? {16'd0,i_data_store[15:0]} : i_data_store); // for SW, SH and SB 
+
+//only for simulation
+`ifdef SIM
+always @(posedge clk)
+begin	
+	#2
+	if(o_stb)
+	begin
+		fd = $fopen("MEM_log.csv","ab+");
+		$fwrite(fd,"mem:%h\n",o_addr);	
+		$fclose(fd);
+	end
+	else
+	begin
+		fd = $fopen("MEM_log.csv","ab+");
+		$fwrite(fd,"\t\n");	
+		$fclose(fd);
+	end
+end
+`endif
 
 endmodule

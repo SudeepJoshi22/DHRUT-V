@@ -39,7 +39,7 @@ module reg_file (
 
 //only for simulation
 `ifdef SIM
-integer i,fd;
+integer fd;
 `endif
 
 //base register file
@@ -90,24 +90,31 @@ begin
     if(is_write)
     begin
     	base_reg[i_rd] <= i_write_data; //synchronous write
-    	
-`ifdef SIM
-    	//only for simulation
-    	fd = $fopen("rtl.dump","ab+");
-	$fdisplay(fd,"time: %t\t",$time);
-	for(i=0;i<32;i=i+1)
-	begin	
-		if(i == i_rd)
-		begin
-			$fdisplay(fd,"\tx%d: %h\n",i[4:0],base_reg[i]);
-		end
-	end
-	$fclose(fd);
-`endif 
-	
-    end
-    
+    end	
 end
+
+
+//only for simulation
+`ifdef SIM
+always @(posedge clk)
+begin
+    if(is_write)
+    begin
+
+	fd = $fopen("ID_log.csv","ab+");
+	$fwrite(fd,"x%d:%h\n",i_rd,i_write_data);	
+	$fclose(fd);
+    end
+    else if(rst_n)
+    begin
+
+    	fd = $fopen("ID_log.csv","ab+");
+	$fwrite(fd,"\t\n");	
+	$fclose(fd);
+    end
+end
+`endif 
+
 
 // asynchronous read
 assign o_read_data1 = ((i_rs1 == 0) | ~i_re) ? 0 : base_reg[i_rs1]; //if x0 is being read then output zero

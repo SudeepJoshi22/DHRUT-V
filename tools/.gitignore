@@ -1,2 +1,3 @@
 riscv-dv/  
 riscv-isa-sim/
+__pycache__/

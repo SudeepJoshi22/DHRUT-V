@@ -41,6 +41,11 @@ input wire i_boj,
 input wire i_jalr
 );
 
+//only for simulation
+`ifdef SIM
+integer fd;
+`endif
+
 //internal signals and registers
 wire is_stall = !i_imem_ack & rst_n;
 wire [31:0] is_pc_increment;
@@ -86,5 +91,20 @@ begin
 		o_instr = i_inst;
 	end
 end
+
+//only for simulation
+`ifdef SIM
+always @(o_pc,o_instr)
+begin	
+	#2
+	if(rst_n & o_imem_stb)
+	begin
+		fd = $fopen("IF_log.csv","ab+");
+		$fwrite(fd,"%h,%h\n",o_pc,o_instr);
+		$fclose(fd);
+	end
+end
+
+`endif
 
 endmodule

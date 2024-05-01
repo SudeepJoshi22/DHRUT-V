@@ -16,6 +16,9 @@ _start:
 	ori t0, zero, 1   # cnt = 1
 	ori a2, zero, 10  # ten = 10
 	ori a0, zero, 0   # out = 0
+	addi x0,x1,4
+	#lw x0, 0(t2)  DON'T LOAD TO ZERO/x0 Register
+	and x0,a2,a0
 
 loop:
 	# Calculate sum
