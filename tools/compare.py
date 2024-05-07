@@ -24,24 +24,40 @@ def extract_column(filename, column_name):
     return column_values
 
 def compare_columns(file1, file2, column_to_compare):
-    """
-    Compares the contents of specified columns in two CSV files
-    """
-    column_values_1 = extract_column(file1, column_to_compare)
-    column_values_2 = extract_column(file2, column_to_compare)
+	"""
+	Compares the contents of specified columns in two CSV files
+	"""
+	column_values_1 = extract_column(file1, column_to_compare)
+	column_values_2 = extract_column(file2, column_to_compare)
 
-    # Ensure both lists have the same length
-    max_length = max(len(column_values_1), len(column_values_2))
-    column_values_1 += [''] * (max_length - len(column_values_1))
-    column_values_2 += [''] * (max_length - len(column_values_2))
+	# Ensure both lists have the same length
+	max_length = max(len(column_values_1), len(column_values_2))
+	column_values_1 += [''] * (max_length - len(column_values_1))
+	column_values_2 += [''] * (max_length - len(column_values_2))
 
-    
-    #print(column_values_1)
-    #print(column_values_2)
-    
-    if column_values_1 != column_values_2:
-        raise MismatchError(f"Contents of column '{column_to_compare}' are different between the two files")
+	# Load rows of file1
+	with open(file1, 'r', newline='') as csvfile:
+		reader = csv.reader(csvfile)
+		rows_file1 = list(reader)
 
+	# Iterate over both columns simultaneously
+
+	for i, (val1, val2, row_file1) in enumerate(zip(column_values_1, column_values_2, rows_file1)):
+		if val1!=val2:
+			log_file = open('compare.log','a')
+			#print(f"Mismatch at Instruction {i+1}: '{val1}'(spike) != '{val2}'(RTL)")
+			log_file.write(f"Mismatch at Instruction {i+1}: '{val1}'(spike) != '{val2}'(RTL)\n")
+			#print(f"{rows_file1[i+1]}(spike)")
+			log_file.write(f"{rows_file1[i+1]}(spike)\n")
+			log_file.close()
+	'''
+	# Iterate over both columns simultaneously
+	for i, (val1, val2) in enumerate(zip(column_values_1, column_values_2)):
+	if val1 != val2:
+	print(f"Mismatch at Instruction {i+1}: '{val1}' != '{val2}'")
+	'''
+	if column_values_1 != column_values_2:
+		raise MismatchError(f"Contents of column '{column_to_compare}' are different between the two files")
 
 if __name__ == "__main__":
 

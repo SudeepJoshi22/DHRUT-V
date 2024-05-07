@@ -53,6 +53,7 @@ core: $(PROGRAMS_DIR)$(TEST).S $(PROGRAMS_DIR)$(TEST).dis
 	python $(TOOLS_DIR)register_remapping.py 
 	
 	@echo "Comparing RTL and Spike Traces..."
+	rm -f compare.log
 	python $(TOOLS_DIR)compare.py
 	
 $(PROGRAMS_DIR)$(TEST).S:
