@@ -20,6 +20,7 @@
 `define JR 7'b1100111
 `define U  7'b0110111
 `define UPC 7'b0010111
+`define CSR 7'b1110011
 
 // ALU Control Signals
 `define ADD 4'b0000
@@ -65,4 +66,32 @@
 `define ANDI 3'b111
 
 ////  CSR-Registers ////
+//func3 for CSR Instructions
+`define CSRRW 3'b001
+`define CSRRS 3'b010 
+`define CSRRC 3'b011
+`define CSRRWI 3'b101
+`define CSRRSI 3'b110
+`define CSRRCI 3'b111
+
+//Machine Mode Registers
+`define mvendorid 12'hf11
+`define marchid 12'hf12
+`define mimpid 12'hf13
+`define mhartid 12'hf14
+
+`define mstatus 12'h300
+`define misa 12'h301
+`define medeleg 12'h302
+`define mideleg 12'h303
+`define mie 12'h304
+`define mtvec 12'h305
+`define mscratch 12'h340
+`define mepc 12'h341
+`define mcause 12'h342
+`define mtval 12'h343
+`define mip 12'h344
+
+
+////  Exception Codes ////
 

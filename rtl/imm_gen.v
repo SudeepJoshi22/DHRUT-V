@@ -60,7 +60,7 @@ begin
 		end
 	`J:
 		begin
-			is_imm = {i_instr[31],i_instr[19:12],i_instr[20],i_instr[30:21]};
+			is_imm = {i_instr[31],i_instr[19:12],i_instr[20],i_instr[30:21],1'b0};
 			o_imm_data = {{12{is_imm[19]}},is_imm[19:0]};
 		end
 	`JR:
