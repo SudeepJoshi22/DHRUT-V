@@ -58,7 +58,7 @@ wire is_re;
 wire is_alu_ctrl;
 wire [31:0] is_rs1_data;
 wire [31:0] is_rs2_data; 
-wire [31:0] is_imm;
+reg [31:0] is_imm;
 wire is_boj;
 reg  [31:0] d_isntr; // used for decoding
 d_instr= (is_boj==1)?NOP:i_instr; // flush this stage if is_boj==1
@@ -83,10 +83,25 @@ begin
 	o_func3<=is_func3;
 	o_alu_ctrl<=is_alu_ctrl;
 	end
+	if(i_stall) begin
+	o_ce<=0;
+	end
+end
+always@(*)
+begin
+	o_flush=is_boj;
+	o_stall=i_stall;
 end
 	
-	
-	
+branch_jump_decision branch_jump_decision_inst(.is_rs1_data(is_rs1_data),
+					       .is_rs2_data(is_rs2_data),
+					       .i_func3(is_func3),
+					       .is_opcode(is_opcode),
+					       .is_pc(i_pc),
+					       .i_imm(is_imm),
+					       .branch_flush(is_boj),
+					       .branch_pc(branch_pc),
+);
 
 
 
