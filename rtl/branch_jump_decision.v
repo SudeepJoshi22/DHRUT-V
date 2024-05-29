@@ -24,54 +24,67 @@
 `default_nettype none
 `include "rtl/parameters.vh"
 
-module branch_decision(
-input wire [31:0] i_result,
+module branch_jump_decision(
+input wire [31:0] is_rs1_data,
+input wire [31:0] is_rs2_data,
+input wire is_func3,
+input wire is_opcode,
+input wire [31:0] is_pc,
 input wire [2:0] i_func3,
-output reg o_branch
+input wire [31:0] i_imm,
+output reg branch_flush,
+output reg branch_pc,
 );
-   
+ 
 always @(*)
 begin
     case(i_func3)
         `BEQ:begin
-                 if(i_result[0] == 1'd1)
-                    o_branch = 1'b1;
+                 if(is_rs1_data==is_rs2_data)
+                   branch_pc<= is_pc + i_imm;
                  else
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
              end
         `BNE:begin
-                 if(i_result[0] == 1'd0)
-                    o_branch = 1'b1;
+                 if(is_rs1_data!=is_rs2_data)
+                   branch_pc<= is_pc + i_imm;
                  else
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
             end
         `BLT:begin
-                 if(i_result[0] == 1'd0)
-                    o_branch = 1'b1;
+                 if($signed(is_rs1_data)<$signed(is_rs2_data))
+                   branch_pc<= is_pc + i_imm;
                  else
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
             end
         `BGE:begin
-                 if(i_result[0] == 1'd1)
-                    o_branch = 1'b1;
+                 if($signed(is_rs1_data)>= $signed(is_rs2_data))
+                   branch_pc<= is_pc + i_imm;
                  else
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
             end
         `BLTU:begin
-                 if(i_result[0] == 1'd0)
-                    o_branch = 1'b1;
+                 if(is_rs1_data<=is_rs2_data)
+                   branch_pc<= is_pc + i_imm;
                  else
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
              end
         `BGEU:begin
-                 if(i_result[0] == 1'd1)
-                    o_branch = 1'b1;
+                if(is_rs1_data>=is_rs2_data)
+                   branch_pc<= is_pc + i_imm;
                  else
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
              end
         default:
-                    o_branch = 1'b0;
+                    branch_pc<=32'b0;
     endcase
+    if((is_opcode=='B)||(is_opcode=='J)||(is_opcode=='JR))
+    begin
+    	branch_flush=1'b1;
+    else
+    	branch_flush=1'b0;
+    end
+    
 end
 
 endmodule
