@@ -35,56 +35,64 @@ input wire [31:0] i_imm,
 output reg branch_flush,
 output reg branch_pc,
 );
- 
+ reg [31:0] b_pc,j_pc;
 always @(*)
 begin
     case(i_func3)
         `BEQ:begin
                  if(is_rs1_data==is_rs2_data)
-                   branch_pc<= is_pc + i_imm;
+                   b_pc<= is_pc + i_imm;
                  else
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
              end
         `BNE:begin
                  if(is_rs1_data!=is_rs2_data)
-                   branch_pc<= is_pc + i_imm;
+                   b_pc<= is_pc + i_imm;
                  else
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
             end
         `BLT:begin
                  if($signed(is_rs1_data)<$signed(is_rs2_data))
-                   branch_pc<= is_pc + i_imm;
+                   b_pc<= is_pc + i_imm;
                  else
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
             end
         `BGE:begin
                  if($signed(is_rs1_data)>= $signed(is_rs2_data))
-                   branch_pc<= is_pc + i_imm;
+                   b_pc<= is_pc + i_imm;
                  else
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
             end
         `BLTU:begin
                  if(is_rs1_data<=is_rs2_data)
-                   branch_pc<= is_pc + i_imm;
+                   b_pc<= is_pc + i_imm;
                  else
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
              end
         `BGEU:begin
                 if(is_rs1_data>=is_rs2_data)
-                   branch_pc<= is_pc + i_imm;
+                   b_pc<= is_pc + i_imm;
                  else
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
              end
         default:
-                    branch_pc<=32'b0;
+                    b_pc<=32'b0;
     endcase
     if((is_opcode=='B)||(is_opcode=='J)||(is_opcode=='JR))
     begin
     	branch_flush=1'b1;
+    end
     else
+    begin
     	branch_flush=1'b0;
     end
-    
+   if((is_opcode=='J) || (is_opcode=='JR)) begin
+   j_pc= is_pc + i_imm;
+   end
+   else begin
+   j_pc= 32'b0;
+   end
+    branch_pc = b_pc+j_pc;
 end
 
 endmodule
