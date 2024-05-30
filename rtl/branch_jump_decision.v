@@ -32,7 +32,7 @@ input wire [31:0] is_pc,
 input wire [2:0] is_func3,
 input wire [31:0] i_imm,
 output reg branch_flush,
-output reg branch_pc,
+output reg [31:0] branch_pc,
 );
  reg [31:0] b_pc,j_pc;
 always @(*)
