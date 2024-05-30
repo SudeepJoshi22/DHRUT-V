@@ -32,7 +32,7 @@ input wire [31:0] is_pc,
 input wire [2:0] is_func3,
 input wire [31:0] i_imm,
 output reg branch_flush,
-output reg [31:0] branch_pc,
+output reg [31:0] branch_pc
 );
  reg [31:0] b_pc,j_pc;
 always @(*)
@@ -77,11 +77,15 @@ begin
         default:
                     b_pc<=32'b0;
     endcase
-    if((is_opcode=='B)||(is_opcode=='J)||(is_opcode=='JR))
+    if((is_opcode=='B))
     begin
     	branch_flush=1'b1;
     end
-    else
+    else if((is_opcode=='J)||(is_opcode=='JR)
+    begin
+    	branch_flush=1'b1;
+    end
+     else 
     begin
     	branch_flush=1'b0;
     end
