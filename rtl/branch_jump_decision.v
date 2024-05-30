@@ -78,23 +78,17 @@ begin
                     b_pc<=32'b0;
     endcase
     if((is_opcode=='B))
-    begin
-    	branch_flush=1'b1;
-    end
+    	 branch_flush=1'b1;
     else if((is_opcode=='J)||(is_opcode=='JR)
-    begin
-    	branch_flush=1'b1;
-    end
-     else 
-    begin
-    	branch_flush=1'b0;
-    end
-   if((is_opcode=='J) || (is_opcode=='JR)) begin
-   j_pc= is_pc + i_imm;
-   end
-   else begin
-   j_pc= 32'b0;
-   end
+   	 branch_flush=1'b1;
+    else 
+  	 branch_flush=1'b0;
+  
+   if((is_opcode=='J) || (is_opcode=='JR)) 
+   	j_pc= is_pc + i_imm;
+   else 
+   	j_pc= 32'b0;
+   
     branch_pc = b_pc+j_pc;
 end
 
