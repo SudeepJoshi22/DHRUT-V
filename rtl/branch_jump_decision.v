@@ -79,7 +79,7 @@ begin
     endcase
     if((is_opcode== 'B))
     	 branch_flush=1'b1;
-    else if((is_opcode=='J)||(is_opcode=='JR)
+    else if((is_opcode== 'J)||(is_opcode== 'JR)
    	 branch_flush=1'b1;
     else 
   	 branch_flush=1'b0;
