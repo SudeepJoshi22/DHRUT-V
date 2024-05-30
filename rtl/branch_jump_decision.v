@@ -77,19 +77,19 @@ begin
         default:
                     b_pc<=32'b0;
     endcase
-    if((is_opcode == 'B))
-    	 branch_flush=1'b1;
-    else if((is_opcode == 'J)||(is_opcode == 'JR)
-   	 branch_flush=1'b1;
-    else 
-  	 branch_flush=1'b0;
-  
-   if((is_opcode == 'J) || (is_opcode == 'JR)) 
-   	j_pc= is_pc + i_imm;
-   else 
-   	j_pc= 32'b0;
-   
-    branch_pc = b_pc+j_pc;
+    if (is_opcode == 'B)
+    branch_flush = 1;
+else if (is_opcode == 'J || is_opcode == 'JR)
+    branch_flush = 1;
+else
+    branch_flush = 0;
+
+if (is_opcode == 'J || is_opcode == 'JR)
+    j_pc = is_pc + i_imm;
+else
+    j_pc = 32'b0;
+
+branch_pc = b_pc + j_pc;
 end
 
 endmodule
