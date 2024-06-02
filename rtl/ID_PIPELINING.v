@@ -26,6 +26,7 @@
 `include "rtl/reg_file.v"
 `include "rtl/imm_gen.v"
 `include "rtl/control_unit.v"
+`include "rtl/branch_jump_decision.v"
 
 module ID(
 input wire clk,
@@ -42,8 +43,7 @@ output reg [6:0] o_opcode, // opcode of the current instruction
 output reg [2:0] o_func3, // func3 of the current instruction
 output reg [3:0] o_alu_ctrl, // ALU Control signals  
 output reg [31:0] o_pc,// PC for the next stage
-output reg branch_flush, // Flush the IF stage
-output reg branch_pc, 
+output reg [31:0] branch_pc, 
 // pipeline control
 input wire i_stall, // stall signal from EX stage 
 output reg o_stall, // stall signal to IF stage
@@ -55,16 +55,18 @@ wire [4:0] is_rs1, is_rs2, is_rd;
 wire [6:0] is_opcode;
 wire [2:0] is_func3;
 wire is_re;
-wire is_alu_ctrl;
+wire [3:0] is_alu_ctrl;
 wire [31:0] is_rs1_data;
 wire [31:0] is_rs2_data; 
-reg [31:0] is_imm;
+wire  [31:0] is_imm;
 wire is_boj;
-reg  [31:0] d_isntr; // used for decoding
-d_instr= (is_boj==1)?NOP:i_instr; // flush this stage if is_boj==1
+reg [31:0] d_isntr; // used for decoding
+always@(*) begin
+d_instr = (is_boj==1) ? `NOP : i_instr; // flush this stage if is_boj==1
+end
 // Decode of instructions
-assign is_rs1 = d_instr[19:15];
-assign is_rs2 = d_instr[24:20];
+assign is_rs1_data = d_instr[19:15];
+assign is_rs2_data = d_instr[24:20];
 assign is_rd = d_instr[11:7];
 assign is_opcode = d_instr[6:0];
 assign is_func3 = d_instr[14:12];
@@ -72,7 +74,7 @@ assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); /
 
 always@(posedge clk, negedge rst_n)
 begin
-	if(rst_n) begin
+	if(~rst_n) begin
 	o_ce<=0;
 	end
 	else if( i_ce && !(is_boj||i_stall) )begin // pipe through signals when stage is enabled and not stalled
@@ -83,9 +85,12 @@ begin
 	o_func3<=is_func3;
 	o_alu_ctrl<=is_alu_ctrl;
 	end
-	if(i_stall) begin
+      
+       if(i_stall) begin
 	o_ce<=0;
 	end
+	else o_ce<=i_ce;
+	
 end
 always@(*)
 begin
@@ -93,14 +98,15 @@ begin
 	o_stall=i_stall;
 end
 	
-branch_jump_decision branch_jump_decision_inst(.is_rs1_data(is_rs1_data),
-					       .is_rs2_data(is_rs2_data),
-					       .i_func3(is_func3),
-					       .is_opcode(is_opcode),
-					       .is_pc(i_pc),
-					       .i_imm(is_imm),
-					       .branch_flush(is_boj),
-					       .branch_pc(branch_pc),
+branch_jump_decision dut_inst(		       
+			.is_rs1_data(is_rs1_data),
+		   	.is_rs2_data(is_rs2_data),
+		        .is_func3(is_func3),
+		        .is_opcode(is_opcode),
+		        .is_pc(i_pc),
+		        .i_imm(is_imm),
+		        .branch_flush(is_boj),
+		        .branch_pc(branch_pc)
 );
 
 
@@ -119,7 +125,7 @@ reg_file reg_file_inst(
 );
 
 imm_gen imm_gen_inst (
-  .i_instr(i_instr),
+  .i_instr(d_instr),
   .o_imm_data(is_imm)
 );
 
