@@ -37,7 +37,7 @@ output reg [31:0] branch_pc
  reg [31:0] b_pc,j_pc;
 always @(*)
 begin
-    case(i_func3)
+    case(is_func3)
         `BEQ:begin
                  if(is_rs1_data==is_rs2_data)
                    b_pc<= is_pc + i_imm;
@@ -51,7 +51,7 @@ begin
                     b_pc<=32'b0;
             end
         `BLT:begin
-                 if($signed(is_rs1_data)<$signed(is_rs2_data))
+                 if($signed(is_rs1_data) < $signed(is_rs2_data))
                    b_pc<= is_pc + i_imm;
                  else
                     b_pc<=32'b0;
@@ -77,20 +77,21 @@ begin
         default:
                     b_pc<=32'b0;
     endcase
-    if (is_opcode == 'B')
+    if (is_opcode == `B && b_pc!=32'b0)
     branch_flush = 1;
-else if (is_opcode == 'J' || is_opcode == 'JR')
-    branch_flush = 1;
-else
-    branch_flush = 0;
+else if (is_opcode == `J || is_opcode == `JR)
+    	branch_flush = 1;
+     else
+    	branch_flush = 0;
 
-if (is_opcode == 'J' || is_opcode == 'JR')
+if (is_opcode == `J )
     j_pc = is_pc + i_imm;
-else
-    j_pc = 32'b0;
+else if(is_opcode == `JR)
+    j_pc = is_rs1_data + i_imm;
+    else
+    j_pc=0;
 
 branch_pc = b_pc + j_pc;
-
 end
 
 endmodule
