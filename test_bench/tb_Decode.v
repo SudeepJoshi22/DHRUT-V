@@ -23,7 +23,7 @@ module tb_Decode();
   wire o_ce;
 
   // Instantiate the module
-  ID_PIPELINING inst(
+  ID inst(
     .clk(clk),
     .rst_n(rst_n),
     .i_instr(i_instr),
