@@ -37,7 +37,8 @@ output reg [31:0] branch_pc
  reg [31:0] b_pc,j_pc;
 always @(*)
 begin
-    case(is_func3)
+	if (is_opcode == `B) begin
+        case(is_func3)
         `BEQ:begin
                  if(is_rs1_data==is_rs2_data)
                    b_pc<= is_pc + i_imm;
@@ -77,6 +78,7 @@ begin
         default:
                     b_pc<=32'b0;
     endcase
+   end
     if (is_opcode == `B && b_pc!=32'b0)
     branch_flush = 1;
 else if (is_opcode == `J || is_opcode == `JR)
