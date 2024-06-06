@@ -92,6 +92,40 @@ begin
     	base_reg[i_rd] <= i_write_data; //synchronous write
     end	
 end
+always @(posedge clk)
+begin
+        base_reg[1] = 32'd0;
+	base_reg[2] = 32'd0;
+	base_reg[3] = 32'd1;
+	base_reg[4] = 32'd2;
+	base_reg[5] = 32'd3;
+	base_reg[6] = 32'd4;
+	base_reg[7] = 32'd5;
+	base_reg[8] = 32'd6;
+	base_reg[9] = 32'd7;
+	base_reg[10] = 32'd8;
+	base_reg[11] = 32'd9;
+	base_reg[12] = 32'd10;
+	base_reg[13] = 32'd11;
+	base_reg[14] = 32'd12;
+	base_reg[15] = 32'd13;
+	base_reg[16] = 32'd14;
+	base_reg[17] = 32'd15;
+	base_reg[18] = 32'd0;
+	base_reg[19] = 32'd0;
+	base_reg[20] = 32'd0;
+	base_reg[21] = 32'd0;
+	base_reg[22] = 32'd0;
+	base_reg[23] = 32'd0;
+	base_reg[24] = 32'd0;
+	base_reg[25] = 32'd0;
+	base_reg[26] = 32'd0;
+	base_reg[27] = 32'd0;
+	base_reg[28] = 32'd0;
+	base_reg[29] = 32'd0;
+	base_reg[30] = 32'd0;
+	base_reg[31] = 32'd0;
+end
 
 
 //only for simulation
