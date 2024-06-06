@@ -34,49 +34,51 @@ input wire [31:0] i_imm,
 output reg branch_flush,
 output reg [31:0] branch_pc
 );
- reg [31:0] b_pc,j_pc;
+ 
+reg [31:0] b_pc,j_pc;
+
 always @(*)
 begin
 	if (is_opcode == `B) begin
         case(is_func3)
-        `BEQ:begin
-                 if(is_rs1_data==is_rs2_data)
-                   b_pc<= is_pc + i_imm;
-                 else
-                    b_pc<=32'b0;
-             end
-        `BNE:begin
-                 if(is_rs1_data!=is_rs2_data)
-                   b_pc<= is_pc + i_imm;
-                 else
-                    b_pc<=32'b0;
-            end
-        `BLT:begin
-                 if($signed(is_rs1_data) < $signed(is_rs2_data))
-                   b_pc<= is_pc + i_imm;
-                 else
-                    b_pc<=32'b0;
-            end
-        `BGE:begin
-                 if($signed(is_rs1_data)>= $signed(is_rs2_data))
-                   b_pc<= is_pc + i_imm;
-                 else
-                    b_pc<=32'b0;
-            end
-        `BLTU:begin
-                 if(is_rs1_data<=is_rs2_data)
-                   b_pc<= is_pc + i_imm;
-                 else
-                    b_pc<=32'b0;
-             end
-        `BGEU:begin
-                if(is_rs1_data>=is_rs2_data)
-                   b_pc<= is_pc + i_imm;
-                 else
-                    b_pc<=32'b0;
-             end
-        default:
-                    b_pc<=32'b0;
+       	 `BEQ:begin
+       	          if(is_rs1_data==is_rs2_data)
+       	            b_pc<= is_pc + i_imm;
+       	          else
+       	             b_pc<=32'b0;
+       	      end
+       	 `BNE:begin
+       	          if(is_rs1_data!=is_rs2_data)
+       	            b_pc<= is_pc + i_imm;
+       	          else
+       	             b_pc<=32'b0;
+       	     end
+       	 `BLT:begin
+       	          if($signed(is_rs1_data) < $signed(is_rs2_data))
+       	            b_pc<= is_pc + i_imm;
+       	          else
+       	             b_pc<=32'b0;
+       	     end
+       	 `BGE:begin
+       	          if($signed(is_rs1_data)>= $signed(is_rs2_data))
+       	            b_pc<= is_pc + i_imm;
+       	          else
+       	             b_pc<=32'b0;
+       	     end
+       	 `BLTU:begin
+       	          if(is_rs1_data<=is_rs2_data)
+       	            b_pc<= is_pc + i_imm;
+       	          else
+       	             b_pc<=32'b0;
+       	      end
+       	 `BGEU:begin
+       	         if(is_rs1_data>=is_rs2_data)
+       	            b_pc<= is_pc + i_imm;
+       	          else
+       	             b_pc<=32'b0;
+       	      end
+       	 default:
+       	             b_pc<=32'b0;
     endcase
    end
     if (is_opcode == `B && b_pc!=32'b0)
@@ -93,7 +95,7 @@ else if(is_opcode == `JR)
     else
     j_pc=0;
 
-branch_pc = b_pc + j_pc;
+branch_pc = b_pc + j_pc; // Not advisable to code like this
 end
 
 endmodule

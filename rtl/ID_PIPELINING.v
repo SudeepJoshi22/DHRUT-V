@@ -62,10 +62,13 @@ wire  [31:0] is_imm;
 wire is_boj;
 reg [31:0] d_instr; // used for decoding
 wire [31:0] is_branch_pc;
+
+// Internal Flush Condition
 always@(*)
 begin
  d_instr = (is_boj==1) ? `NOP : i_instr; // flush this stage if is_boj==1
 end
+
 // Decode of instructions
 assign is_rs1= d_instr[19:15];
 assign is_rs2= d_instr[24:20];
@@ -74,6 +77,7 @@ assign is_opcode = d_instr[6:0];
 assign is_func3 = d_instr[14:12];
 assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
 
+//Pipeing the signals to next stage
 always@(posedge clk)
 begin
 	if(~rst_n) begin
