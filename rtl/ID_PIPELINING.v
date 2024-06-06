@@ -60,19 +60,21 @@ wire [31:0] is_rs1_data;
 wire [31:0] is_rs2_data; 
 wire  [31:0] is_imm;
 wire is_boj;
-reg [31:0] d_isntr; // used for decoding
-always@(*) begin
-d_instr = (is_boj==1) ? `NOP : i_instr; // flush this stage if is_boj==1
+reg [31:0] d_instr; // used for decoding
+wire [31:0] is_branch_pc;
+always@(*)
+begin
+ d_instr = (is_boj==1) ? `NOP : i_instr; // flush this stage if is_boj==1
 end
 // Decode of instructions
-assign is_rs1_data = d_instr[19:15];
-assign is_rs2_data = d_instr[24:20];
+assign is_rs1= d_instr[19:15];
+assign is_rs2= d_instr[24:20];
 assign is_rd = d_instr[11:7];
 assign is_opcode = d_instr[6:0];
 assign is_func3 = d_instr[14:12];
 assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
 
-always@(posedge clk, negedge rst_n)
+always@(posedge clk)
 begin
 	if(~rst_n) begin
 	o_ce<=0;
@@ -96,6 +98,7 @@ always@(*)
 begin
 	o_flush=is_boj;
 	o_stall=i_stall;
+	branch_pc=is_branch_pc;
 end
 	
 branch_jump_decision dut_inst(		       
@@ -106,7 +109,7 @@ branch_jump_decision dut_inst(
 		        .is_pc(i_pc),
 		        .i_imm(is_imm),
 		        .branch_flush(is_boj),
-		        .branch_pc(branch_pc)
+		        .branch_pc(is_branch_pc)
 );
 
 
@@ -116,8 +119,8 @@ reg_file reg_file_inst(
 	.rst_n(rst_n),
 	.i_re(is_re),
 	.i_wr(i_wr),
-	.i_rs1(is_rs1_data),
-	.i_rs2(is_rs2_data),
+	.i_rs1(is_rs1),
+	.i_rs2(is_rs2),
 	.i_rd(is_rd),
 	.i_write_data(i_write_data),
 	.o_read_data1(is_rs1_data),
