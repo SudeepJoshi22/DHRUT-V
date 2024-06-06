@@ -16,7 +16,7 @@ module tb_Decode();
   wire [2:0] o_func3;
   wire [3:0] o_alu_ctrl;
   wire [31:0] o_pc;
-  reg  [31:0] branch_pc;
+  wire  [31:0] branch_pc;
   reg i_stall; 
   wire o_stall; 
   wire o_flush; 
@@ -53,28 +53,33 @@ module tb_Decode();
     $dumpvars(0, tb_Decode);
     clk = 0;
     rst_n = 0;
-    i_instr = 32'h7FF00293;
+    i_instr = 32'h18431663;
     i_write_data = 32'h0;
     i_pc = 32'h0;
     i_wr = 0;
-
+    i_ce=1;
+    i_stall=0;
     #10; // Wait for a few clock cycles before toggling reset
 
     rst_n = 1;
     #20; // Provide some time after releasing reset
 
     // Test cases with instructions
-   i_instr=32'h00218333; //add
-   #10
-   i_instr=32'h18431663; // bne
-   #10
-   i_instr=32'h00840393; //addi
-   #10
-   i_instr=32'h00828467; //jalr
+  //  i_ce=1;
+  //  i_instr=32'h00218333; //add x6,x3,x2
+  // #10
+  //  i_ce=1;
+  // i_instr=32'h18431663; // bne x6,x4,12
+  // #10
+    //i_ce=1;
+  // i_instr=32'h00840393; //addi x7,x5,8
+  // #10
+    //i_ce=1;
+  // i_instr=32'h00828467; //jalr x8,8(x5)
     // Add more test cases if needed
 
     // Finish the simulation
-    #100;
+    #200;
     $finish;
   end
 
