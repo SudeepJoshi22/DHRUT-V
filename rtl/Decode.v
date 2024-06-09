@@ -63,6 +63,20 @@ wire is_boj;
 reg [31:0] d_instr; // used for decoding
 wire [31:0] is_branch_pc;
 
+
+// Debug Display Statements
+always @(posedge clk) begin
+    $display("Time: %0t", $time);
+    $display("is_rs1: %b, is_rs2: %b, is_rd: %b", is_rs1, is_rs2, is_rd);
+    $display("is_opcode: %b, is_func3: %b", is_opcode, is_func3);
+    $display("is_re: %b, is_alu_ctrl: %b", is_re, is_alu_ctrl);
+    $display("is_rs1_data: %h, is_rs2_data: %h", is_rs1_data, is_rs2_data);
+    $display("is_imm: %h, is_boj: %b", is_imm, is_boj);
+    $display("d_instr: %h", d_instr);
+    $display("is_branch_pc: %h", is_branch_pc);
+end
+
+
 // Internal Flush Condition
 always@(*)
 begin
