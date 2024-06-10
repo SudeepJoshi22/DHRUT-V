@@ -60,16 +60,18 @@ module tb_Decode();
     #10 
     rst_n = 1;
     #10
-    i_instr=32'h00218333; //add x6,x3,x2
+    i_instr=32'h00000013; //add x6,x3,x2
     i_write_data = 32'h0;
     i_pc = 32'h0;
     i_wr = 0;
     i_ce=1;
     i_stall=0;    
     #20
-    i_instr=32'h00840393; //addi x7,x5,8
+   i_instr= 32'h00840393; //addi x7,x5,8
     #20
     i_instr=32'h00431663; // bne x6,x4,12
+    #10
+    
   
     #200;
     $finish;
