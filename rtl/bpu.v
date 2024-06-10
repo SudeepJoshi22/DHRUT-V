@@ -25,7 +25,7 @@
 
 // Branch History Table Configs
 `define TABLE_DEPTH 256
-`define INDEX_WIDTH $clog2(TABLE_DEPTH)
+`define INDEX_WIDTH 8
 
 module bpu(
 input wire clk,
@@ -35,13 +35,13 @@ input wire [`N-1:0] i_branch_pc, // PC of the branch instruction
 input wire [`N-1:0] i_offset_pc, // PC of the instruction to which the branch is jumping to(will come from ID stage)
 input wire i_actually_taken,	 // Result of the branch, from ID stage(DHRUT-V) 
 output wire o_prediction,
-output wire o_predicted_pc
+output wire [`N-1:0] o_predicted_pc
 );
 
 // Branch History Table
-reg [`N-1:0] branch_pc [0:TABLE_DEPTH-1];
-reg [`N-1:0] offset_pc [0:TABLE_DEPTH-1];
-reg [1:0] global_history [0:TABLE_DEPTH-1];
+reg [`N-1:0] branch_pc [0:`TABLE_DEPTH-1];
+reg [`N-1:0] offset_pc [0:`TABLE_DEPTH-1];
+reg [1:0] global_history [0:`TABLE_DEPTH-1];
 integer i;
 
 // Internal Wires
@@ -62,16 +62,13 @@ assign is_hit = (i_branch_pc == branch_pc[is_index]);
 
 // If hit -> give prediction -> update the table when the actual decision comes from ID
 // IF miss -> predict as WNT(defult reset entry to FSM) -> update the table
-always @(*) begin
-	ir_current_state = global_history[index];
-end	
 
-assign o_prediction = (ir_current_state == `WT) || (ir_current_state == `ST); // predict taken if the state is either WT or ST
+assign o_prediction = (global_history[ir_index] == `WT) || (global_history[ir_index] == `ST); // predict taken if the state is either WT or ST
 
 // BHT Reset
 always @(posedge clk) begin
 	if(~rst_n) begin 
-		for(i=0; i<TABLE_DEPTH; i=i+1) begin
+		for(i=0; i<`TABLE_DEPTH; i=i+1) begin
 			branch_pc[i] <= 0;
 			offset_pc[i] <= 0;
 			global_history[i] <= `WNT;
@@ -111,8 +108,8 @@ always @(posedge clk) begin
 		offset_pc[ir_index] <= i_offset_pc;
 	end
 	else if( ir_hit && ir_is_branch) begin // If it is a hit and the instruction is actually branch, upate the global history
-		global_history[ir_index] <= i_actually_taken ? (global_history[ir_index] == ST ? ST : global_history[ir_index] + 1) : 
-                                            		       (global_history[ir_index] == SNT ? SNT : global_history[ir_index] - 1);
+		global_history[ir_index] <= i_actually_taken ? (global_history[ir_index] == `ST ? `ST : global_history[ir_index] + 1) : 
+                                            		       (global_history[ir_index] == `SNT ? `SNT : global_history[ir_index] - 1);
 	end
 	else begin // If it is not a branch, then do nothing
 		branch_pc[ir_index] <= branch_pc[ir_index];
