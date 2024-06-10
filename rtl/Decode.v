@@ -62,7 +62,7 @@ wire  [31:0] is_imm;
 wire is_boj;
 reg [31:0] d_instr; // used for decoding
 wire [31:0] is_branch_pc;
-
+wire [31:0] is_pc;
 
 // Debug Display Statements
 always @(posedge clk) begin
@@ -80,7 +80,10 @@ end
 // Internal Flush Condition
 always@(*)
 begin
- d_instr = (is_boj==1) ? `NOP : i_instr; // flush this stage if is_boj==1
+	if(is_boj == 0) begin
+		d_instr <= i_instr;	
+	end
+	
 end
 
 // Decode of instructions
@@ -90,6 +93,7 @@ assign is_rd = d_instr[11:7];
 assign is_opcode = d_instr[6:0];
 assign is_func3 = d_instr[14:12];
 assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
+assign is_pc = i_pc;
 
 //Pipeing the signals to next stage
 always@(posedge clk)
@@ -97,7 +101,7 @@ begin
 	if(~rst_n) begin
 	o_ce<=0;
 	end
-	else if( i_ce && !(is_boj||i_stall) )begin // pipe through signals when stage is enabled and not stalled
+	else if( i_ce && !(i_stall) )begin // pipe through signals when stage is enabled and not stalled
 	o_rs1_data<=is_rs1_data;
 	o_rs2_data<=is_rs2_data;
 	o_imm_data<=is_imm;
@@ -124,7 +128,7 @@ branch_jump_decision dut_inst(
 		   	.is_rs2_data(is_rs2_data),
 		        .is_func3(is_func3),
 		        .is_opcode(is_opcode),
-		        .is_pc(i_pc),
+		        .is_pc(is_pc),
 		        .i_imm(is_imm),
 		        .branch_flush(is_boj),
 		        .branch_pc(is_branch_pc)
