@@ -75,10 +75,10 @@ compile: $(TESTBENCH_DIR)$(TB).v $(RTL_DIR)$(DESIGN).v
 	iverilog -o output.vvp $(TESTBENCH_DIR)$(TB).v $(RTL_DIR)$(DESIGN).v
 	vvp output.vvp
 	@echo "Generating waveform..."
-	gtkwave waveform.vcd &
+	#gtkwave waveform.vcd &
 
 clean:
 	@echo "Cleaning up..."
-	rm -f *.vvp *.log *.csv *.vcd $(PROGRAMS_DIR)*.elf $(PROGRAMS_DIR)*.hex $(PROGRAMS_DIR)*.dis *.dump $(PROGRAMS_DIR)*.mem
+	rm -f *.vvp *.log *.csv *.vcd $(TESTBENCH_DIR)*.swp $(PROGRAMS_DIR)*.elf $(PROGRAMS_DIR)*.hex $(PROGRAMS_DIR)*.dis *.dump $(PROGRAMS_DIR)*.mem $(RTL_DIR)*.swp
 
 .PHONY: all core compile clean

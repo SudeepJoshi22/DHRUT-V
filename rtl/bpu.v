@@ -1,5 +1,5 @@
 /*
-   Copyright 2024 Sudeep Joshi Et al.
+   Copyright 2024 Sudeep Joshi
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -51,19 +51,20 @@ wire is_hit;
 reg [1:0] ir_next_state;
 reg [`N-1:0] ir_branch_pc;
 reg ir_hit;
-reg [`INDEX_WIDTH-1] ir_index;
+reg [`INDEX_WIDTH-1:0] ir_index;
 reg ir_is_branch;
 
 // Index the table based on the PC
 assign is_index = i_branch_pc[`INDEX_WIDTH-1:0];
 
 // Check if an BHT entry exists for the index
-assign is_hit = (i_branch_pc == branch_pc[is_index]);
+assign is_hit = (i_branch_pc == branch_pc[is_index]) & i_is_branch;
 
 // If hit -> give prediction -> update the table when the actual decision comes from ID
 // IF miss -> predict as WNT(defult reset entry to FSM) -> update the table
 
-assign o_prediction = (global_history[ir_index] == `WT) || (global_history[ir_index] == `ST); // predict taken if the state is either WT or ST
+assign o_prediction = (ir_hit && ir_is_branch) ? ((global_history[ir_index] == `WT) || (global_history[ir_index] == `ST)) : 'dz; // predict taken if the state is either WT or ST
+assign o_predicted_pc = (ir_hit && ir_is_branch) ? offset_pc[ir_index] : 'dz ;
 
 // BHT Reset
 always @(posedge clk) begin
@@ -74,9 +75,6 @@ always @(posedge clk) begin
 			global_history[i] <= `WNT;
 		end
 	end	
-	else if(is_hit) begin
-		
-	end
 end
 
 //  Buffer the information about the branch to update the table after one clock cycle
@@ -87,35 +85,41 @@ always @(posedge clk) begin
 		ir_index <= 0;
 		ir_is_branch <= 1'b0;
 	end
-	else if(is_hit) begin
+	else if(i_is_branch) begin
 		ir_branch_pc <= i_branch_pc;
 		ir_hit <= is_hit;	
 		ir_index <= is_index;
 		ir_is_branch <= i_is_branch;
 	end
 	else begin
-		ir_branch_pc <= ir_branch_pc;
-		ir_hit <= ir_hit;
-		ir_index <= ir_index;
-		ir_is_branch <= ir_is_branch;
+		ir_branch_pc <= 'd0;
+		ir_hit <= 'd0;
+		ir_index <= 'd0;
+		ir_is_branch <= 'd0;
 	end
 end
 
 // Update the table
+
 always @(posedge clk) begin
 	if((~ir_hit) && ir_is_branch ) begin // If it is a miss and the instruction is actually branch, create new entry in the table
 		branch_pc[ir_index] <= ir_branch_pc;
 		offset_pc[ir_index] <= i_offset_pc;
+		$display("Cycle %0t: New branch entry created at index %0d with branch_pc = %h, offset_pc = %h", 
+		          $time, ir_index, ir_branch_pc, i_offset_pc);
 	end
-	else if( ir_hit && ir_is_branch) begin // If it is a hit and the instruction is actually branch, upate the global history
-		global_history[ir_index] <= i_actually_taken ? (global_history[ir_index] == `ST ? `ST : global_history[ir_index] + 1) : 
-                                            		       (global_history[ir_index] == `SNT ? `SNT : global_history[ir_index] - 1);
+	else if( ir_hit && ir_is_branch) begin // If it is a hit and the instruction is actually branch, update the global history
+		global_history[ir_index] <= i_actually_taken ? 
+                                    (global_history[ir_index] == `ST ? `ST : global_history[ir_index] + 1) : 
+                                    (global_history[ir_index] == `SNT ? `SNT : global_history[ir_index] - 1);
+		$display("Cycle %0t: Branch hit at index %0d. branch_pc = %h, Updated global history = %d", 
+		          $time, ir_index, ir_branch_pc, global_history[ir_index]);
 	end
 	else begin // If it is not a branch, then do nothing
 		branch_pc[ir_index] <= branch_pc[ir_index];
 		offset_pc[ir_index] <= offset_pc[ir_index];
 		global_history[ir_index] <= global_history[ir_index];
+		$display("Cycle %0t: Non-branch instruction at index %0d. No updates made.", $time, ir_index);
 	end
 end
-
 endmodule
