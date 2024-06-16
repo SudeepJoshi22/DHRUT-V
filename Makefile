@@ -75,7 +75,7 @@ compile: $(TESTBENCH_DIR)$(TB).v $(RTL_DIR)$(DESIGN).v
 	iverilog -o output.vvp $(TESTBENCH_DIR)$(TB).v $(RTL_DIR)$(DESIGN).v
 	vvp output.vvp
 	@echo "Generating waveform..."
-	gtkwave waveform.vcd &
+        #gtkwave waveform.vcd &
 
 clean:
 	@echo "Cleaning up..."
