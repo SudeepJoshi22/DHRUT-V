@@ -20,7 +20,7 @@
 module Fetch(
 input wire clk,
 input wire rst_n,
-output wire [31:0] o_pc, //Current PC value
+output reg [31:0] o_pc, //Current PC value
 output reg [31:0] o_instr,
 //Instruction memory interface
 input wire [31:0] i_inst, //instruction code received from the instruction memory
@@ -31,11 +31,13 @@ output wire i_imem_rd,
 output reg [31:0] o_iaddr, //instruction address
 //Change in PC
 input wire i_boj,
-input wire [31:0] i_boj_offset_pc,
+input wire [31:0] i_boj_pc,
 input wire i_trap,
 input wire i_trap_pc,
+//Branch Prediction
+output reg o_prediction,
 //Pipeline control
-output wire o_ce,
+output reg o_ce,
 input wire i_stall,
 input wire i_flush
 );
@@ -49,51 +51,30 @@ integer fd;
 wire is_stall;
 wire [31:0] is_pc_increment;
 wire is_branch;
+wire is_prediction;
+wire [31:0] is_predicted_pc;
 
 //Internal Registers
 reg [31:0] pc;
+reg [31:0] ir_inst;
 
-assign is_stall = !i_imem_ack & rst_n;
-assign is_pc_increment = i_boj ? i_imm : ( is_stall ? 32'd0 : 32'd4 );
-assign o_pc = pc;
+// If the instruction is branch or not
+assign is_branch = (i_inst[6:0] == `B);
 
-assign is_branch = (i_inst[6:0] == `B); // check if the instruction is branch or not, for BPU
 
-always @(posedge clk)
-begin
-	if(~rst_n)
-	begin
+// PC Change Logic
+always @(posedge clk) begin
+	if(~rst_n) begin
 		pc <= `PC_RESET;
 	end
-	else if(is_stall)
-	begin
-		pc <= pc;
+	else if(is_branch & is_prediction) begin
+		pc <= is_predicted_pc;
 	end
-	else if(i_jalr)
-	begin
-		pc <= i_result &~1;	
+	else if(i_trap) begin
+		pc <= i_trap_pc;
 	end
-	else
-	begin
-		pc <= pc + is_pc_increment;
-	end
-end
-
-always @(*)
-begin
-	if(~rst_n)
-	begin
-		o_iaddr = 32'd0;
-		o_imem_stb = 1'b0;
-		o_instr = `NOP;
-	end
-	else if(is_stall)
-		o_instr = `NOP;
-	else
-	begin
-		o_iaddr = pc;
-		o_imem_stb = 1'b1;
-		o_instr = i_inst;
+	else begin
+		pc <= pc + 32'd4;
 	end
 end
 
@@ -103,10 +84,10 @@ bpu branch_prediction_unit (
 	.rst_n(rst_n),
 	.i_is_branch(is_branch),
 	.i_branch_pc(pc),
-	.i_offset_pc(i_boj_offset_pc),
+	.i_offset_pc(i_boj_pc),
 	.i_actually_taken(i_boj),
-	.o_prediction(prediction),
-	.o_predicted_pc(predicted_pc)
+	.o_prediction(is_prediction),
+	.o_predicted_pc(is_predicted_pc)
 );
 
 //only for simulation

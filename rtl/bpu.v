@@ -63,7 +63,7 @@ assign is_hit = (i_branch_pc == branch_pc[is_index]) & i_is_branch;
 // If hit -> give prediction -> update the table when the actual decision comes from ID
 // IF miss -> predict as WNT(defult reset entry to FSM) -> update the table
 
-assign o_prediction = (ir_hit && ir_is_branch) ? ((global_history[ir_index] == `WT) || (global_history[ir_index] == `ST)) : 'dz; // predict taken if the state is either WT or ST
+assign o_prediction = (ir_hit && ir_is_branch) ? ((global_history[ir_index] == `WT) || (global_history[ir_index] == `ST)) : 'd0; // predict taken if the state is either WT or ST
 assign o_predicted_pc = (ir_hit && ir_is_branch) ? offset_pc[ir_index] : 'dz ;
 
 // BHT Reset
@@ -105,21 +105,25 @@ always @(posedge clk) begin
 	if((~ir_hit) && ir_is_branch ) begin // If it is a miss and the instruction is actually branch, create new entry in the table
 		branch_pc[ir_index] <= ir_branch_pc;
 		offset_pc[ir_index] <= i_offset_pc;
-		$display("Cycle %0t: New branch entry created at index %0d with branch_pc = %h, offset_pc = %h", 
-		          $time, ir_index, ir_branch_pc, i_offset_pc);
+`ifdef SIM
+		$display("Cycle %0t: New branch entry created at index %0d with branch_pc = %h, offset_pc = %h", $time, ir_index, ir_branch_pc, i_offset_pc);
+`endif
 	end
 	else if( ir_hit && ir_is_branch) begin // If it is a hit and the instruction is actually branch, update the global history
 		global_history[ir_index] <= i_actually_taken ? 
                                     (global_history[ir_index] == `ST ? `ST : global_history[ir_index] + 1) : 
                                     (global_history[ir_index] == `SNT ? `SNT : global_history[ir_index] - 1);
-		$display("Cycle %0t: Branch hit at index %0d. branch_pc = %h, Updated global history = %d", 
-		          $time, ir_index, ir_branch_pc, global_history[ir_index]);
+`ifdef SIM
+		$display("Cycle %0t: Branch hit at index %0d. branch_pc = %h, Updated global history = %d", $time, ir_index, ir_branch_pc, global_history[ir_index]);
+`endif
 	end
 	else begin // If it is not a branch, then do nothing
 		branch_pc[ir_index] <= branch_pc[ir_index];
 		offset_pc[ir_index] <= offset_pc[ir_index];
 		global_history[ir_index] <= global_history[ir_index];
+`ifdef SIM
 		$display("Cycle %0t: Non-branch instruction at index %0d. No updates made.", $time, ir_index);
+`endif
 	end
 end
 endmodule
