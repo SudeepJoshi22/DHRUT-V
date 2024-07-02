@@ -20,12 +20,10 @@
 module instr_rom (
 input wire clk,
 input wire rst_n,
-input wire i_mem_en,
-input wire i_mem_rd,
 input wire [31:0] i_mem_addr,
 output reg [31:0] o_mem_rdata,
-output reg o_mem_rdy,
-output reg o_mem_vld
+input wire i_mem_ready,
+output reg o_mem_valid
 );
 
 // Internal ROM storage
@@ -36,27 +34,27 @@ initial begin
 $readmemh("programs/instr_mem.mem", rom);
 end
 
-always @(posedge clk or negedge rst_n) begin
-if (!rst_n) begin
-    o_mem_rdy <= 0;
-    o_mem_vld <= 0;
-    o_mem_rdata <= 0;
-end 
-else if (i_mem_en) begin
-    if (i_mem_rd) begin
-        o_mem_rdy <= 1; // Memory is ready to provide data
-        o_mem_rdata <= {rom[i_mem_addr+3],rom[i_mem_addr+2],rom[i_mem_addr+1],rom[i_mem_addr]}; // instructions are present byte wise and are in little-endian format
-        o_mem_vld <= 1; // Data is valid
-    end else begin
-        o_mem_rdy <= 0;
-        o_mem_vld <= 0;
-    end
-end 
-else begin
-    o_mem_rdy <= 0;
-    o_mem_vld <= 0;
+// Valid signal
+always @(posedge clk) begin
+	if(!rst_n) begin
+		o_mem_valid <= 1'b0;
+	end
+	else begin
+		o_mem_valid <= 1'b1;
+	end
 end
 
+// Read Data
+always @(posedge clk) begin
+	if(!rst_n) begin
+		o_mem_rdata <= 32'dz;
+	end
+	else if(o_mem_valid & i_mem_ready) begin
+		o_mem_rdata <= {rom[i_mem_addr+3],rom[i_mem_addr+2],rom[i_mem_addr+1],rom[i_mem_addr]};
+	end
+	else begin
+		o_mem_rdata <= 32'dz;
+	end
 end
     
 endmodule

@@ -37,7 +37,6 @@ input wire i_trap_pc,
 //Branch Prediction
 output reg o_prediction,
 //Pipeline control
-output reg o_ce,
 input wire i_stall,
 input wire i_flush
 );
@@ -62,9 +61,34 @@ reg [31:0] ir_inst;
 assign is_branch = (i_inst[6:0] == `B);
 
 
+// Instruction Memory Interface
+assign i_imem_en = ~rst_n & ~i_stall;
+assign i_imem_rd = ~rst_n & i_imem_en;  
+
+// Update the instruction address for memory interface
+always @(*) begin
+    if (~rst_n) begin
+        o_iaddr = `PC_RESET;
+    end else if (~i_stall) begin
+        o_iaddr = pc;
+    end
+end
+
+
+always @(posedge clk) begin
+    if (~rst_n) begin
+        ir_inst <= `NOP;
+    end else if (i_imem_vld & i_imem_rdy) begin
+        ir_inst <= i_inst;
+    end
+end
+
 // PC Change Logic
 always @(posedge clk) begin
 	if(~rst_n) begin
+		pc <= `PC_RESET;
+	end
+	else if(i_flush) begin
 		pc <= `PC_RESET;
 	end
 	else if(is_branch & is_prediction) begin
@@ -73,8 +97,27 @@ always @(posedge clk) begin
 	else if(i_trap) begin
 		pc <= i_trap_pc;
 	end
-	else begin
+	else if(~i_stall) begin
 		pc <= pc + 32'd4;
+	end
+end
+
+// Pipeing the signals for next stage
+always @(posedge clk) begin
+	if (~rst_n | i_flush) begin
+		o_pc <= 0;
+		o_instr <= `NOP;
+		o_prediction <= 0;		
+	end
+	else if(i_stall) begin
+		o_pc <= o_pc;
+		o_instr <= o_instr;
+		o_prediction <= o_prediction;
+	end
+	else begin
+		o_pc <= pc;
+		o_instr <= ir_inst;
+		o_prediction <= is_prediction;
 	end
 end
 
