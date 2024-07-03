@@ -116,7 +116,7 @@ begin
 end
 always@(*)
 begin
-	o_flush = (i_prediction ^ is_boj);
+	o_flush = (i_prediction ^ is_boj);//Flush the Fetch stage if prediction is wrong
 	o_stall = i_stall;
 	branch_pc = is_branch_pc;
 	ir_flush = is_boj;
