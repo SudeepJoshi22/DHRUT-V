@@ -28,7 +28,6 @@ input wire [31:0] i_instr, // Instruction Fetched in IF stage
 input wire signed [31:0] i_write_data, // Data to be written to register file from the WB stage
 input wire [31:0] i_pc, // PC of the current instruction
 input wire i_wr, // write enable signal from the WB stage, enables the register file to write to rd.
-input wire i_ce,
 output reg [31:0] o_rs1_data, // rs1 data from register file
 output reg [31:0] o_rs2_data, // rs2 data from register file
 output reg [31:0] o_imm_data, // sign extended immediate value
@@ -38,10 +37,10 @@ output reg [3:0] o_alu_ctrl, // ALU Control signals
 output reg [31:0] o_pc,// PC for the next stage
 output reg [31:0] branch_pc, 
 // pipeline control
+input wire i_prediction, // Prediction signal from Fetch stage
 input wire i_stall, // stall signal from EX stage 
 output reg o_stall, // stall signal to IF stage
-output reg o_flush, // Flush signal to IF depending on branch decision
-output reg o_ce
+output reg o_flush // Flush signal to IF depending on branch decision
 );
 
 // Internal Wires
@@ -59,6 +58,7 @@ wire [31:0] is_pc;
 
 // Internal Registers
 reg [31:0] ir_instr; // used for decoding
+reg ir_flush; // internal register used to flush contents 
 
 // Debug Display Statements
 always @(posedge clk) begin
@@ -70,34 +70,36 @@ always @(posedge clk) begin
     $display("is_imm: %h, is_boj: %b", is_imm, is_boj);
     $display("ir_instr: %h", ir_instr);
     $display("is_branch_pc: %h", is_branch_pc);
+    $display("ir_flush: %h", ir_flush);
 end
 
 
-// Internal Flush Condition
+//Registering instruction 
 always@(*)
 begin
-	if(is_boj == 0) begin
-		ir_instr <= i_instr;	
+	
+	if(ir_flush == 0) begin
+		ir_instr <= i_instr;
 	end
 	
 end
 
 // Decode of instructions
 assign is_rs1= ir_instr[19:15];
-assign is_rs2= ir_instr[24:20];
+assign is_rs2=  ir_instr[24:20];
 assign is_rd = ir_instr[11:7];
-assign is_opcode = ir_instr[6:0];
-assign is_func3 = ir_instr[14:12];
+assign is_opcode =  ir_instr[6:0];
+assign is_func3 =  ir_instr[14:12];
 assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
 assign is_pc = i_pc;
 
 //Pipeing the signals to next stage
-always@(posedge clk)
+always@(posedge clk or negedge rst_n)
 begin
 	if(~rst_n) begin
-		o_ce <= 0;
+		ir_instr <= `NOP;
 	end
-	else if( i_ce && !(i_stall) )begin // pipe through signals when stage is enabled and not stalled
+	else if(!(i_stall || ir_flush))begin // pipe through signals when stage is  not stalled and not flushed
 		o_rs1_data <= is_rs1_data;
 		o_rs2_data <= is_rs2_data;
 		o_imm_data <= is_imm;
@@ -105,21 +107,21 @@ begin
 		o_func3 <= is_func3;
 		o_alu_ctrl <= is_alu_ctrl;
 	end
+	// Internal Flush Condition
+	if(ir_flush) begin
+		ir_instr <= `NOP;// Every new cycle (if branch/jump) ir_instr is being flushed with NOP,so is interal wires
+	end
+	
       
-        if(i_stall) begin
-		o_ce <= 0;
-	end
-	else begin
-		o_ce <= i_ce;
-	end
 end
 always@(*)
 begin
-	o_flush=is_boj;
-	o_stall=i_stall;
-	branch_pc=is_branch_pc;
+	o_flush = (i_prediction ^ is_boj);
+	o_stall = i_stall;
+	branch_pc = is_branch_pc;
+	ir_flush = is_boj;
 end
-	
+
 branch_jump_decision branch_jump_decision_inst(		       
 	.is_rs1_data(is_rs1_data),
 	.is_rs2_data(is_rs2_data),
@@ -155,6 +157,4 @@ control_unit control_unit_inst (
 	.i_instr(ir_instr),
 	.o_alu_ctrl(is_alu_ctrl)
 );
-
-
 endmodule
