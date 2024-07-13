@@ -95,8 +95,8 @@ This is a custom designed RISC-V core, fouced on easy understading of the RISC-V
 
 ### Designed and Verified with
 
-* [![Verilog][Verilog HDL]][verilog-url]
-* [![RISCV][RISC-V]][riscv-url]
+* ![Verilog][verilog-hdl]
+* ![RISC-V][riscv-hdl]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -197,11 +197,11 @@ Project Link: [https://github.com/SudeepJoshi22/DHRUT-V](https://github.com/Sude
 
 
 <!-- CONTRIBUTORS -->
-## Project Creator
+## Contributors
 
 <name> - <email>
 
-Profile : [social hanel](www.example.com)
+Profile : [social handle](www.example.com)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

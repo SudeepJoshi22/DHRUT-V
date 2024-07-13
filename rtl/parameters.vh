@@ -21,6 +21,7 @@
 `define U  7'b0110111
 `define UPC 7'b0010111
 `define CSR 7'b1110011
+`define FENCE 7'b0001111
 
 // ALU Control Signals
 `define ADD 4'b0000
@@ -94,4 +95,41 @@
 
 
 ////  Exception Codes ////
+//// {interrupt,exception code} ////
+// The Interrupt bit in the mcause register is set if the trap was caused by an interrupt. The Exception
+// Code field contains a code identifying the last exception. riscv-priv-spec(pg no.34) 
+
+// Non-Interrupt Exceptions
+`define INSTR_ADDR_MISALIGNED    0   // Instruction address misaligned
+`define INSTR_ACCESS_FAULT       1   // Instruction access fault
+`define ILLEGAL_INSTR            2   // Illegal instruction
+`define BREAKPOINT               3   // Breakpoint
+`define LOAD_ADDR_MISALIGNED     4   // Load address misaligned
+`define LOAD_ACCESS_FAULT        5   // Load access fault
+`define STORE_AMO_ADDR_MISALIGNED 6  // Store/AMO address misaligned
+`define STORE_AMO_ACCESS_FAULT   7   // Store/AMO access fault
+`define ECALL_FROM_U_MODE        8   // Environment call from U-mode
+`define ECALL_FROM_S_MODE        9   // Environment call from S-mode
+`define RESERVED_10              10  // Reserved
+`define ECALL_FROM_M_MODE        11  // Environment call from M-mode
+`define INSTR_PAGE_FAULT         12  // Instruction page fault
+`define LOAD_PAGE_FAULT          13  // Load page fault
+`define RESERVED_14              14  // Reserved
+`define STORE_AMO_PAGE_FAULT     15  // Store/AMO page fault
+`define RESERVED_16_OR_HIGHER    16  // Reserved for future use and higher
+
+// Interrupt Exceptions
+`define USER_SW_INTR        0  // User software interrupt
+`define SUPERVISOR_SW_INTR  1  // Supervisor software interrupt
+`define RESERVED_2          2  // Reserved
+`define MACHINE_SW_INTR     3  // Machine software interrupt
+`define USER_TIMER_INTR     4  // User timer interrupt
+`define SUPERVISOR_TIMER_INTR 5 // Supervisor timer interrupt
+`define RESERVED_6          6  // Reserved
+`define MACHINE_TIMER_INTR  7  // Machine timer interrupt
+`define USER_EXT_INTR       8  // User external interrupt
+`define SUPERVISOR_EXT_INTR 9  // Supervisor external interrupt
+`define RESERVED_10         10 // Reserved
+`define MACHINE_EXT_INTR    11 // Machine external interrupt
+
 
