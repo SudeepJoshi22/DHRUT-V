@@ -24,10 +24,8 @@ output reg [31:0] o_pc, //Current PC value
 output reg [31:0] o_instr,
 //Instruction memory interface
 input wire [31:0] i_inst, //instruction code received from the instruction memory
-input wire i_imem_rdy,
+output wire o_imem_rdy,
 input wire i_imem_vld,
-output wire i_imem_en,
-output wire i_imem_rd,
 output reg [31:0] o_iaddr, //instruction address
 //Change in PC
 input wire i_boj,
@@ -48,7 +46,6 @@ integer fd;
 
 //Internal signals
 wire is_stall;
-wire [31:0] is_pc_increment;
 wire is_branch;
 wire is_prediction;
 wire [31:0] is_predicted_pc;
@@ -60,17 +57,19 @@ reg [31:0] ir_inst;
 // If the instruction is branch or not
 assign is_branch = (i_inst[6:0] == `B);
 
-
-// Instruction Memory Interface
-assign i_imem_en = ~rst_n & ~i_stall;
-assign i_imem_rd = ~rst_n & i_imem_en;  
+// Instruction memory ready interface
+assign o_imem_rdy = (~i_stall & i_imem_vld) ? 1'b1 : 1'b0;
 
 // Update the instruction address for memory interface
 always @(*) begin
     if (~rst_n) begin
         o_iaddr = `PC_RESET;
-    end else if (~i_stall) begin
+    end 
+    else if (~i_stall & i_imem_vld) begin
         o_iaddr = pc;
+    end
+    else begin
+    	o_iaddr = 32'd0;
     end
 end
 
@@ -89,7 +88,7 @@ always @(posedge clk) begin
 		pc <= `PC_RESET;
 	end
 	else if(i_flush) begin
-		pc <= `PC_RESET;
+		pc <= pc;
 	end
 	else if(is_branch & is_prediction) begin
 		pc <= is_predicted_pc;
@@ -99,6 +98,9 @@ always @(posedge clk) begin
 	end
 	else if(~i_stall) begin
 		pc <= pc + 32'd4;
+	end
+	else begin
+		pc <= pc;
 	end
 end
 

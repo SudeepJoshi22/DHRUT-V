@@ -52,10 +52,8 @@ output reg [`N-1:0] o_ret_addr,
 output reg [`N-1:0] o_trap_addr,
 output reg o_trap,
 output reg o_ret_trap
-/*
-input wire i_cen,
+//Pipeline Stall
 input wire i_stall
-*/
 );
 
 // Internal Signals

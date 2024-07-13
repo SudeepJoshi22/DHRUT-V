@@ -187,7 +187,7 @@ Distributed under the Apache License 2.0. See `LICENSE.txt` for more information
 
 
 <!-- CONTACT -->
-## Contact
+## Project Creator
 
 Sudeep Joshi - sudeepj881@gmail.com
 
@@ -195,6 +195,15 @@ Project Link: [https://github.com/SudeepJoshi22/DHRUT-V](https://github.com/Sude
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+
+<!-- CONTRIBUTORS -->
+## Project Creator
+
+<name> - <email>
+
+Profile : [social hanel](www.example.com)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 <!-- ACKNOWLEDGMENTS 
