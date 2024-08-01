@@ -18,13 +18,22 @@ module tb_Decode();
   wire [31:0] o_pc;
   wire  [31:0] branch_pc;
   reg i_prediction;
-  reg i_stall; 
+  reg i_stall;
+  reg i_forward_branch;
+  reg [31:0] i_EX_result;
+  reg i_decode_forward_rs1;
+  reg i_decode_forward_rs2; 
   wire o_stall; 
   wire o_flush; 
+  wire [4:0] o_rs1;
+  wire [4:0] o_rs2;
+  wire [4:0] o_rd;
+  wire [4:0] o_is_rs1,o_is_rs2;
+  wire o_is_branch;
   //wire o_ce;
 
   // Instantiate the module
-  ID inst(
+  Decode inst(
     .clk(clk),
     .rst_n(rst_n),
     .i_instr(i_instr),
@@ -41,8 +50,19 @@ module tb_Decode();
     .branch_pc(branch_pc),
     .i_prediction(i_prediction),
     .i_stall(i_stall),
+    .i_forward_branch(i_forward_branch),
+    .i_decode_forward_rs1(i_decode_forward_rs1),
+    .i_decode_forward_rs2(i_decode_forward_rs2),
+    .i_EX_result(i_EX_result),
     .o_stall(o_stall),
-    .o_flush(o_flush)
+    .o_flush(o_flush),
+    .o_rs1(o_rs1),
+    .o_rs2(o_rs2),
+    .o_rd(o_rd),
+    .o_is_branch(o_is_branch),
+    .o_is_rs1(o_is_rs1),
+    .o_is_rs2(o_is_rs2)
+    
     //.o_ce(o_ce)
   );
 

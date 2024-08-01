@@ -34,9 +34,16 @@ begin
 		end
 		
 	end
-	 if( (i_rs1 == i_rd_mem)  ) begin
+	else begin
+		o_forward_EX_rs1 = 1'b0;
+		
+	end
+	if( (i_rs1 == i_rd_mem)  ) begin
 			o_forward_MEM_rs1 = 1'b1;;
 	     end
+	else begin
+		o_forward_MEM_rs1 = 1'b0;
+	end
 	  
 	if( (i_rs2 == i_rd_execute)) begin
 		
@@ -48,9 +55,17 @@ begin
 			o_forward_EX_rs2 = 1'b1;
 		end
 	end
+	else begin
+		o_forward_EX_rs2 = 1'b0;
+		
+	end
+	
          if(  (i_rs2 == i_rd_mem) ) begin
 			o_forward_MEM_rs2 = 1'b1;;
 	     end
+	 else begin
+		o_forward_MEM_rs2 = 1'b0;
+	 end
 	   
      
 end
@@ -68,6 +83,9 @@ begin
 			o_stall = 1'b0;
 		end
 		
+	end
+	else begin 
+		o_stall = 1'b0;
 	end
 	if( (i_rs1 == i_rd_mem) || (i_rs2 == i_rd_mem) ) begin
 			o_stall = 1'b0;

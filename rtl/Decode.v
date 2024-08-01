@@ -21,7 +21,7 @@
 `include "rtl/control_unit.v"
 `include "rtl/branch_jump_decision.v"
 
-module ID(
+module Decode(
 input wire clk,
 input wire rst_n,
 input wire [31:0] i_instr, // Instruction Fetched in IF stage
@@ -36,9 +36,19 @@ output reg [2:0] o_func3, // func3 of the current instruction
 output reg [3:0] o_alu_ctrl, // ALU Control signals  
 output reg [31:0] o_pc,// PC for the next stage
 output reg [31:0] branch_pc, 
+output reg [4:0] o_rs1,
+output reg [4:0] o_rs2,
+output reg [4:0] o_rd,
+output reg [4:0] o_is_rs1,// To execute stage
+output reg [4:0] o_is_rs2,// To execute stage
+output reg o_is_branch,// To execute stage
 // pipeline control
 input wire i_prediction, // Prediction signal from Fetch stage
 input wire i_stall, // stall signal from EX stage 
+input wire i_forward_branch,
+input wire [31:0] i_EX_result,// Result after stall and forward from EX stage
+input wire i_decode_forward_rs1,
+input wire i_decode_forward_rs2,
 output reg o_stall, // stall signal to IF stage
 output reg o_flush // Flush signal to IF depending on branch decision
 );
@@ -55,6 +65,8 @@ wire  [31:0] is_imm;
 wire is_boj;
 wire [31:0] is_branch_pc;
 wire [31:0] is_pc;
+wire [31:0] is_rs1_d;
+wire [31:0] is_rs2_d;
 
 // Internal Registers
 reg [31:0] ir_instr; // used for decoding
@@ -92,7 +104,9 @@ assign is_opcode =  ir_instr[6:0];
 assign is_func3 =  ir_instr[14:12];
 assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
 assign is_pc = i_pc;
-
+// Mux Before Branch/Jump decision unit
+assign is_rs1_d = (i_decode_forward_rs1 == 1'b1) ? i_EX_result: is_rs1_data; 
+assign is_rs2_d = (i_decode_forward_rs2 == 1'b1) ? i_EX_result: is_rs2_data; 
 //Pipeing the signals to next stage
 always@(posedge clk or negedge rst_n)
 begin
@@ -106,6 +120,9 @@ begin
 		o_opcode <= is_opcode;
 		o_func3 <= is_func3;
 		o_alu_ctrl <= is_alu_ctrl;
+		o_rs1 <= is_rs1;
+		o_rs2 <= is_rs2;
+		o_rd  <= is_rd;
 	end
 	// Internal Flush Condition
 	if(ir_flush) begin
@@ -116,15 +133,28 @@ begin
 end
 always@(*)
 begin
+	//Outputs to execute stage when there is branch and to check dependency
+	if(is_boj) begin
+		o_is_branch = 1'b1;
+		o_is_rs1 = is_rs1;
+		o_is_rs2 = is_rs2;
+	end
+	else begin
+		o_is_branch = 1'b0;
+		o_is_rs1 = 5'b0;
+		o_is_rs2 = 5'b0;
+	end
+	
 	o_flush = (i_prediction ^ is_boj);//Flush the Fetch stage if prediction is wrong
 	o_stall = i_stall;
 	branch_pc = is_branch_pc;
 	ir_flush = is_boj;
+	
 end
 
 branch_jump_decision branch_jump_decision_inst(		       
-	.is_rs1_data(is_rs1_data),
-	.is_rs2_data(is_rs2_data),
+	.is_rs1_data(is_rs1_d),
+	.is_rs2_data(is_rs2_d),
 	.is_func3(is_func3),
 	.is_opcode(is_opcode),
 	.is_pc(is_pc),
