@@ -95,8 +95,8 @@ This is a custom designed RISC-V core, fouced on easy understading of the RISC-V
 
 ### Designed and Verified with
 
-* ![Verilog][verilog-hdl]
-* ![RISC-V][riscv-hdl]
+* ![Verilog][verilog-url]
+* ![RISC-V][riscv-url]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
