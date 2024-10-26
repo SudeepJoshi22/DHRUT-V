@@ -106,7 +106,7 @@ always @(posedge clk) begin
 		branch_pc[ir_index] <= ir_branch_pc;
 		offset_pc[ir_index] <= i_offset_pc;
 `ifdef SIM
-		$display("Cycle %0t: New branch entry created at index %0d with branch_pc = %h, offset_pc = %h", $time, ir_index, ir_branch_pc, i_offset_pc);
+		//$display("Cycle %0t: New branch entry created at index %0d with branch_pc = %h, offset_pc = %h", $time, ir_index, ir_branch_pc, i_offset_pc);
 `endif
 	end
 	else if( ir_hit && ir_is_branch) begin // If it is a hit and the instruction is actually branch, update the global history
@@ -114,7 +114,7 @@ always @(posedge clk) begin
                                     (global_history[ir_index] == `ST ? `ST : global_history[ir_index] + 1) : 
                                     (global_history[ir_index] == `SNT ? `SNT : global_history[ir_index] - 1);
 `ifdef SIM
-		$display("Cycle %0t: Branch hit at index %0d. branch_pc = %h, Updated global history = %d", $time, ir_index, ir_branch_pc, global_history[ir_index]);
+		//$display("Cycle %0t: Branch hit at index %0d. branch_pc = %h, Updated global history = %d", $time, ir_index, ir_branch_pc, global_history[ir_index]);
 `endif
 	end
 	else begin // If it is not a branch, then do nothing
@@ -122,7 +122,7 @@ always @(posedge clk) begin
 		offset_pc[ir_index] <= offset_pc[ir_index];
 		global_history[ir_index] <= global_history[ir_index];
 `ifdef SIM
-		$display("Cycle %0t: Non-branch instruction at index %0d. No updates made.", $time, ir_index);
+		//$display("Cycle %0t: Non-branch instruction at index %0d. No updates made.", $time, ir_index);
 `endif
 	end
 end

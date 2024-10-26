@@ -16,6 +16,7 @@
 `timescale 1ns / 1ps
 `default_nettype none
 `include "rtl/parameters.vh"
+<<<<<<< HEAD
 `include "rtl/bpu.v"	
 
 module Fetch(
@@ -38,6 +39,31 @@ module Fetch(
 	//Pipeline control
 	input wire i_stall,
 	input wire i_flush
+=======
+`include"rtl/bpu.v"
+
+module Fetch(
+input wire clk,
+input wire rst_n,
+output reg [31:0] o_pc, //Current PC value
+output reg [31:0] o_instr,
+//Instruction memory interface
+input wire [31:0] i_instr, //instruction code received from the instruction memory
+output wire o_imem_rdy,
+input wire i_imem_vld,
+input wire i_imem_rdy,
+output reg [31:0] o_iaddr, //instruction address
+//Change in PC
+input wire i_boj,
+input wire [31:0] i_boj_pc,
+input wire i_trap,
+input wire [31:0] i_trap_pc,
+//Branch Prediction
+output reg o_prediction,
+//Pipeline control
+input wire i_stall,
+input wire i_flush
+>>>>>>> f9b9703 (Verified)
 );
 
 //only for simulation
@@ -53,10 +79,10 @@ wire [31:0] is_predicted_pc;
 
 //Internal Registers
 reg [31:0] pc;
-reg [31:0] ir_inst;
+reg [31:0] ir_instr;
 
 // If the instruction is branch or not
-assign is_branch = (i_inst[6:0] == `B);
+assign is_branch = (i_instr[6:0] == `B);
 
 // Instruction memory ready interface
 assign o_imem_rdy = (~i_stall & i_imem_vld) ? 1'b1 : 1'b0;
@@ -75,11 +101,12 @@ always @(*) begin
 end
 
 
-always @(posedge clk) begin
+always @(*) begin
     if (~rst_n) begin
-        ir_inst <= `NOP;
-    end else if (i_imem_vld & i_imem_rdy) begin
-        ir_inst <= i_inst;
+        ir_instr = `NOP;
+    end 
+    else if (i_imem_vld & i_imem_rdy) begin
+        ir_instr = i_instr;
     end
 end
 
@@ -119,7 +146,7 @@ always @(posedge clk) begin
 	end
 	else begin
 		o_pc <= pc;
-		o_instr <= ir_inst;
+		o_instr <= ir_instr;
 		o_prediction <= is_prediction;
 	end
 end
@@ -135,7 +162,11 @@ bpu branch_prediction_unit (
 	.o_prediction(is_prediction),
 	.o_predicted_pc(is_predicted_pc)
 );
-
+always@(posedge clk)
+begin
+	$display("ir_instr %b :",ir_instr);
+	end
+	
 //only for simulation
 `ifdef SIM
 always @(o_pc,o_instr)

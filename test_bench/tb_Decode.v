@@ -86,18 +86,23 @@ module tb_Decode();
     i_write_data = 32'h0;
     i_pc = 32'h0;
     i_wr = 0;
-    i_prediction = 1;
-    i_stall=0;    
+    i_prediction = 0;
+    i_stall=0;  
+    i_decode_forward_rs1 = 0;
+    i_decode_forward_rs2 = 0;  
     #30
     i_instr=32'h00218333; //add x6,x3,x2
     #20
-    i_instr=32'h00431663; // bne x6,x4,12
+    i_instr = 32'h00428433;
     #20
-    i_instr= 32'h00840393;//addi x7,x5,8
+    i_instr= 32'h003404B3;//add x9,x8,x3
+   // i_instr= 32'h00840393;//addi x7,x5,8
     #20
-    i_instr=32'h00828467; //jalr x8,8(x5)
+     i_instr=32'h00431463; // bne x9,x8,8
+   // i_instr=32'h00828467; //jalr x8,8(x5)
     #20
-    i_instr=32'h0000C36F; //jal x6 , 12
+    i_instr=32'h00218333;
+    //i_instr=32'h0000C36F; //jal x6 , 12
     #200;
     $finish;
   end
