@@ -1,24 +1,17 @@
-// MIT License
-// 
-// Copyright (c) 2023 Sudeep.
-// 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+/*
+   Copyright 2024 Sudeep Joshi
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License. */
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -54,7 +47,7 @@ output reg [6:0] o_opcode,
 output reg [4:0] o_rd,
 // outputs to previous stages 
 output reg o_stall,
-output reg o_forward_branch ,// Forwarding o_result to decode when there is dependancy of branch instruction on previous instruction after stalling
+output reg o_forward_branch , // Forwarding o_result to decode when there is dependancy of branch instruction on previous instruction after stalling
 output reg o_decode_forward_rs1,
 output reg o_decode_forward_rs2
 );
@@ -126,25 +119,25 @@ begin
 end
 
 always @(posedge clk) begin
-    $display("Time: %0t", $time);
-   // $display("is_rs1: %b, is_rs2: %b, is_rd_decode: %b", is_rs1, is_rs2, is_rd_decode);
-    $display("is_op1: %b, is_op2: %b", is_op1, is_op2);
+    //$display("Time: %0t", $time);
+   //$display("is_rs1: %b, is_rs2: %b, is_rd_decode: %b", is_rs1, is_rs2, is_rd_decode);
+    //$display("is_op1: , is_op2: ", is_op1, is_op2);
     //$display("is_result: %b", is_result);
-    //$display("is_rs1_data: %h, is_rs2_data: %h", is_rs1_data, is_rs2_data);
+    //$display("is_rs1_data: , is_rs2_data: ", i_rs1_data, i_rs2_data);
     //$display("is_imm: %h, is_boj: %b", is_imm, is_boj);
     //$display("ir_instr: %h", ir_instr);
    // $display("is_branch_pc: %h", is_branch_pc);
     //$display("ir_flush: %h", ir_flush);
-    $display("o_stall=%b",o_stall);
-    $display("o_result = %b", o_result);
-    $display("i_mem_result = %b", i_mem_result);
-    $display("i_rs2_data = %b", i_rs2_data);
-    $display("i_imm_data = %b", i_imm_data);
-    $display("is_forward_EX_rs2 = %b", is_forward_EX_rs2);
-    $display("is_forward_MEM_rs2 = %b", is_forward_MEM_rs2);
-    $display("i_opcode = %b", i_opcode);
-    $display("is_forward_MEM_rs1 = %b", is_forward_MEM_rs1);
-
+    //$display("o_stall=%b",o_stall);
+    //$display("o_result = %b", o_result);
+    //$display("i_mem_result = %b", i_mem_result);
+    //$display("i_rs2_data = %b", i_rs2_data);
+    //$display("i_imm_data = %b", i_imm_data);
+    //$display("is_forward_EX_rs2 = %b", is_forward_EX_rs2);
+    //$display("is_forward_MEM_rs2 = %b", is_forward_MEM_rs2);
+    //$display("i_opcode = %b", i_opcode);
+    //$display("is_forward_branch = %b", is_forward_branch);	
+    $display("is_stall : %b", is_stall);
 end
 
 
@@ -175,4 +168,4 @@ alu alu_inst (
 	.o_result(is_result)
 );
 
-endmodule
+endmodule //check from is_stall here

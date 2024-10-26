@@ -74,15 +74,16 @@ reg ir_flush; // internal register used to flush contents
 
 // Debug Display Statements
 always @(posedge clk) begin
-    $display("Time: %0t", $time);
-    $display("is_rs1: %b, is_rs2: %b, is_rd: %b", is_rs1, is_rs2, is_rd);
-    $display("is_opcode: %b, is_func3: %b", is_opcode, is_func3);
-    $display("is_re: %b, is_alu_ctrl: %b", is_re, is_alu_ctrl);
-    $display("is_rs1_data: %h, is_rs2_data: %h", is_rs1_data, is_rs2_data);
-    $display("is_imm: %h, is_boj: %b", is_imm, is_boj);
+   // $display("Time: %0t", $time);
+    //$display("is_rs1: %b, is_rs2: %b, is_rd: %b", is_rs1, is_rs2, is_rd);
+    //$display("is_opcode: %b, is_func3: %b", is_opcode, is_func3);
+    //$display("is_re: %b, is_alu_ctrl: %b", is_re, is_alu_ctrl);
+    $display("is_rs1_d: %h, is_rs2_d: %h", is_rs1_d, is_rs2_d);
+    //$display("is_imm: %h, is_boj: %b", is_imm, is_boj);
+    //$display("ir_flush: %b", ir_flush);
+    //$display("is_branch_pc: %h", is_branch_pc);
     $display("ir_instr: %h", ir_instr);
-    $display("is_branch_pc: %h", is_branch_pc);
-    $display("ir_flush: %h", ir_flush);
+    
 end
 
 
@@ -102,18 +103,18 @@ assign is_rs2=  ir_instr[24:20];
 assign is_rd = ir_instr[11:7];
 assign is_opcode =  ir_instr[6:0];
 assign is_func3 =  ir_instr[14:12];
-assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
+assign is_re =    (~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC))); // every instruction except LUI, AUIPC and JAL requires register file to be read
 assign is_pc = i_pc;
 // Mux Before Branch/Jump decision unit
-assign is_rs1_d = (i_decode_forward_rs1 == 1'b1) ? i_EX_result: is_rs1_data; 
-assign is_rs2_d = (i_decode_forward_rs2 == 1'b1) ? i_EX_result: is_rs2_data; 
+assign is_rs1_d = (i_decode_forward_rs1 == 1'b1 && i_forward_branch == 1) ? i_EX_result: is_rs1_data; 
+assign is_rs2_d = (i_decode_forward_rs2 == 1'b1 && i_forward_branch == 1) ? i_EX_result:is_rs2_data; 
 //Pipeing the signals to next stage
 always@(posedge clk or negedge rst_n)
 begin
 	if(~rst_n) begin
 		ir_instr <= `NOP;
 	end
-	else if(!(i_stall || ir_flush))begin // pipe through signals when stage is  not stalled and not flushed
+	else if(!(i_stall || is_boj))begin // pipe through signals when stage is  not stalled and not flushed
 		o_rs1_data <= is_rs1_data;
 		o_rs2_data <= is_rs2_data;
 		o_imm_data <= is_imm;
@@ -125,16 +126,16 @@ begin
 		o_rd  <= is_rd;
 	end
 	// Internal Flush Condition
-	if(ir_flush) begin
+	/*if(ir_flush) begin
 		ir_instr <= `NOP;// Every new cycle (if branch/jump) ir_instr is being flushed with NOP,so is interal wires
-	end
+	end*/
 	
       
 end
 always@(*)
 begin
 	//Outputs to execute stage when there is branch and to check dependency
-	if(is_boj) begin
+	if(is_opcode == `B) begin
 		o_is_branch = 1'b1;
 		o_is_rs1 = is_rs1;
 		o_is_rs2 = is_rs2;
