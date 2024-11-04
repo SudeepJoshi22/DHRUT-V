@@ -16,7 +16,6 @@
 `timescale 1ns / 1ps
 `default_nettype none
 `include "rtl/parameters.vh"
-<<<<<<< HEAD
 `include "rtl/bpu.v"	
 
 module Fetch(
@@ -39,31 +38,6 @@ module Fetch(
 	//Pipeline control
 	input wire i_stall,
 	input wire i_flush
-=======
-`include"rtl/bpu.v"
-
-module Fetch(
-input wire clk,
-input wire rst_n,
-output reg [31:0] o_pc, //Current PC value
-output reg [31:0] o_instr,
-//Instruction memory interface
-input wire [31:0] i_instr, //instruction code received from the instruction memory
-output wire o_imem_rdy,
-input wire i_imem_vld,
-input wire i_imem_rdy,
-output reg [31:0] o_iaddr, //instruction address
-//Change in PC
-input wire i_boj,
-input wire [31:0] i_boj_pc,
-input wire i_trap,
-input wire [31:0] i_trap_pc,
-//Branch Prediction
-output reg o_prediction,
-//Pipeline control
-input wire i_stall,
-input wire i_flush
->>>>>>> f9b9703 (Verified)
 );
 
 //only for simulation
