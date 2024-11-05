@@ -25,14 +25,14 @@
 `include "rtl/parameters.vh"
 
 module branch_jump_decision(
-input wire [31:0] is_rs1_data,
-input wire [31:0] is_rs2_data,
-input wire [6:0]is_opcode,
-input wire [31:0] is_pc,
-input wire [2:0] is_func3,
-input wire [31:0] i_imm,
-output reg branch_flush,
-output reg [31:0] branch_pc
+	input wire [31:0] is_rs1_data,
+	input wire [31:0] is_rs2_data,
+	input wire [6:0] is_opcode,
+	input wire [31:0] is_pc,
+	input wire [2:0] is_func3,
+	input wire [31:0] i_imm,
+	output reg branch_flush,
+	output reg [31:0] branch_pc
 );
 
 always @(*)

@@ -24,23 +24,23 @@
 `default_nettype none
 `include "rtl/parameters.vh"
 
-module MEM(
-input wire clk,
-input wire rst_n,
-input wire [31:0] i_result,
-input wire [31:0] i_data_store,
-input wire [31:0] i_pc,
-input wire [6:0] i_opcode,
-input wire [2:0] i_func3,
-output wire [31:0] o_wb_data, // write back value can be result, data read or pc depending on the opcode
-output wire [6:0] o_opcode,
-// Data memory interface
-input wire i_rd_ack, //ack from data memory
-input wire [31:0] i_read_data, //data read from data memory
-output wire o_stb,
-output wire o_wr_en,
-output wire [31:0] o_addr,
-output wire [31:0] o_wr_data
+module Memory(
+	input wire clk,
+	input wire rst_n,
+	input wire [31:0] i_result,
+	input wire [31:0] i_data_store,
+	input wire [31:0] i_pc,
+	input wire [6:0] i_opcode,
+	input wire [2:0] i_func3,
+	output wire [31:0] o_wb_data, // write back value can be result, data read or pc depending on the opcode
+	output wire [6:0] o_opcode,
+	// Data memory interface
+	input wire i_rd_ack, //ack from data memory
+	input wire [31:0] i_read_data, //data read from data memory
+	output wire o_stb,
+	output wire o_wr_en,
+	output wire [31:0] o_addr,
+	output wire [31:0] o_wr_data
 );
 
 wire [31:0] is_pc_4, is_load_data;

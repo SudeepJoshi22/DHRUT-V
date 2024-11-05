@@ -21,21 +21,21 @@
 module Fetch(
 	input wire clk,
 	input wire rst_n,
-	output reg [31:0] o_pc, //Current PC value
-	output reg [31:0] o_instr,
-	//Instruction memory interface
+	// Instruction memory interface
 	input wire [31:0] i_inst, //instruction code received from the instruction memory
 	output wire o_imem_rdy,
 	input wire i_imem_vld,
 	output reg [31:0] o_iaddr, //instruction address
-	//Change in PC
-	input wire i_boj,
-	input wire [31:0] i_boj_pc,
+	
 	input wire i_trap,
 	input wire [31:0] i_trap_pc,
-	//Branch Prediction
+	// IF-ID Interface
+	input wire i_boj,
+	input wire [31:0] i_boj_pc,
+	output reg [31:0] o_pc, //Current PC value
+	output reg [31:0] o_instr,
 	output reg o_prediction,
-	//Pipeline control
+	// Pipeline control
 	input wire i_stall,
 	input wire i_flush
 );
@@ -136,10 +136,10 @@ bpu branch_prediction_unit (
 	.o_prediction(is_prediction),
 	.o_predicted_pc(is_predicted_pc)
 );
-always@(posedge clk)
-begin
+
+always@(posedge clk) begin
 	$display("ir_instr %b :",ir_instr);
-	end
+end
 	
 //only for simulation
 `ifdef SIM

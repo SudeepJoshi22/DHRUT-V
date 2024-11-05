@@ -22,35 +22,38 @@
 `include "rtl/branch_jump_decision.v"
 
 module Decode(
-input wire clk,
-input wire rst_n,
-input wire [31:0] i_instr, // Instruction Fetched in IF stage
-input wire signed [31:0] i_write_data, // Data to be written to register file from the WB stage
-input wire [31:0] i_pc, // PC of the current instruction
-input wire i_wr, // write enable signal from the WB stage, enables the register file to write to rd.
-output reg [31:0] o_rs1_data, // rs1 data from register file
-output reg [31:0] o_rs2_data, // rs2 data from register file
-output reg [31:0] o_imm_data, // sign extended immediate value
-output reg [6:0] o_opcode, // opcode of the current instruction
-output reg [2:0] o_func3, // func3 of the current instruction
-output reg [3:0] o_alu_ctrl, // ALU Control signals  
-output reg [31:0] o_pc,// PC for the next stage
-output reg [31:0] branch_pc, 
-output reg [4:0] o_rs1,
-output reg [4:0] o_rs2,
-output reg [4:0] o_rd,
-output reg [4:0] o_is_rs1,// To execute stage
-output reg [4:0] o_is_rs2,// To execute stage
-output reg o_is_branch,// To execute stage
-// pipeline control
-input wire i_prediction, // Prediction signal from Fetch stage
-input wire i_stall, // stall signal from EX stage 
-input wire i_forward_branch,
-input wire [31:0] i_EX_result,// Result after stall and forward from EX stage
-input wire i_decode_forward_rs1,
-input wire i_decode_forward_rs2,
-output reg o_stall, // stall signal to IF stage
-output reg o_flush // Flush signal to IF depending on branch decision
+	input wire clk,
+	input wire rst_n,
+	// IF-ID Interface
+	input wire [31:0] i_instr, // Instruction Fetched in IF stage
+	input wire [31:0] i_pc, // PC of the current instruction
+	// ID-WB Interface
+	input wire signed [31:0] i_write_data, // Data to be written to register file from the WB stage
+	input wire i_wr, // write enable signal from the WB stage, enables the register file to write to rd.
+	// ID-EX Interface
+	output reg [31:0] o_rs1_data, // rs1 data from register file
+	output reg [31:0] o_rs2_data, // rs2 data from register file
+	output reg [31:0] o_imm_data, // sign extended immediate value
+	output reg [6:0] o_opcode, // opcode of the current instruction
+	output reg [2:0] o_func3, // func3 of the current instruction
+	output reg [3:0] o_alu_ctrl, // ALU Control signals  
+	output reg [31:0] o_pc,// PC for the next stage
+	output reg [31:0] branch_pc, // REVISIT
+	output reg [4:0] o_rs1,
+	output reg [4:0] o_rs2,
+	output reg [4:0] o_rd,
+	output reg [4:0] o_is_rs1,// To execute stage
+	output reg [4:0] o_is_rs2,// To execute stage
+	output reg o_is_branch,// To execute stage // REVISIT
+	// pipeline control
+	input wire i_prediction, // Prediction signal from Fetch stage
+	input wire i_stall, // stall signal from EX stage 
+	input wire i_forward_branch,
+	input wire [31:0] i_EX_result,// Result after stall and forward from EX stage
+	input wire i_decode_forward_rs1,
+	input wire i_decode_forward_rs2,
+	output reg o_stall, // stall signal to IF stage
+	output reg o_flush // Flush signal to IF depending on branch decision
 );
 
 // Internal Wires
@@ -91,7 +94,7 @@ end
 always@(*)
 begin
 	
-	if(ir_flush == 0) begin
+	if(~ir_flush) begin
 		ir_instr <= i_instr;
 	end
 	
@@ -105,9 +108,11 @@ assign is_opcode =  ir_instr[6:0];
 assign is_func3 =  ir_instr[14:12];
 assign is_re =    (~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC))); // every instruction except LUI, AUIPC and JAL requires register file to be read
 assign is_pc = i_pc;
+
 // Mux Before Branch/Jump decision unit
 assign is_rs1_d = (i_decode_forward_rs1 == 1'b1 && i_forward_branch == 1) ? i_EX_result: is_rs1_data; 
 assign is_rs2_d = (i_decode_forward_rs2 == 1'b1 && i_forward_branch == 1) ? i_EX_result:is_rs2_data; 
+
 //Pipeing the signals to next stage
 always@(posedge clk or negedge rst_n)
 begin
@@ -188,4 +193,5 @@ control_unit control_unit_inst (
 	.i_instr(ir_instr),
 	.o_alu_ctrl(is_alu_ctrl)
 );
+
 endmodule
