@@ -15,7 +15,6 @@
    
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
 
 // FSM States
 `define SNT 2'b00 	// Strongly not-taken

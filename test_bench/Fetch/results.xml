@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1730919429" />
+    <testcase name="test_fetch_rom" classname="test_fetch_rom" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch/test_fetch_rom.py" lineno="8" time="0.0008873939514160156" sim_time_ns="10.001" ratio_time="11270.079071466953">
+      <failure message="Test failed with RANDOM_SEED=1730919429" />
+    </testcase>
+  </testsuite>
+</testsuites>

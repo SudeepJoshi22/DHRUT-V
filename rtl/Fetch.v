@@ -14,19 +14,17 @@
    limitations under the License. */
 
 `timescale 1ns / 1ps
-`default_nettype none
-`include "rtl/parameters.vh"
-`include "rtl/bpu.v"	
+`default_nettype none	
 
 module Fetch(
 	input wire clk,
 	input wire rst_n,
 	// Instruction memory interface
-	input wire [31:0] i_inst, //instruction code received from the instruction memory
+	input wire [31:0] i_instr, //instruction code received from the instruction memory
 	output wire o_imem_rdy,
 	input wire i_imem_vld,
 	output reg [31:0] o_iaddr, //instruction address
-	
+	// IF-CSr Interface(current not in place)
 	input wire i_trap,
 	input wire [31:0] i_trap_pc,
 	// IF-ID Interface
@@ -79,8 +77,11 @@ always @(*) begin
     if (~rst_n) begin
         ir_instr = `NOP;
     end 
-    else if (i_imem_vld & i_imem_rdy) begin
+    else if (i_imem_vld) begin
         ir_instr = i_instr;
+    end
+    else begin
+    	ir_instr = 32'd0;
     end
 end
 
