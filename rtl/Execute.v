@@ -23,6 +23,7 @@
 module Execute(
 	input wire clk,
 	input wire rst_n,
+	// Decode-Execute Interface
 	input wire [31:0] i_rs1_data,
 	input wire [31:0] i_rs2_data,
 	input wire [31:0] i_imm_data,
@@ -33,11 +34,12 @@ module Execute(
 	input wire [4:0] i_rs1,
 	input wire [4:0] i_rs2,
 	input wire [4:0] i_rd_decode,
-	input wire [4:0] i_rd_mem, // input required for MEM to EX forwarding
-	input wire [31:0] i_mem_result, // input required for stall and forward due to dependency of branch/jump instruction
 	input wire i_is_branch, // input from branch decode (without clocked) to check branch dependency
 	input wire [4:0] i_is_rs1, // source registers for checking dependency ,if branch
 	input wire [4:0] i_is_rs2,
+	// Execute-Mem Interface
+	input wire [4:0] i_rd_mem, // input required for MEM to EX forwarding
+	input wire [31:0] i_mem_result, // input required for stall and forward due to dependency of branch/jump instruction
 	// outputs to the next stage(MEM)
 	output reg [31:0] o_result, // must be forwarded to both IF and MEM stages
 	output reg [31:0] o_data_store,
