@@ -74,11 +74,11 @@ assign o_valid_dmem = ( (i_opcode == `LD) || (i_opcode == `S)) ? 1'b1 : 1'b0 ;
 assign o_ready_mem = (i_valid_mem == 1) ? 1'b1 : 1'b0;
 always@(*)
 begin   
-	is_opcode = i_opcode;
-	is_result = i_result;
-	is_rd = i_rd;
+	is_opcode <= i_opcode;
+	is_result <= i_result;
+	is_rd <= i_rd;
 	// Valid-Ready interface 
-	if(i_ready_dmem)
+	if(i_ready_dmem && o_valid_dmem)
 		o_addr = i_result;
 	else
 		o_addr = 32'b0;
@@ -98,20 +98,22 @@ begin
 	if(~rst_n) begin
 		o_wb_data <= 32'b0;
  		o_opcode  <= 7'b0;
+ 		end
+ 		
 		
 	else begin
 		if(is_opcode == `LD) 
 			o_wb_data <= is_load_data;
-		else
+		else	if( is_opcode!=`S)
 			o_wb_data <= is_result;
 		
 		o_opcode <= is_opcode;
-		o_rd <= i_rd;
+		o_rd <= is_rd;
 	     end
 	
 end
 //only for simulation
-`ifdef SIM
+/*`ifdef SIM
 always @(posedge clk)
 begin	
 	#2
@@ -128,6 +130,6 @@ begin
 		$fclose(fd);
 	end
 end
-`endif
+`endif*/
 
 endmodule
