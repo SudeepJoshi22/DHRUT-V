@@ -14,19 +14,21 @@ module tb_fetch_rom_wrapper (
 );
 
     // Internal signals to connect Fetch and instr_rom
-    wire [31:0] fetch_to_rom_addr;  // Address from Fetch to ROM
-    wire fetch_imem_rdy;            // Ready signal from Fetch to ROM
-    wire rom_to_fetch_valid;        // Valid signal from ROM to Fetch
-    wire [31:0] rom_to_fetch_data;  // Data output from ROM to Fetch
-
+    wire [31:0] fetch_to_imem_addr;  // Address from Fetch to ROM
+    wire fetch_to_imem_valid;            // Ready signal from Fetch to ROM
+    wire imem_to_fetch_rdy;        // Valid signal from ROM to Fetch
+    wire [31:0] imem_to_fetch_data;  // Data output from ROM to Fetch
+    wire imem_to_fetch_valid;
+    
     // Instantiate the Fetch module
     Fetch fetch_inst (
         .clk(clk),
         .rst_n(rst_n),
-        .i_instr(rom_to_fetch_data),
-        .o_imem_rdy(fetch_imem_rdy),
-        .i_imem_vld(rom_to_fetch_valid),
-        .o_iaddr(fetch_to_rom_addr),
+        .i_instr(imem_to_fetch_data),
+        .i_instr_vld(imem_to_fetch_valid),
+        .i_imem_rdy(imem_to_fetch_rdy),
+        .o_imem_vld(fetch_to_imem_valid),
+        .o_iaddr(fetch_to_imem_addr),
         .i_trap(i_trap),
         .i_trap_pc(i_trap_pc),
         .i_boj(i_boj),
@@ -42,11 +44,17 @@ module tb_fetch_rom_wrapper (
     instr_rom rom_inst (
         .clk(clk),
         .rst_n(rst_n),
-        .i_mem_addr(fetch_to_rom_addr),
-        .o_mem_rdata(rom_to_fetch_data),
-        .i_mem_ready(fetch_imem_rdy),
-        .o_mem_valid(rom_to_fetch_valid)
+        .i_mem_addr(fetch_to_imem_addr),
+        .o_mem_rdata(imem_to_fetch_data),
+        .o_rdata_vld(imem_to_fetch_valid),
+        .i_mem_valid(fetch_to_imem_valid),
+        .o_mem_ready(imem_to_fetch_rdy)
     );
+
+    initial begin
+        $dumpfile("dump.vcd");
+        $dumpvars(0, tb_fetch_rom_wrapper);
+    end
 
 endmodule
 

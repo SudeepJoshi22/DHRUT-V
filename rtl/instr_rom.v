@@ -17,12 +17,13 @@
 `default_nettype none
 
 module instr_rom (
-input wire clk,
-input wire rst_n,
-input wire [31:0] i_mem_addr,
-output reg [31:0] o_mem_rdata,
-input wire i_mem_ready,
-output reg o_mem_valid
+	input wire clk,
+	input wire rst_n,
+	input wire [31:0] i_mem_addr,
+	output reg [31:0] o_mem_rdata,
+	output reg o_rdata_vld,
+	input wire i_mem_valid,
+	output reg o_mem_ready
 );
 
 // Internal ROM storage
@@ -36,10 +37,10 @@ end
 // Valid signal
 always @(posedge clk) begin
 	if(!rst_n) begin
-		o_mem_valid <= 1'b0;
+		o_mem_ready <= 1'b0;
 	end
 	else begin
-		o_mem_valid <= 1'b1;
+		o_mem_ready <= 1'b1;
 	end
 end
 
@@ -47,12 +48,15 @@ end
 always @(posedge clk) begin
 	if(!rst_n) begin
 		o_mem_rdata <= 32'dz;
+		o_rdata_vld <= 1'b0;
 	end
-	else if(o_mem_valid & i_mem_ready) begin
+	else if(i_mem_valid) begin
 		o_mem_rdata <= {rom[i_mem_addr+3],rom[i_mem_addr+2],rom[i_mem_addr+1],rom[i_mem_addr]};
+		o_rdata_vld <= 1'b1;
 	end
 	else begin
 		o_mem_rdata <= 32'dz;
+		o_rdata_vld <= 1'b0;
 	end
 end
     

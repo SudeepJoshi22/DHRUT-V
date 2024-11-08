@@ -21,8 +21,9 @@ module Fetch(
 	input wire rst_n,
 	// Instruction memory interface
 	input wire [31:0] i_instr, //instruction code received from the instruction memory
-	output wire o_imem_rdy,
-	input wire i_imem_vld,
+	input wire i_instr_vld,
+	input wire i_imem_rdy,
+	output wire o_imem_vld,
 	output reg [31:0] o_iaddr, //instruction address
 	// IF-CSr Interface(current not in place)
 	input wire i_trap,
@@ -30,9 +31,9 @@ module Fetch(
 	// IF-ID Interface
 	input wire i_boj,
 	input wire [31:0] i_boj_pc,
-	output reg [31:0] o_pc, //Current PC value
-	output reg [31:0] o_instr,
-	output reg o_prediction,
+	output wire [31:0] o_pc, //Current PC value
+	output wire [31:0] o_instr,
+	output wire o_prediction,
 	// Pipeline control
 	input wire i_stall,
 	input wire i_flush
@@ -50,38 +51,28 @@ wire is_prediction;
 wire [31:0] is_predicted_pc;
 
 //Internal Registers
-reg [31:0] pc;
+reg [31:0] pc; // Current-PC counter
 reg [31:0] ir_instr;
+reg [31:0] ir_pc; 
+reg ir_prediction;
 
 // If the instruction is branch or not
 assign is_branch = (i_instr[6:0] == `B);
 
 // Instruction memory ready interface
-assign o_imem_rdy = (~i_stall & i_imem_vld) ? 1'b1 : 1'b0;
+assign o_imem_vld = rst_n & ~i_stall & i_imem_rdy;
 
 // Update the instruction address for memory interface
-always @(*) begin
+
+always @(posedge clk) begin
     if (~rst_n) begin
-        o_iaddr = `PC_RESET;
+        o_iaddr <= 32'dz;
     end 
-    else if (~i_stall & i_imem_vld) begin
-        o_iaddr = pc;
+    else if (~i_stall) begin
+        o_iaddr <= pc;
     end
     else begin
-    	o_iaddr = 32'd0;
-    end
-end
-
-
-always @(*) begin
-    if (~rst_n) begin
-        ir_instr = `NOP;
-    end 
-    else if (i_imem_vld) begin
-        ir_instr = i_instr;
-    end
-    else begin
-    	ir_instr = 32'd0;
+    	o_iaddr <= 32'dz;
     end
 end
 
@@ -99,7 +90,7 @@ always @(posedge clk) begin
 	else if(i_trap) begin
 		pc <= i_trap_pc;
 	end
-	else if(~i_stall) begin
+	else if(~i_stall & rst_n & o_imem_vld) begin
 		pc <= pc + 32'd4;
 	end
 	else begin
@@ -109,22 +100,27 @@ end
 
 // Pipeing the signals for next stage
 always @(posedge clk) begin
-	if (~rst_n | i_flush) begin
-		o_pc <= 0;
-		o_instr <= `NOP;
-		o_prediction <= 0;		
-	end
-	else if(i_stall) begin
-		o_pc <= o_pc;
-		o_instr <= o_instr;
-		o_prediction <= o_prediction;
-	end
-	else begin
-		o_pc <= pc;
-		o_instr <= ir_instr;
-		o_prediction <= is_prediction;
-	end
+    if (~rst_n | i_flush) begin
+        ir_instr <= `NOP;
+        ir_pc <= 32'd0;
+        ir_prediction <= 0;
+    end 
+    else if(i_instr_vld & ~i_stall) begin
+    	ir_instr <= i_instr;
+    	ir_pc <= o_iaddr;
+    	ir_prediction <= is_prediction;
+    end
+    else begin
+    	ir_instr <= ir_instr;
+    	ir_pc <= ir_pc;
+    	ir_prediction <= ir_prediction;
+    end
 end
+
+// Output
+assign o_instr = ir_instr;
+assign o_pc = ir_pc;
+assign o_prediction = ir_prediction;
 
 // Branch-Prediction
 bpu branch_prediction_unit (
@@ -137,10 +133,6 @@ bpu branch_prediction_unit (
 	.o_prediction(is_prediction),
 	.o_predicted_pc(is_predicted_pc)
 );
-
-always@(posedge clk) begin
-	$display("ir_instr %b :",ir_instr);
-end
 	
 //only for simulation
 `ifdef SIM
