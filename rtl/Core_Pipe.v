@@ -18,6 +18,7 @@
 `include "rtl/Fetch.v"
 `include "rtl/Decode.v"
 `include "rtl/Execute.v"
+`include "rtl/Memory.v"
 module Core_Pipe( input wire clk,
 		  input wire rst_n,
 		  input wire [31:0] i_instr,
@@ -32,7 +33,12 @@ module Core_Pipe( input wire clk,
 		  output reg [31:0] o_pc,
 		  output reg [2:0] o_func3,
 		  output reg [6:0] o_opcode,
-		  output reg [4:0] o_rd
+		  output reg [4:0] o_rd,
+		  output reg [31:0] o_wb_data,
+		  output reg [31:0] o_wr_data,
+		  output reg [31:0] o_addr,
+		  output reg o_valid_dmem,
+		  output red o_ready_mem
 );
 // Wires to Decode stage from Fetch and Memory
 //wire [31:0] o_fetch_pc , o_fetch_instr,o_iaddr;
@@ -110,10 +116,10 @@ Decode decode_inst( .clk(clk),
 );
 	
 //Initialized internal wires from Writeback/Memory stages
-wire  [31:0] i_mem_result;
+wire  [31:0] is_mem_result;
 wire [4:0] i_rd_mem;
-assign #200 i_mem_result =  32'h00000003;// Since MEM stage is'nt included according to TB delay has been added for simulation purposes
-assign #200 i_rd_mem = 5'b00110;
+//assign #200 i_mem_result =  32'h00000003;// Since MEM stage is'nt included according to TB delay has been added for simulation purposes
+//assign #200 i_rd_mem = 5'b00110;
 //Internal wires connecting to output
 wire [31:0] is_result,is_pc,is_data_store;
 wire [6:0] is_opcode;
@@ -131,8 +137,8 @@ Execute execute_inst( .clk(clk),
 		      .i_rs1(o_rs1),
 		      .i_rs2(o_rs2),
 		      .i_rd_decode(o_rd_decode),
-		      .i_rd_mem(i_rd_mem),
-		      .i_mem_result(i_mem_result),
+		      .i_rd_mem(is_rd_mem),
+		      .i_mem_result(is_mem_result),
 		      .i_is_rs1(o_is_rs1),
 		      .i_is_rs2(o_is_rs2),
 		      .i_is_branch(i_boj),
@@ -147,15 +153,38 @@ Execute execute_inst( .clk(clk),
 		      .o_decode_forward_rs1(i_decode_forward_rs1),
 		      .o_decode_forward_rs2(i_decode_forward_rs2)
 );
-
+wire [4:0] is_rd_mem;
+wire [6:0] is_opcode_mem;
+wire is_ready_dmem , is_valid_mem , is_stall_dmem , is_valid_dmem , is_ready_mem ;
+wire [31:0] is_addr , is_mem_result , is_read_data,is_wr_data;
+Memory mem_inst( .clk(clk),
+		 .rst_n(rst_n),
+		 .i_result(is_result),
+		 .i_data_store(is_data_store),
+		 .i_pc(is_pc),
+		 .i_opcode(is_opcode),
+		 .i_func3(is_func3),
+		 .i_rd(is_rd),
+		 .o_rd(is_rd_mem),
+		 .o_wb_data(is_mem_result),
+		 .o_opcode(is_opcode_mem),
+		 .i_ready_dmem(is_ready_dmem),
+		 .i_valid_mem(is_valid_mem),
+		 .i_read_data(is_read_data),
+		 .i_stall(is_stall_dmem),
+		 .o_addr(is_addr),
+		 .o_valid_dmem(is_valid_dmem),
+		 .o_ready_mem(is_ready_mem),
+		 .o_wr_data(is_wr_data)
+);
 always@(*) 
 begin
-	o_data_store <= is_data_store;
+	o_addr <= is_addr;
+	o_opcode <= is_opcode_mem;
+	o_wb_data <= is_mem_result;
+	o_wr_data <= is_wr_data ;
+	o_rd <= is_rd_mem;
 	o_result <= is_result;
-	o_func3 <= is_func3;
-	o_opcode <= is_opcode;
-	o_pc <= is_pc;
-	o_rd <= is_rd;
 end
 always@(*)
 begin
