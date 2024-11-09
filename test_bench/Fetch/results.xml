@@ -1,8 +1,8 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1731093848" />
-    <testcase name="test_fetch_rom" classname="test_fetch_rom" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch/test_fetch_rom.py" lineno="11" time="0.00733184814453125" sim_time_ns="140.001" ratio_time="19094.912665972945">
-      <failure message="Test failed with RANDOM_SEED=1731093848" />
+    <property name="random_seed" value="1731162929" />
+    <testcase name="test_fetch_rom" classname="test_fetch_rom" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch/test_fetch_rom.py" lineno="11" time="0.007563591003417969" sim_time_ns="140.001" ratio_time="18509.858602446096">
+      <failure message="Test failed with RANDOM_SEED=1731162929" />
     </testcase>
   </testsuite>
 </testsuites>
