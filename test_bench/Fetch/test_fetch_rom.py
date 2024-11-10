@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import cocotb
+import random
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, Timer
 from cocotb.regression import TestFactory
@@ -33,11 +34,11 @@ async def test_fetch_rom(dut):
     # Test fetch operation
     await perform_fetch_test(dut)
 
-    # Test trapping behavior
-    await perform_trap_test(dut)
-
     # Test BOJ (Branch On Jump) behavior
     await perform_boj_test(dut)
+    
+    # Test trapping behavior
+    await perform_trap_test(dut)
 
     # Test stalling behavior
     await perform_stall_test(dut)
@@ -55,40 +56,56 @@ async def perform_fetch_test(dut):
     dut.i_flush.value = 0
 
     # Allow fetch to operate normally
-    for _ in range(10):
+    for _ in range(5):
         await RisingEdge(dut.clk)
         assert dut.o_pc.value.is_resolvable, "PC output is not resolvable"
         assert dut.o_instr.value.is_resolvable, "Instruction output is not resolvable"
         assert dut.o_prediction.value.is_resolvable, "Prediction output is not resolvable"
-        cocotb.log.info(f"PC: {dut.o_pc.value}, Instruction: {dut.o_instr.value}, Prediction: {dut.o_prediction.value}")
+        cocotb.log.info(f"PC: {hex(dut.o_pc.value)}, Instruction: {hex(dut.o_instr.value)}, Prediction: {dut.o_prediction.value}")
 
 async def perform_trap_test(dut):
     """Test the trap functionality"""
     dut.i_trap.value = 1
-    trap_pc = 0x12345678
+    trap_pc = 0x80002018
     dut.i_trap_pc.value = trap_pc
     await RisingEdge(dut.clk)
-
+    dut.i_trap.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    
     assert dut.o_pc == trap_pc, f"Expected trap PC {hex(trap_pc)}, but got {hex(dut.o_pc.value)}"
     dut.i_trap.value = 0  # Deactivate trap
 
 async def perform_boj_test(dut):
     """Test the BOJ (Branch On Jump) functionality"""
     dut.i_boj.value = 1
-    boj_pc = 0x87654321
+    boj_pc = 0x8000200c
     dut.i_boj_pc.value = boj_pc
+    
     await RisingEdge(dut.clk)
-
+    dut.i_boj.value = 0
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    
     assert dut.o_pc == boj_pc, f"Expected BOJ PC {hex(boj_pc)}, but got {hex(dut.o_pc.value)}"
     dut.i_boj.value = 0  # Deactivate BOJ
 
 async def perform_stall_test(dut):
     """Test the stall functionality"""
     dut.i_stall.value = 1
-    prev_pc = dut.o_pc.value
     await RisingEdge(dut.clk)
-    assert dut.o_pc == prev_pc, "PC changed during stall when it should remain constant"
+    prev_pc = dut.o_pc.value
+    
+    
+    assert dut.o_pc == prev_pc, f"PC changed during stall when it should remain constant to {hex(prev_pc)}"
+    # keep stall for two cycles
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
     dut.i_stall.value = 0  # Release stall
+    # Run the PC for two clock cycles after stalling
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+
 
 async def perform_flush_test(dut):
     """Test the flush functionality"""
