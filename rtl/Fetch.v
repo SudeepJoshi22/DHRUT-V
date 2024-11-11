@@ -20,11 +20,10 @@ module Fetch(
 	input wire clk,
 	input wire rst_n,
 	// Instruction memory interface
-	input wire [31:0] i_instr, //instruction code received from the instruction memory
+	input wire [31:0] i_rom_instr,
 	input wire i_instr_vld,
-	input wire i_imem_rdy,
-	output wire o_imem_vld,
-	output reg [31:0] o_iaddr, //instruction address
+	output wire [31:0] o_iaddr,
+	output wire o_fetch_rdy,
 	// IF-CSr Interface(current not in place)
 	input wire i_trap,
 	input wire [31:0] i_trap_pc,
@@ -36,6 +35,7 @@ module Fetch(
 	output wire o_prediction,
 	// Pipeline control
 	input wire i_stall,
+	input wire [31:0] i_redir_pc,
 	input wire i_flush
 );
 
@@ -53,44 +53,35 @@ wire [31:0] is_predicted_pc;
 //Internal Registers
 reg [31:0] pc; // Current-PC counter
 reg [31:0] ir_instr;
+reg ir_instr_latch;
 reg [31:0] ir_pc; 
 reg ir_prediction;
 
 // If the instruction is branch or not
-assign is_branch = (i_instr[6:0] == `B);
+assign is_branch = (i_rom_instr[6:0] == `B);
 
-// Instruction memory ready interface
-assign o_imem_vld = rst_n & ~i_stall & i_imem_rdy;
-
-// Update the instruction address for memory interface
-
-always @(posedge clk) begin
-    if (~rst_n) begin
-        o_iaddr <= 32'dz;
-    end 
-    else if (~i_stall) begin
-        o_iaddr <= pc;
-    end
-    else begin
-    	o_iaddr <= 32'dz;
-    end
-end
+// Generate Address for the Instruction ROM(producer)
+assign o_fetch_rdy = (~i_stall & ~i_flush & rst_n);
+assign o_iaddr = pc; 	
 
 // PC Change Logic
-always @(posedge clk) begin
+always @(posedge clk or negedge rst_n) begin
 	if(~rst_n) begin
 		pc <= `PC_RESET;
 	end
-	else if(i_flush) begin
-		pc <= pc;
-	end
-	else if(is_branch & is_prediction) begin
-		pc <= is_predicted_pc;
+	else if(i_flush) begin 
+		pc <= i_redir_pc;
 	end
 	else if(i_trap) begin
 		pc <= i_trap_pc;
 	end
-	else if(~i_stall & rst_n & o_imem_vld) begin
+	else if(i_boj) begin
+	pc <= i_boj_pc;
+	end
+	else if(is_branch & is_prediction) begin
+		pc <= is_predicted_pc;
+	end
+	else if(~i_stall & rst_n) begin
 		pc <= pc + 32'd4;
 	end
 	else begin
@@ -99,16 +90,21 @@ always @(posedge clk) begin
 end
 
 // Pipeing the signals for next stage
-always @(posedge clk) begin
+always @(posedge clk or negedge rst_n) begin
     if (~rst_n | i_flush) begin
         ir_instr <= `NOP;
         ir_pc <= 32'd0;
         ir_prediction <= 0;
     end 
     else if(i_instr_vld & ~i_stall) begin
-    	ir_instr <= i_instr;
+    	ir_instr <= i_rom_instr;
     	ir_pc <= o_iaddr;
     	ir_prediction <= is_prediction;
+    end
+    else if(i_flush) begin
+	ir_instr <= `NOP;
+    	ir_pc <= 0;
+    	ir_prediction <= 0;
     end
     else begin
     	ir_instr <= ir_instr;

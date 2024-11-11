@@ -1,0 +1,78 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Mon Nov 11 18:35:11 2024
+[*]
+[dumpfile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch/dump.vcd"
+[dumpfile_mtime] "Mon Nov 11 18:31:53 2024"
+[dumpfile_size] 68124672
+[savefile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch/fetch_signals.gtkw"
+[timestart] 0
+[size] 1920 1001
+[pos] -1 -1
+*-15.122166 270000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_fetch_rom_wrapper.
+[treeopen] tb_fetch_rom_wrapper.u_fetch.
+[sst_width] 278
+[signals_width] 260
+[sst_expanded] 1
+[sst_vpaned_height] 297
+@28
+tb_fetch_rom_wrapper.clk
+tb_fetch_rom_wrapper.rst_n
+tb_fetch_rom_wrapper.i_stall
+tb_fetch_rom_wrapper.i_flush
+@22
+tb_fetch_rom_wrapper.i_redir_pc[31:0]
+@28
+tb_fetch_rom_wrapper.i_boj
+@22
+tb_fetch_rom_wrapper.i_boj_pc[31:0]
+@28
+tb_fetch_rom_wrapper.i_trap
+@22
+tb_fetch_rom_wrapper.i_trap_pc[31:0]
+@200
+-Current PC Value
+@22
+tb_fetch_rom_wrapper.u_fetch.pc[31:0]
+tb_fetch_rom_wrapper.u_fetch.o_iaddr[31:0]
+@28
+tb_fetch_rom_wrapper.u_fetch.o_fetch_rdy
+@200
+-ROM Side
+@22
+tb_fetch_rom_wrapper.u_instr_rom.i_addr[31:0]
+@28
+tb_fetch_rom_wrapper.u_instr_rom.i_stb
+@22
+tb_fetch_rom_wrapper.u_instr_rom.o_data[31:0]
+@28
+tb_fetch_rom_wrapper.u_instr_rom.o_data_vld
+@200
+-Fetch Side
+@28
+tb_fetch_rom_wrapper.i_instr_vld
+@22
+tb_fetch_rom_wrapper.i_rom_instr[31:0]
+tb_fetch_rom_wrapper.o_instr[31:0]
+tb_fetch_rom_wrapper.o_pc[31:0]
+@28
+tb_fetch_rom_wrapper.o_prediction
+@200
+-Branch Prediction
+@28
+tb_fetch_rom_wrapper.u_fetch.is_branch
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.i_actually_taken
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.i_is_branch
+@22
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.i_branch_pc[31:0]
+@28
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.ir_hit
+@22
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.o_predicted_pc[31:0]
+@28
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.ir_is_branch
+@23
+tb_fetch_rom_wrapper.u_fetch.branch_prediction_unit.ir_index[7:0]
+[pattern_trace] 1
+[pattern_trace] 0
