@@ -40,10 +40,8 @@ module Execute(
 	// Execute-Mem Interface
 	input wire [4:0] i_rd_mem, // input required for MEM to EX forwarding
 	input wire [31:0] i_mem_result, // input required for stall and forward due to dependency of branch/jump instruction
-	// outputs to the next stage(MEM)
 	output reg [31:0] o_result, // must be forwarded to both IF and MEM stages
 	output reg [31:0] o_data_store,
-	output reg [31:0] o_pc,
 	output reg [2:0] o_func3,
 	output reg [6:0] o_opcode,
 	output reg [4:0] o_rd,

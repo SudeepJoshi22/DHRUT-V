@@ -1,24 +1,17 @@
-// MIT License
-// 
-// Copyright (c) 2023 Sudeep.
-// 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+/*
+   Copyright 2024 Sudeep Joshi
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License. */
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -34,19 +27,21 @@ module Memory(
 	input wire [6:0] i_opcode,
 	input wire [2:0] i_func3,
 	input wire [4:0] i_rd,
-	output reg [4:0] o_rd,// For forwarding unit
-	// MEM-WB Interface
+	output reg [4:0] o_ex_rd, // For forwarding unit
+	output reg [31:0] o_mem_data_val, // Loaded Value, or Buffered result from EXE 
+	// MEM-WB Interfacue
+	output reg o_wb_rd,
 	output reg [31:0] o_wb_data, // write back value can be result, data read or pc depending on the opcode
 	output reg [6:0] o_opcode,
-	// Data memory interface for load type instruction ( 2 Ready-Valid interfaces )
-	input wire i_ready_dmem,// Mem stage is sender for address and data for store type instruction
-	input wire i_valid_mem,// Mem Stage is receiver for i_read_data for load type instruction
-	input wire [31:0] i_read_data, //data read from data memory
-	input wire i_stall, //Stall the MEM stage when there is a delay in reading data from memory within one clock cycle
-	output reg [31:0] o_addr,//Address to data memory/cache
-	output wire o_valid_dmem,//Mem stage as sender for address and Data for store type
-	output wire o_ready_mem,//Mem is receiver for load type
-	output reg [31:0] o_wr_data// Data to be sent to Data_memory
+	// Data-Memory Interface
+        output wire o_wr_en,    		// Write enable signal
+        output wire [3:0] o_sel,		// Select signal for byte-enable (4 bits for 32-bit word)
+        output wire [31:0] o_daddr,    		// 32-bit Address signal
+        output wire [31:0] o_write_data,    	// 32-bit Write data
+        input wire [31:0] i_read_data,    	// 32-bit Read data
+        output wire o_d_ready,  		// Ready signal for data transfer
+        input wire i_d_valid,  			// Valid signal for data transfer
+        input wire i_error     			// Error signal for invalid accesses
 );
 
 reg [31:0] is_pc_4, is_load_data,is_result;

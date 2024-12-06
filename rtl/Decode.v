@@ -15,11 +15,6 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
-`include "rtl/reg_file.v"
-`include "rtl/imm_gen.v"
-`include "rtl/control_unit.v"
-`include "rtl/branch_jump_decision.v"
 
 module Decode(
 	input wire clk,
@@ -27,6 +22,9 @@ module Decode(
 	// IF-ID Interface
 	input wire [31:0] i_instr, // Instruction Fetched in IF stage
 	input wire [31:0] i_pc, // PC of the current instruction
+	input wire i_prediction, // Prediction signal from Fetch stage
+	output wire o_boj, // Tells if the Branch is taken or not
+	output wire [31:0] o_boj_pc,
 	// ID-WB Interface
 	input wire signed [31:0] i_write_data, // Data to be written to register file from the WB stage
 	input wire i_wr, // write enable signal from the WB stage, enables the register file to write to rd.
@@ -38,7 +36,6 @@ module Decode(
 	output reg [2:0] o_func3, // func3 of the current instruction
 	output reg [3:0] o_alu_ctrl, // ALU Control signals  
 	output reg [31:0] o_pc,// PC for the next stage
-	output reg [31:0] branch_pc, // REVISIT
 	output reg [4:0] o_rs1,
 	output reg [4:0] o_rs2,
 	output reg [4:0] o_rd,
@@ -46,7 +43,6 @@ module Decode(
 	output reg [4:0] o_is_rs2,// To execute stage
 	output reg o_is_branch,// To execute stage // REVISIT
 	// pipeline control
-	input wire i_prediction, // Prediction signal from Fetch stage
 	input wire i_stall, // stall signal from EX stage 
 	input wire i_forward_branch,
 	input wire [31:0] i_EX_result,// Result after stall and forward from EX stage
@@ -71,6 +67,7 @@ wire [31:0] is_pc;
 wire [31:0] is_rs1_d;
 wire [31:0] is_rs2_d;
 
+assign o_boj = is_boj;
 // Internal Registers
 reg [31:0] ir_instr; // used for decoding
 reg ir_flush; // internal register used to flush contents 
@@ -153,7 +150,7 @@ begin
 	
 	o_flush = (i_prediction ^ is_boj);//Flush the Fetch stage if prediction is wrong
 	o_stall = i_stall;
-	branch_pc = is_branch_pc;
+	o_boj_pc = is_branch_pc;
 	ir_flush = is_boj;
 	
 end

@@ -7,7 +7,7 @@ module tb_fetch_rom_wrapper (
     input wire i_boj,
     input wire [31:0] i_boj_pc,
     input wire i_stall,
-    input wire [31:0] i_redir_pc,
+    input wire [31:0] i_flush_pc,
     input wire i_flush,
     output wire [31:0] o_pc,      // Current PC value from Fetch
     output wire [31:0] o_instr,   // Fetched instruction from Fetch
@@ -36,7 +36,7 @@ Fetch u_fetch (
 	.o_instr(o_instr),
 	.o_prediction(o_prediction),
 	.i_stall(i_stall),
-	.i_redir_pc(i_redir_pc),
+	.i_flush_pc(i_flush_pc),
 	.i_flush(i_flush)
 );
 

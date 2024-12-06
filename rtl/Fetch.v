@@ -35,7 +35,7 @@ module Fetch(
 	output wire o_prediction,
 	// Pipeline control
 	input wire i_stall,
-	input wire [31:0] i_redir_pc,
+	input wire [31:0] i_flush_pc,
 	input wire i_flush
 );
 
@@ -70,7 +70,7 @@ always @(posedge clk or negedge rst_n) begin
 		pc <= `PC_RESET;
 	end
 	else if(i_flush) begin 
-		pc <= i_redir_pc;
+		pc <= i_flush_pc;
 	end
 	else if(i_trap) begin
 		pc <= i_trap_pc;

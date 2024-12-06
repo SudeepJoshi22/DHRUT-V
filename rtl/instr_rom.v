@@ -16,9 +16,6 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
-`timescale 1ns / 1ps
-`default_nettype none
-
 module instr_rom (
     input wire clk,
     input wire rst_n,

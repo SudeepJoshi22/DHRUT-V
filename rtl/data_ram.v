@@ -12,59 +12,70 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License. */
-   
+
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
 
 module data_ram (
-input wire clk,
-input wire rst_n,
-input wire i_mem_en,
-input wire i_mem_rd,
-input wire i_mem_wr,
-input wire [31:0] i_mem_addr,
-input wire [31:0] i_mem_wdata,
-output reg [31:0] o_mem_rdata,
-output reg o_mem_rdy,
-output reg o_mem_vld
+    input  wire         clk,      // Clock signal
+    input  wire         rst_n,    // Reset signal (active low)
+    input  wire         i_wr_en,    // Write enable signal
+    input  wire [3:0]   i_sel,      // Select signal for byte-enable (4 bits for 32-bit word)
+    input  wire [31:0]  i_addr,     // 32-bit Address signal
+    input  wire [31:0]  i_wdata,    // 32-bit Write data
+    output reg  [31:0]  o_rdata,    // 32-bit Read data
+    input  wire         i_d_ready,  // Ready signal for data transfer
+    output reg          o_d_valid,  // Valid signal for data transfer
+    output reg          o_error     // Error signal for invalid accesses
 );
 
-// Internal RAM storage
-reg [7:0] ram[`DATA_START + `DATA_MEM_SIZE : `DATA_START];
+    // Byte-addressable memory array
+    reg [7:0] memory[`DATA_START + `DATA_MEM_SIZE - 1 : `DATA_START]; // Byte-addressable RAM
 
-// Initialize RAM contents from a file (optional)
-initial begin
-$readmemh("programs/data_mem.mem", ram);
-end
-
-always @(posedge clk or negedge rst_n) begin
-if (!rst_n) begin
-    o_mem_rdy <= 0;
-    o_mem_vld <= 0;
-    o_mem_rdata <= 0;
-end else if (i_mem_en) begin
-    if (i_mem_rd) begin
-        o_mem_rdy <= 1; // Memory is ready to provide data
-        o_mem_rdata <= {ram[i_mem_addr+3], ram[i_mem_addr+2], ram[i_mem_addr+1], ram[i_mem_addr]}; // Read data (little-endian)
-        o_mem_vld <= 1; // Data is valid
-    end else if (i_mem_wr) begin
-        // Write data to RAM
-        ram[i_mem_addr] <= i_mem_wdata[7:0];
-        ram[i_mem_addr+1] <= i_mem_wdata[15:8];
-        ram[i_mem_addr+2] <= i_mem_wdata[23:16];
-        ram[i_mem_addr+3] <= i_mem_wdata[31:24];
-        o_mem_rdy <= 1; // Memory is ready to accept data
-        o_mem_vld <= 0; // No read data is valid
-    end else begin
-        o_mem_rdy <= 0;
-        o_mem_vld <= 0;
+    // RAM Initialization (optional)
+    initial begin
+        $readmemh("programs/data_mem.mem", rom);
     end
-end else begin
-    o_mem_rdy <= 0;
-    o_mem_vld <= 0;
-end
-end
+
+    // Error detection logic
+    wire out_of_bounds = (i_addr < `DATA_START) || (i_addr >= `DATA_START + `DATA_MEM_SIZE);
+    wire misaligned    = |i_addr[1:0]; // True if lower 2 bits of address are non-zero
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            o_error <= 1'b0;
+        end else begin
+            o_error <= out_of_bounds || (i_wr_en && misaligned); // Set error on invalid access
+        end
+    end
+
+    // Valid-ready handshake logic
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            o_d_valid <= 1'b0; // Deassert valid on reset
+        end else begin
+            o_d_valid <= i_d_ready && !o_error; // Assert valid if ready and no error
+        end
+    end
+
+    // Write operation with select signal support
+    always @(posedge clk) begin
+        if (i_wr_en && !o_error) begin
+            if (i_sel[0]) memory[i_addr]     <= i_wdata[7:0];
+            if (i_sel[1]) memory[i_addr + 1] <= i_wdata[15:8];
+            if (i_sel[2]) memory[i_addr + 2] <= i_wdata[23:16];
+            if (i_sel[3]) memory[i_addr + 3] <= i_wdata[31:24];
+        end
+    end
+
+    // Read operation
+    always @(posedge clk) begin
+        if (!o_error) begin
+            o_rdata <= {memory[i_addr + 3], memory[i_addr + 2], memory[i_addr + 1], memory[i_addr]};
+        end else begin
+            o_rdata <= 32'hDEADBEEF; // Default error value, can be customized
+        end
+    end
 
 endmodule
 

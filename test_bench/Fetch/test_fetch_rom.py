@@ -113,7 +113,7 @@ async def perform_stall_test(dut):
 async def perform_flush_test(dut):
     """Test the flush functionality"""
     dut.i_flush.value = 1
-    dut.i_redir_pc = 0x8000200c
+    dut.i_flush_pc = 0x8000200c
     await RisingEdge(dut.clk)
     dut.i_flush.value = 0  # Deactivate flush
 
