@@ -48,7 +48,6 @@ pass:
 
 .align 4
 .data
-    some_data:	.word 0x10002000 .word 0x20003000  .word 0x40005000 .word 0xabcdefff .word 0xdeadbeef
     tohost: .word 0
     fromhost: .word 0
     result: .word 0

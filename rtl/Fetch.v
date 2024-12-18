@@ -76,7 +76,7 @@ always @(posedge clk or negedge rst_n) begin
 		pc <= i_trap_pc;
 	end
 	else if(i_boj) begin
-	pc <= i_boj_pc;
+		pc <= i_boj_pc;
 	end
 	else if(is_branch & is_prediction) begin
 		pc <= is_predicted_pc;

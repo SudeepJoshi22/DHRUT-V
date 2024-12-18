@@ -77,7 +77,6 @@ async def perform_trap_test(dut):
     await RisingEdge(dut.clk)
     
     assert dut.o_pc == trap_pc, f"Expected trap PC {hex(trap_pc)}, but got {hex(dut.o_pc.value)}"
-    dut.i_trap.value = 0  # Deactivate trap
 
 async def perform_boj_test(dut):
     """Test the BOJ (Branch On Jump) functionality"""
