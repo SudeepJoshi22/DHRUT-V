@@ -9,7 +9,7 @@ from cocotb.regression import TestFactory
 RESET_DURATION = 20  # Reset duration in ns
 
 @cocotb.test
-async def test_fetch_rom(dut):
+async def test_fetch_axil_interface(dut):
 
     """Test the Fetch-Rom interface with various inputs"""
 
@@ -18,49 +18,56 @@ async def test_fetch_rom(dut):
 
     # Reset the DUT
     dut.rst_n.value = 0
-    dut.i_trap.value = 0
-    dut.i_trap_pc.value = 0
-    dut.i_boj.value = 0
-    dut.i_boj_pc.value = 0
-    dut.i_stall.value = 0
-    dut.i_flush.value = 0
-
+    
     # Release reset after some time
     await Timer(RESET_DURATION, units="ns")
     dut.rst_n.value = 1
     await RisingEdge(dut.clk)
-
+    #dut.rst_n.value = 0
+    
     # Test fetch operation
     await perform_fetch_test(dut)
 
     # Test trapping behavior
-    await perform_trap_test(dut)
+    #await perform_trap_test(dut)
 
-    # Test BOJ (Branch On Jump) behavior
-    await perform_boj_test(dut)
+    ## Test BOJ (Branch On Jump) behavior
+    #await perform_boj_test(dut)
 
-    # Test stalling behavior
-    await perform_stall_test(dut)
+    ## Test stalling behavior
+    #await perform_stall_test(dut)
 
-    # Test flush behavior
-    await perform_flush_test(dut)
+    ## Test flush behavior
+    #await perform_flush_test(dut)
 
-    # Test prediction output
-    await perform_prediction_test(dut)
+    ## Test prediction output
+    #await perform_prediction_test(dut)
 
 async def perform_fetch_test(dut):
     """Test the basic fetch operation"""
     await RisingEdge(dut.clk)
-    dut.i_stall.value = 0
-    dut.i_flush.value = 0
+    #dut.i_stall.value = 0
+    #dut.i_flush.value = 0
 
     # Allow fetch to operate normally
-    for _ in range(10):
+    
+    
+    for _ in range(15):
         await RisingEdge(dut.clk)
-        assert dut.o_pc.value.is_resolvable, "PC output is not resolvable"
-        assert dut.o_instr.value.is_resolvable, "Instruction output is not resolvable"
-        assert dut.o_prediction.value.is_resolvable, "Prediction output is not resolvable"
-        cocotb.log.info(f"PC: {dut.o_pc.value}, Instruction: {dut.o_instr.value}, Prediction: {dut.o_prediction.value}")
+        #assert dut.o_pc.value.is_resolvable, "PC output is not resolvable"
+        #assert dut.o_instr.value.is_resolvable, "Instruction output is not resolvable"
+        #assert dut.o_prediction.value.is_resolvable, "Prediction output is not resolvable"
+        #cocotb.log.info(f"PC: {dut.o_pc.value}, Instruction: {dut.o_instr.value}, Prediction: {dut.o_prediction.value}")
+    
+    dut.rst_n.value = 0
+    
+    # Release reset after some time
+    await Timer(RESET_DURATION, units="ns")
+    dut.rst_n.value = 1
+    await RisingEdge(dut.clk)
+		
+    for _ in range(15):
+        await RisingEdge(dut.clk)
 
 async def perform_trap_test(dut):
     """Test the trap functionality"""

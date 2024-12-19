@@ -1,0 +1,74 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Thu Dec 19 19:16:59 2024
+[*]
+[dumpfile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch_axi/waves.vcd"
+[dumpfile_mtime] "Thu Dec 19 19:15:47 2024"
+[dumpfile_size] 18946
+[savefile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch_axi/signals.gtkw"
+[timestart] 0
+[size] 1920 1001
+[pos] -1 -1
+*-14.291991 100300 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_fetch_axil_interface.
+[sst_width] 278
+[signals_width] 385
+[sst_expanded] 1
+[sst_vpaned_height] 297
+@200
+-Fetch to AXIL Interface
+@28
+tb_fetch_axil_interface.u_axil_ram.clk
+tb_fetch_axil_interface.rst_n
+@22
+tb_fetch_axil_interface.u_fetch.pc[31:0]
+@28
+tb_fetch_axil_interface.u_fetch.i_axil_arready
+@22
+tb_fetch_axil_interface.u_fetch.ir_instr[31:0]
+@28
+tb_fetch_axil_interface.u_fetch.o_axil_arvalid
+@22
+tb_fetch_axil_interface.u_fetch.o_axil_araddr[31:0]
+@28
+tb_fetch_axil_interface.u_fetch.o_axil_rready
+tb_fetch_axil_interface.u_fetch.i_axil_rvalid
+@22
+tb_fetch_axil_interface.u_fetch.i_axil_rdata[31:0]
+@200
+-AXIL to Fetch Interface
+@28
+tb_fetch_axil_interface.u_axil_ram.clk
+tb_fetch_axil_interface.u_axil_ram.rst
+tb_fetch_axil_interface.u_axil_ram.s_axil_arvalid
+@22
+tb_fetch_axil_interface.u_axil_ram.s_axil_araddr[31:0]
+tb_fetch_axil_interface.u_axil_ram.s_axil_araddr_valid[29:0]
+@28
+tb_fetch_axil_interface.u_axil_ram.s_axil_arprot[2:0]
+tb_fetch_axil_interface.u_axil_ram.s_axil_arready
+tb_fetch_axil_interface.u_axil_ram.s_axil_arready_next
+tb_fetch_axil_interface.u_axil_ram.s_axil_arready_reg
+@22
+tb_fetch_axil_interface.u_axil_ram.s_axil_rdata[31:0]
+tb_fetch_axil_interface.u_axil_ram.s_axil_rdata_pipe_reg[31:0]
+tb_fetch_axil_interface.u_axil_ram.s_axil_rdata_reg[31:0]
+@28
+tb_fetch_axil_interface.u_axil_ram.s_axil_rready
+tb_fetch_axil_interface.u_axil_ram.s_axil_rresp[1:0]
+tb_fetch_axil_interface.u_axil_ram.s_axil_rvalid
+tb_fetch_axil_interface.u_axil_ram.s_axil_rvalid_next
+tb_fetch_axil_interface.u_axil_ram.s_axil_rvalid_pipe_reg
+tb_fetch_axil_interface.u_axil_ram.s_axil_rvalid_reg
+@420
+tb_fetch_axil_interface.u_axil_ram.ADDR_WIDTH
+tb_fetch_axil_interface.u_axil_ram.DATA_WIDTH
+tb_fetch_axil_interface.u_axil_ram.PIPELINE_OUTPUT
+tb_fetch_axil_interface.u_axil_ram.STRB_WIDTH
+tb_fetch_axil_interface.u_axil_ram.VALID_ADDR_WIDTH
+@22
+tb_fetch_axil_interface.u_axil_ram.START_ADDR
+@23
+tb_fetch_axil_interface.u_axil_ram.END_ADDR
+[pattern_trace] 1
+[pattern_trace] 0
