@@ -1,31 +1,51 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Thu Dec 19 19:16:59 2024
+[*] Sun Dec 22 08:58:34 2024
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch_axi/waves.vcd"
-[dumpfile_mtime] "Thu Dec 19 19:15:47 2024"
-[dumpfile_size] 18946
+[dumpfile_mtime] "Sun Dec 22 08:57:32 2024"
+[dumpfile_size] 33764
 [savefile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch_axi/signals.gtkw"
-[timestart] 0
+[timestart] 150200
 [size] 1920 1001
 [pos] -1 -1
-*-14.291991 100300 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-14.291991 16300 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_fetch_axil_interface.
 [sst_width] 278
 [signals_width] 385
 [sst_expanded] 1
 [sst_vpaned_height] 297
 @200
+-Fetch to Decode interface
+@28
+tb_fetch_axil_interface.u_fetch.o_if_pkt_valid
+@22
+tb_fetch_axil_interface.u_fetch.o_if_pkt_data[63:0]
+tb_fetch_axil_interface.u_fetch.pc[31:0]
+tb_fetch_axil_interface.u_fetch.ir_next_pc[31:0]
+@200
+-Branch-Trap
+@28
+tb_fetch_axil_interface.u_fetch.i_boj
+@22
+tb_fetch_axil_interface.u_fetch.i_boj_pc[31:0]
+@28
+tb_fetch_axil_interface.u_fetch.i_flush
+@22
+tb_fetch_axil_interface.u_fetch.i_redir_pc[31:0]
+@28
+tb_fetch_axil_interface.u_fetch.i_trap
+@23
+tb_fetch_axil_interface.u_fetch.i_trap_pc[31:0]
+@200
 -Fetch to AXIL Interface
 @28
 tb_fetch_axil_interface.u_axil_ram.clk
 tb_fetch_axil_interface.rst_n
-@22
-tb_fetch_axil_interface.u_fetch.pc[31:0]
-@28
 tb_fetch_axil_interface.u_fetch.i_axil_arready
 @22
 tb_fetch_axil_interface.u_fetch.ir_instr[31:0]
+tb_fetch_axil_interface.u_fetch.ir_addr[31:0]
 @28
 tb_fetch_axil_interface.u_fetch.o_axil_arvalid
 @22
@@ -68,7 +88,6 @@ tb_fetch_axil_interface.u_axil_ram.STRB_WIDTH
 tb_fetch_axil_interface.u_axil_ram.VALID_ADDR_WIDTH
 @22
 tb_fetch_axil_interface.u_axil_ram.START_ADDR
-@23
 tb_fetch_axil_interface.u_axil_ram.END_ADDR
 [pattern_trace] 1
 [pattern_trace] 0

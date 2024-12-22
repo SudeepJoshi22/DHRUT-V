@@ -6,7 +6,7 @@ VERILOG_SOURCES += $(RTL_DIR)/parameters.vh
 VERILOG_SOURCES += $(PWD)/tb_fetch_axil_interface.v
 VERILOG_SOURCES += $(RTL_DIR)/Fetch.v
 VERILOG_SOURCES += $(RTL_DIR)/axil_rom.v
-
+VERILOG_SOURCES += $(RTL_DIR)/bpu.v
 
 fetch:
 	rm -rf sim_build/
