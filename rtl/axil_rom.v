@@ -36,7 +36,7 @@ module axil_ram #
     // Width of data bus in bits
     parameter DATA_WIDTH = 32,
     // Width of address bus in bits
-    parameter ADDR_WIDTH = 32,
+    parameter ADDR_WIDTH = 16,
     // Width of wstrb (width of data bus in words)
     parameter STRB_WIDTH = (DATA_WIDTH/8),
     // Extra pipeline register on output
@@ -70,6 +70,8 @@ module axil_ram #
 parameter VALID_ADDR_WIDTH = ADDR_WIDTH - $clog2(STRB_WIDTH);
 parameter WORD_WIDTH = STRB_WIDTH;
 parameter WORD_SIZE = DATA_WIDTH/WORD_WIDTH;
+parameter END_ADDR = (`PC_RESET + `INSTR_MEM_SIZE - 1) >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
+parameter START_ADDR = (`PC_RESET) >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
 
 reg mem_wr_en;
 reg mem_rd_en;
@@ -84,7 +86,7 @@ reg [DATA_WIDTH-1:0] s_axil_rdata_pipe_reg = {DATA_WIDTH{1'b0}};
 reg s_axil_rvalid_pipe_reg = 1'b0;
 
 // (* RAM_STYLE="BLOCK" *)
-reg [DATA_WIDTH-1:0] mem[(2**VALID_ADDR_WIDTH)-1:0];
+reg [DATA_WIDTH-1:0] mem[END_ADDR : START_ADDR];
 
 wire [VALID_ADDR_WIDTH-1:0] s_axil_awaddr_valid = s_axil_awaddr >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
 wire [VALID_ADDR_WIDTH-1:0] s_axil_araddr_valid = s_axil_araddr >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
@@ -98,16 +100,11 @@ assign s_axil_rdata = PIPELINE_OUTPUT ? s_axil_rdata_pipe_reg : s_axil_rdata_reg
 assign s_axil_rresp = 2'b00;
 assign s_axil_rvalid = PIPELINE_OUTPUT ? s_axil_rvalid_pipe_reg : s_axil_rvalid_reg;
 
-integer i, j;
+integer i;
 
 initial begin
-    // two nested loops for smaller number of iterations per loop
-    // workaround for synthesizer complaints about large loop counts
-    for (i = 0; i < 2**VALID_ADDR_WIDTH; i = i + 2**(VALID_ADDR_WIDTH/2)) begin
-        for (j = i; j < i + 2**(VALID_ADDR_WIDTH/2); j = j + 1) begin
-            mem[j] = 0;
-        end
-    end
+	$readmemh("instr_mem.mem", mem);
+	//$readmemh("instr_mem.mem", mem, `PC_RESET, `PC_RESET + `INSTR_MEM_SIZE);
 end
 
 always @* begin
@@ -150,7 +147,7 @@ always @* begin
     s_axil_arready_next = 1'b0;
     s_axil_rvalid_next = s_axil_rvalid_reg && !(s_axil_rready || (PIPELINE_OUTPUT && !s_axil_rvalid_pipe_reg));
 
-    if (s_axil_arvalid && (!s_axil_rvalid || s_axil_rready || (PIPELINE_OUTPUT && !s_axil_rvalid_pipe_reg)) && (!s_axil_arready)) begin
+    if (s_axil_arvalid && (!s_axil_rvalid || s_axil_rready || (PIPELINE_OUTPUT && !s_axil_rvalid_pipe_reg))&& (!s_axil_arready) ) begin
         s_axil_arready_next = 1'b1;
         s_axil_rvalid_next = 1'b1;
 

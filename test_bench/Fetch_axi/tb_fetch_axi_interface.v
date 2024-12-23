@@ -1,4 +1,4 @@
-module tb_fetch_axil_interface (
+module tb_fetch_axi_interface (
     input wire clk,
     input wire rst_n,
     input wire stall,
@@ -22,6 +22,7 @@ module tb_fetch_axil_interface (
 localparam ADDR_WIDTH = 32;
 localparam DATA_WIDTH = 32;
 localparam IF_PKT_WIDTH = 64;
+localparam ID_WIDTH = 8;
 
 // Signals for Fetch module
 wire [ADDR_WIDTH-1:0] fetch_araddr;
@@ -32,16 +33,6 @@ wire fetch_rvalid;
 wire fetch_rready;
 wire fetch_if_pkt_valid;
 wire [IF_PKT_WIDTH-1:0] fetch_if_pkt_data;
-
-// Signals for AXI-lite RAM module
-wire [ADDR_WIDTH-1:0] ram_araddr;
-wire [2:0] ram_arprot = 3'b000; // Default value for ARPROT
-wire ram_arvalid;
-wire ram_arready;
-wire [DATA_WIDTH-1:0] ram_rdata;
-wire [1:0] ram_rresp; // Unused
-wire ram_rvalid;
-wire ram_rready;
 
 // Debug Outputs
 assign araddr = fetch_araddr;
@@ -79,44 +70,25 @@ Fetch #(
     .o_axil_rready(fetch_rready)
 );
 
-// Instantiate AXI-lite RAM module
-
-axil_ram #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .ADDR_WIDTH(ADDR_WIDTH)
-) u_axil_ram (
-    .clk(clk),
-    .rst(~rst_n), // Convert active-low reset to active-high
-    .s_axil_araddr(fetch_araddr),
-    .s_axil_arprot(ram_arprot),
-    .s_axil_arvalid(fetch_arvalid),
-    .s_axil_arready(fetch_arready),
-    .s_axil_rdata(fetch_rdata),
-    .s_axil_rresp(ram_rresp), // Unused
-    .s_axil_rvalid(fetch_rvalid),
-    .s_axil_rready(fetch_rready),
-    .s_axil_awaddr(), // Unused
-    .s_axil_awprot(), // Unused
-    .s_axil_awvalid(), // Unused
-    .s_axil_awready(), // Unused
-    .s_axil_wdata(), // Unused
-    .s_axil_wstrb(), // Unused
-    .s_axil_wvalid(), // Unused
-    .s_axil_wready(), // Unused
-    .s_axil_bresp(), // Unused
-    .s_axil_bvalid(), // Unused
-    .s_axil_bready() // Unused
+// Instantiate ROM module (replacing AXI RAM with ROM)
+rom_axi_lite #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .DATA_WIDTH(DATA_WIDTH)
+) u_rom_axi_lite (
+.clk(clk),
+.resetn(rst_n),
+    .i_axil_araddr(fetch_araddr),
+    .i_axil_arvalid(fetch_arvalid),
+    .o_axil_arready(fetch_arready),
+    .o_axil_rdata(fetch_rdata),
+    .o_axil_rvalid(fetch_rvalid),
+    .i_axil_rready(fetch_rready)
 );
 
-
-
 initial begin
-	$dumpfile("waves.vcd");
-        $dumpvars(0, tb_fetch_axil_interface);
+    $dumpfile("waves.vcd");
+    $dumpvars(0, tb_fetch_axi_interface);
 end
-
-
-
 
 endmodule
 
