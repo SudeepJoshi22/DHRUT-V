@@ -75,8 +75,8 @@ rom_axi_lite #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .DATA_WIDTH(DATA_WIDTH)
 ) u_rom_axi_lite (
-.clk(clk),
-.resetn(rst_n),
+    .clk(clk),
+    .resetn(rst_n),
     .i_axil_araddr(fetch_araddr),
     .i_axil_arvalid(fetch_arvalid),
     .o_axil_arready(fetch_arready),

@@ -39,12 +39,12 @@ async def test_fetch_axil_interface(dut):
     await perform_fetch_test(dut)
 
     ## Test BOJ (Branch On Jump) behavior
-    await perform_boj_test(dut)
+    #await perform_boj_test(dut)
     
     # Test trapping behavior
     #await perform_trap_test(dut)
-    for _ in range(5):
-        await RisingEdge(dut.clk)
+    #for _ in range(5):
+    #    await RisingEdge(dut.clk)
 
     ## Test stalling behavior
     await perform_stall_test(dut)

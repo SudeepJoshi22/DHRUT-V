@@ -1,6 +1,6 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1734980859" />
-    <testcase name="test_fetch_axil_interface" classname="test_fetch_axil_interface" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch_axi/test_fetch_axil_interface.py" lineno="12" time="0.007191658020019531" sim_time_ns="520.001" ratio_time="72306.13560217478" />
+    <property name="random_seed" value="1735108257" />
+    <testcase name="test_fetch_axil_interface" classname="test_fetch_axil_interface" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Fetch_axi/test_fetch_axil_interface.py" lineno="12" time="0.0071752071380615234" sim_time_ns="520.001" ratio_time="72471.91474676857" />
   </testsuite>
 </testsuites>

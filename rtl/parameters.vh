@@ -2,8 +2,12 @@
 `define NOP 32'h00000013 // addi x0,x0,0
 `define SIM 
 
+// Stage Packet Widths
+`define IF_PKT_WIDTH 64
+
 `define ADDR_WIDTH 32
-`define DATA_WIDTH 32
+`define INST_WIDTH 32
+
 // Instruction Memory
 `define INSTR_MEM_SIZE 20'h1000 //in bytes
 `define PC_RESET 32'h80002000

@@ -22,7 +22,6 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
 
 module instr_mem(
 input wire clk,
@@ -37,13 +36,12 @@ reg [7:0] memory[`PC_RESET + `INSTR_MEM_SIZE : `PC_RESET];
 
 initial
 begin
-	$readmemh("programs/instr_mem.mem",memory); // read instruction from the .mem file (byte wise)
+	$readmemh("instr_mem.mem",memory); // read instruction from the .mem file (byte wise)
 	o_data <= 32'd0;
 	o_ack <= 1'b0;
 end
 
-// Just for the simulation purpose, instruction memeory reads as soon as the address is inserted
-always @(*)
+always @(posedge clk, negedge rst_n)
 begin
 	if(~rst_n) 
 	begin
