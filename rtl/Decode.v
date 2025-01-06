@@ -41,21 +41,33 @@ module Decode(
 
 	//// Internal Wires ////
 
-	wire [4:0] is_rs1, is_rs2, is_rd;
-	wire [6:0] is_opcode;
-	wire [2:0] is_func3;
-	wire is_re;
-	wire [31:0] is_instr;
-	wire [31:0] is_pc;
+	wire [4:0] 		is_rs1, is_rs2, is_rd;
+	wire [6:0] 		is_opcode;
+	wire [2:0] 		is_func3;
+	wire 			is_re;
+	wire [31:0] 		is_instr;
+	wire [31:0] 		is_pc;
+	
+	wire [`N-1:0]		is_rs1_data;
+	wire [`N-1:0]		is_rs2_data;
+	wire [`N-1:0]		is_imm_data;
+	wire [3:0]		is_alu_ctrl;
+
+	wire			is_ce;
 
 	//// Internal Registers ////
-
+	reg			ir_fetch_stall;
 
 	//// Pipeline Registers ////
-
+	reg [`N-1:0]		pipe_rs1_data, pipe_rs2_data;
+	reg [`N-1:0] 		pipe_imm_data;
+	reg [6:0] 		pipe_opcode;
+	reg [2:0] 		pipe_func3;
+	reg [3:0]		pipe_alu_ctrl;
+	reg [`ADDR_WIDTH-1:0]	pipe_pc;
+	reg			pipe_id_valid;
 	
 	//// Decoding ////
-	
 	assign is_instr = i_if_pkt_data[31:0];
 	assign is_pc = i_if_pkt[63:32];
 
@@ -67,6 +79,37 @@ module Decode(
 	assign is_re = ~((is_opcode == `J) | (is_opcode == `U) | (is_opcode == `UPC)); // every instruction except LUI, AUIPC and JAL requires register file to be read
 
 
+
+	//// Pipelining the Values for Next Stage ////
+	
+	// Stage Enable Signal
+	assign is_ce = rst_n || ~i_stall || i_if_pkt_valid;
+
+	always @(posedge clk, negedge rst_n) begin
+		if(is_ce) begin
+			pipe_rs1_data <= is_rs1_data;
+			pipe_rs2_data <= is_rs2_data;
+			pipe_imm_data <= is_imm_data;
+			pipe_opcode   <= is_opcode;
+			pipe_func3    <= is_func3;
+			pipe_alu_ctrl <= is_alu_ctrl;
+			pipe_pc	      <= is_pc;
+			pipe_id_valid <= is_ce;
+			ir_fetch_stall <= is_ce;
+		end
+	end
+
+	assign o_rs1_data = 	pipe_rs1_data;
+	assign o_rs2_data = 	pipe_rs2_data;
+	assign o_imm_data = 	pipe_imm_data;
+	assign o_opcode	  =	pipe_opcode;
+	assign o_func3    = 	pipe_func3;
+	assign o_alu_ctrl = 	pipe_alu_ctrl;
+	assign o_pc	  = 	pipe_pc;
+	assign o_id_valid = 	pipe_id_valid;
+
+	assign o_stall    = 	ir_fetch_stall;
+
 	/*** Register File ***/
 	reg_file reg_file_inst(
 		.clk(clk),
@@ -77,21 +120,21 @@ module Decode(
 		.i_rs2(is_rs2),
 		.i_rd(is_rd),
 		.i_write_data(i_write_data),
-		.o_read_data1(o_rs1_data),
-		.o_read_data2(o_rs2_data)
+		.o_read_data1(is_rs1_data),
+		.o_read_data2(is_rs2_data)
 	);
 
 	/*** Immediate Value Generator ***/
 	imm_gen imm_gen_inst (
-	  	.i_instr(i_instr),
-	  	.o_imm_data(o_imm_data)
+	  	.i_instr(is_instr),
+	  	.o_imm_data(is_imm_data)
 	);
 	
 
 	/*** Control Unit ***/
 	control_unit control_unit_inst (
-	  	.i_instr(i_instr),
-	  	.o_alu_ctrl(o_alu_ctrl)
+	  	.i_instr(is_instr),
+	  	.o_alu_ctrl(is_alu_ctrl)
 	);
 
 endmodule
