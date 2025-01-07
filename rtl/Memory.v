@@ -18,64 +18,68 @@
 `include "rtl/parameters.vh"
 
 module Memory(
-	input wire clk,
-	input wire rst_n,
-	// EX-MEM interface
-	input wire [31:0] i_result,
-	input wire [31:0] i_data_store,
-	input wire [31:0] i_pc,
-	input wire [6:0] i_opcode,
-	input wire [2:0] i_func3,
-	input wire [4:0] i_rd,
-	output reg [4:0] o_ex_rd, // For forwarding unit
-	output reg [31:0] o_mem_data_val, // Loaded Value, or Buffered result from EXE 
-	// MEM-WB Interfacue
-	output wire [4:0] o_wb_rd,
-	output wire [31:0] o_wb_data, // write back value can be result, data read or pc depending on the opcode
-	output wire [6:0] o_opcode,
-	// Data-Memory Interface
-        output wire o_wr_en,    		// Write enable signal
-        output wire [3:0] o_sel,		// Select signal for byte-enable (4 bits for 32-bit word)
-        output wire [31:0] o_daddr,    		// 32-bit Address signal
-        output wire [31:0] o_write_data,    	// 32-bit Write data
-        input wire [31:0] i_read_data,    	// 32-bit Read data
-        output wire o_d_ready,  		// Ready signal for data transfer
-        input wire i_d_valid,  			// Valid signal for data transfer
-        input wire i_error     			// Error signal for invalid accesses
+	input 	wire 				clk,
+	input 	wire 				rst_n,
+	/*** Memory-Execute Stage Interface ***/
+	input 	wire 	[`N-1:0] 		i_result,
+	input 	wire 	[`N-1:0] 		i_data_store,
+	input 	wire 	[`ADDR_WIDTH:0] 	i_pc,
+	input 	wire 	[2:0] 			i_func3,
+	input 	wire 	[4:0] 			i_rd,
+	input 	wire 	[6:0] 			i_opcode,
+	input 	wire				i_ex_valid,
+	output	wire				o_stall,
+	/*** Memory-WriteBack Stage Interface ***/
+	output 	wire 	[4:0] 			o_wb_rd,
+	output 	wire 	[6:0] 			o_opcode,
+	output 	wire 	[31:0] 			o_wb_data, // write back value can be result, data read or pc depending on the opcode
+	/*** Data-Memory Interface ***/
+    	input 	wire  	[`N-1:0]  		i_rdata,    // 32-bit Read data
+    	input  	wire          			i_d_valid  // Valid signal 
+    	output  wire         			o_wr_en,    // Write enable signal
+    	output  wire 	[3:0]   		o_sel,      // Select signal for byte-enable (4 bits for 32-bit word)
+    	output  wire 	[`ADDR_WIDTH-1:0] 	o_addr,     // 32-bit Address signal
+    	output  wire				o_addr_vld,
+    	output  wire 	[`N-1:0]  		o_wdata    // 32-bit Write data
 );
 	
-	// Internal Signals
-	wire is_stall;
-	wire [31:0] is_wb_data;
-	// Internal Registers
-	reg [4:0] ir_wb_rd;
-	reg [6:0] ir_opcode;
-	reg [31:0] ir_wb_data;
+	//// Internal Wires ////
+	wire 				is_ce;
+	wire				is_stall;
 
-	// Data Memory Interface
-	assign o_wr_en = (i_opcode == `S);
-	assign o_daddr	
- 
-	// Data Muxing for WB stage
-	assign is_wb_data = (i_opcode == `LD) ? i_read_data : i_result;
- 
-	// Pipeline the signals
+	//// Internal Registers ////
+	reg				ir_memory_stall;
+
+	//// Pipeline Registers ////
+	reg	[4:0]			pipe_wb_rd;
+	reg	[6:0]			pipe_opcode;
+	reg	[`N-1:0]		pipe_wb_data; // write back value can be result, data read or pc depending on the opcode
+
+	// Internal Stall
+	assign	is_stall	= 	~i_d_valid;
+
+
+	/*** Pipelining the Values for Next Stage ***/
+
+	// Stage Enable Signal
+	assign is_ce = rst_n || ~is_stall || i_ex_valid;
+
 	always @(posedge clk, negedge rst_n) begin
-		if(!rst_n) begin
-			ir_wb_rd <= 0;
-			ir_opcode <= 0;
-			ir_wb_data <= 0;
-		end
-		else if(is_stall) begin
-			ir_wb_rd <= ir_wb_rd;
-			ir_opcode <= ir_opcode;
-			ir_wb_data <= ir_wb_data;
-		end
-		else begin
-			ir_wb_rd <= i_rd;	
-			ir_opcode <= i_opcode;
-			ir_wb_data <= is_wb_data;
+		if(is_ce) begin
+			pipe_wb_rd	<= 	i_rd;
+			pipe_opcode	<= 	i_opcode;
+			pipe_wb_data	<= 	is_wb_data;
+			ir_memory_stall	<=	is_ce;
 		end
 	end
+
+	assign	o_wb_rd		= 	pipe_wb_rd;
+	assign 	o_opcode	=	pipe_opcode;
+	assign	o_wb_data	= 	pipe_wb_data;
+
+	assign	o_stall		= 	ir_memory_stall;
+
+
+	/*** Data Memory Interaction ***/
 
 endmodule

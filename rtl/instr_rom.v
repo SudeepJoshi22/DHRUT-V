@@ -19,7 +19,6 @@
 module instr_rom (
     input wire clk,
     input wire rst_n,
-
     // Address Interface (consumer)
     input wire [31:0] i_addr,
     input wire i_stb,

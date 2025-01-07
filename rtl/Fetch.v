@@ -54,7 +54,7 @@ module Fetch (
 
 
 	// Stage Enable
-	assign is_ce = ~rst_n || ~is_stall;
+	assign is_ce = rst_n || ~is_stall;
 
 	/*** PC Control ***/
 	always @(posedge clk, negedge rst_n) begin

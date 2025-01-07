@@ -25,13 +25,14 @@ module Decode(
 	output 	wire					o_stall,
 	/*** Decode-WriteBack Stage Interface ***/
 	input 	wire 	signed 	[`N-1:0] 		i_write_data, 		// Data to be written to register file from the WB stage
+	input 	wire		[4:0]			i_rd,
 	input 	wire 					i_wr, 			// write enable signal from the WB stage, enables the register file to write to rd.
-
 	/*** Decode-Execute Stage Interface ***/
 	input 	wire					i_stall,
 	output 	wire 		[`N-1:0] 		o_rs1_data, 		// rs1 data from register file
 	output 	wire 		[`N-1:0] 		o_rs2_data, 		// rs2 data from register file
 	output 	wire 		[`N-1:0] 		o_imm_data, 		// sign extended immediate value
+	output  wire		[4:0]			o_rd,
 	output 	wire 		[6:0] 			o_opcode, 		// opcode of the current instruction
 	output 	wire 		[2:0] 			o_func3, 		// func3 of the current instruction
 	output 	wire 		[3:0] 			o_alu_ctrl, 		// ALU Control signals  
@@ -61,6 +62,7 @@ module Decode(
 	//// Pipeline Registers ////
 	reg [`N-1:0]		pipe_rs1_data, pipe_rs2_data;
 	reg [`N-1:0] 		pipe_imm_data;
+	reg [4:0]		pipe_rd;
 	reg [6:0] 		pipe_opcode;
 	reg [2:0] 		pipe_func3;
 	reg [3:0]		pipe_alu_ctrl;
@@ -90,6 +92,7 @@ module Decode(
 			pipe_rs1_data <= is_rs1_data;
 			pipe_rs2_data <= is_rs2_data;
 			pipe_imm_data <= is_imm_data;
+			pipe_rd	      <= is_rd;
 			pipe_opcode   <= is_opcode;
 			pipe_func3    <= is_func3;
 			pipe_alu_ctrl <= is_alu_ctrl;
@@ -102,6 +105,7 @@ module Decode(
 	assign o_rs1_data = 	pipe_rs1_data;
 	assign o_rs2_data = 	pipe_rs2_data;
 	assign o_imm_data = 	pipe_imm_data;
+	assign o_rd	  =	pipe_rd;
 	assign o_opcode	  =	pipe_opcode;
 	assign o_func3    = 	pipe_func3;
 	assign o_alu_ctrl = 	pipe_alu_ctrl;
@@ -118,7 +122,7 @@ module Decode(
 		.i_wr(i_wr),
 		.i_rs1(is_rs1),
 		.i_rs2(is_rs2),
-		.i_rd(is_rd),
+		.i_rd(i_rd),
 		.i_write_data(i_write_data),
 		.o_read_data1(is_rs1_data),
 		.o_read_data2(is_rs2_data)
