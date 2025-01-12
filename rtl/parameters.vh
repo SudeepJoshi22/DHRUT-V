@@ -46,9 +46,9 @@
 `define GEU 4'b1101
 
 //func3 for Load Instructions
-`define LB 3'b000
-`define LH 3'b001
-`define LW 3'b010
+`define B 3'b000
+`define H 3'b001
+`define W 3'b010
 `define LBU 3'b100
 `define LHU 3'b101
 
