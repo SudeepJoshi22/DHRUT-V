@@ -22,59 +22,83 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/core.v"
-`include "rtl/instr_mem.v"
-`include "rtl/data_mem.v"
 
-module top_module(
-input wire clk,
-input wire rst_n
+module top_module (
+    input  wire clk,
+    input  wire rst_n
 );
 
-wire [31:0] i_i_data;
-wire [31:0] i_d_data;
-wire i_i_ack;
-wire i_d_ack;
-wire o_i_stb;
-wire o_d_stb;
-wire o_d_wr_en;
-wire [31:0] o_d_write_data;
-wire [31:0] o_i_addr;
-wire [31:0] o_d_addr;
+    // Core module signals
+    wire [`ADDR_WIDTH-1:0] core_o_iaddr;
+    wire core_o_iaddr_vld;
+    wire [`INST_WIDTH-1:0] core_i_inst;
+    wire core_i_inst_vld;
 
-core core_inst (
-    .clk(clk),
-    .rst_n(rst_n),
-    .i_i_data(i_i_data),
-    .i_d_data(i_d_data),
-    .i_i_ack(i_i_ack),
-    .i_d_ack(i_d_ack),
-    .o_i_stb(o_i_stb),
-    .o_d_stb(o_d_stb),
-    .o_d_wr_en(o_d_wr_en),
-    .o_d_write_data(o_d_write_data),
-    .o_i_addr(o_i_addr),
-    .o_d_addr(o_d_addr)
-);
+    wire [`N-1:0] core_i_rdata;
+    wire core_i_d_valid;
+    wire core_o_wr_en;
+    wire [3:0] core_o_sel;
+    wire [`ADDR_WIDTH-1:0] core_o_addr;
+    wire core_o_addr_vld;
+    wire [`N-1:0] core_o_wdata;
 
-data_mem data_mem_inst (
-    .clk(clk),
-    .rst_n(rst_n),
-    .i_stb(o_d_stb),
-    .i_wr_en(o_d_wr_en),
-    .i_addr(o_d_addr),
-    .i_write_data(o_d_write_data),
-    .o_rd_ack(i_d_ack),
-    .o_read_data(i_d_data)
-);
+    // Instruction memory signals
+    wire [31:0] instr_mem_o_data;
+    wire instr_mem_o_ack;
 
-instr_mem instr_mem_inst (
-    .clk(clk),
-    .rst_n(rst_n),
-    .i_addr(o_i_addr),
-    .i_stb(o_i_stb),
-    .o_ack(i_i_ack),
-    .o_data(i_i_data)
-);
+    // Data RAM signals
+    wire [31:0] data_ram_o_rdata;
+    wire data_ram_o_d_valid;
+
+    // Core instance
+    Core core_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        // I-mem interface
+        .o_iaddr(core_o_iaddr),
+        .o_iaddr_vld(core_o_iaddr_vld),
+        .i_inst(instr_mem_o_data),
+        .i_inst_vld(instr_mem_o_ack),
+
+        // D-mem interface
+        .i_rdata(data_ram_o_rdata),
+        .i_d_valid(data_ram_o_d_valid),
+        .o_wr_en(core_o_wr_en),
+        .o_sel(core_o_sel),
+        .o_addr(core_o_addr),
+        .o_addr_vld(core_o_addr_vld),
+        .o_wdata(core_o_wdata)
+    );
+
+    // Instruction memory instance
+    instr_mem instr_mem_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+        .i_addr(core_o_iaddr),
+        .i_stb(core_o_iaddr_vld),
+        .o_ack(instr_mem_o_ack),
+        .o_data(instr_mem_o_data)
+    );
+
+    // Data RAM instance
+    data_ram data_ram_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+        .i_wr_en(core_o_wr_en),
+        .i_sel(core_o_sel),
+        .i_addr(core_o_addr),
+        .i_addr_vld(core_o_addr_vld),
+        .i_wdata(core_o_wdata),
+        .o_rdata(data_ram_o_rdata),
+        .o_d_valid(data_ram_o_d_valid)
+    );
+    
+    initial begin
+    	$dumpfile("dump.vcd");
+        $dumpvars(0, top_module);
+    end
+
 
 endmodule
+

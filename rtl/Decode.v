@@ -71,7 +71,7 @@ module Decode(
 	
 	//// Decoding ////
 	assign is_instr = i_if_pkt_data[31:0];
-	assign is_pc = i_if_pkt[63:32];
+	assign is_pc = i_if_pkt_data[63:32];
 
 	assign is_rs1 = is_instr[19:15];
 	assign is_rs2 = is_instr[24:20];

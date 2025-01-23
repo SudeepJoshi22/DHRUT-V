@@ -22,7 +22,6 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
 
 module alu(
 input wire [31:0] i_op1, //operand 1

@@ -35,7 +35,7 @@ module Memory(
 	output	wire				o_mem_vld,
 	/*** Data-Memory Interface ***/
     	input 	wire  	[`N-1:0]  		i_rdata,    // 32-bit Read data
-    	input  	wire          			i_d_valid  // Valid signal 
+    	input  	wire          			i_d_valid,  // Valid signal 
     	output  wire         			o_wr_en,    // Write enable signal
     	output  wire 	[3:0]   		o_sel,      // Select signal for byte-enable (4 bits for 32-bit word)
     	output  wire 	[`ADDR_WIDTH-1:0] 	o_addr,     // 32-bit Address signal
@@ -64,10 +64,10 @@ module Memory(
 	/*** Data Memory Interaction Logic ***/
 
 	// Sending the Valid Address if the instruction is a Load or a Store
-	assign 	o_wr_en		=	(i_opcode == 'S);	// write to Data Memory if the instruction is store
+	assign 	o_wr_en		=	(i_opcode == `S);	// write to Data Memory if the instruction is store
 	assign 	o_wdata		=	o_wr_en ? i_data_store : 'dz;
 
-	assign	o_addr_vld	=	(~is_stall) && ((i_opcode == `LD || i_opcode == 'S));	// Send valid address if the instruction is a Load/Store and the stage is not stalled
+	assign	o_addr_vld	=	(~is_stall) && ((i_opcode == `LD || i_opcode == `S));	// Send valid address if the instruction is a Load/Store and the stage is not stalled
 	assign	o_addr		=	o_addr_vld ? i_result: 'dz;
 
 	assign 	o_sel		= 	ir_sel;

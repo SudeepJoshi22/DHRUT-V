@@ -67,13 +67,13 @@ module Fetch (
 
 	// Capture the Instruction address sent
 	always @(posedge clk, negedge rst_n) begin
-		if(o_addr_vld)
+		if(o_iaddr_vld)
 			ir_prev_pc <= o_iaddr;
 	end
 
-	assign is_next_pc = is_stall ? (pc) : pc + 'd4;
+	assign is_next_pc = is_stall ? pc : pc + 32'd4;
 
-	assign is_stall = i_stall || i_inst_vld; 			// Stall if Decode is asserting stall or I-MEM has not given instruction yet
+	assign is_stall = ~rst_n || i_stall || i_inst_vld; 			// Stall if Decode is asserting stall or I-MEM has not given instruction yet
 
 	/*** IMEM Logic ***/
 	assign o_iaddr = o_iaddr_vld ? o_iaddr : 'dz;

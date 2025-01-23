@@ -34,6 +34,7 @@ module Writeback(
 	//// Internal Wires ////
 	wire			is_ce;
 	wire	[4:0]		is_rd;
+	wire			is_rf_wr;
 	wire	[`N-1:0]	is_rf_data;
 	
 	//// Pipeline Registers ////

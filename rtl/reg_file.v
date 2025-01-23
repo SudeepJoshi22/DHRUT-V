@@ -22,7 +22,6 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
 
 module reg_file (
 	input wire clk,
@@ -36,11 +35,6 @@ module reg_file (
 	output wire [31:0] o_read_data1, // data read from source register 1
 	output wire [31:0] o_read_data2 // data read from source register 2
 );
-
-//only for simulation
-`ifdef SIM
-integer fd;
-`endif
 
 //base register file
 reg [31:0] base_reg[31:1]; //x0 is hardwired to zero
@@ -124,28 +118,6 @@ begin
     	base_reg[i_rd] <= i_write_data; //synchronous write
     end	
 end
-
-
-//only for simulation
-`ifdef SIM
-always @(posedge clk)
-begin
-    if(is_write)
-    begin
-
-	fd = $fopen("ID_log.csv","ab+");
-	$fwrite(fd,"x%d:%h\n",i_rd,i_write_data);	
-	$fclose(fd);
-    end
-    else if(rst_n)
-    begin
-
-    	fd = $fopen("ID_log.csv","ab+");
-	$fwrite(fd,"\t\n");	
-	$fclose(fd);
-    end
-end
-`endif 
 
 
 // asynchronous read

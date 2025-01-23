@@ -38,7 +38,7 @@ module data_ram (
 
     // RAM Initialization (optional)
     initial begin
-        $readmemh("programs/data_mem.mem", rom);
+        $readmemh("data_mem.mem", memory);
     end
 
     // Write operation with select signal support

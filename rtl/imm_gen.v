@@ -22,7 +22,6 @@
 
 `timescale 1ns / 1ps
 `default_nettype none
-`include "rtl/parameters.vh"
 
 module imm_gen(
 input wire [31:0] i_instr,
