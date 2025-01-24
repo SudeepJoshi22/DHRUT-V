@@ -89,16 +89,28 @@ module Decode(
 
 	always @(posedge clk, negedge rst_n) begin
 		if(is_ce) begin
-			pipe_rs1_data <= is_rs1_data;
-			pipe_rs2_data <= is_rs2_data;
-			pipe_imm_data <= is_imm_data;
-			pipe_rd	      <= is_rd;
-			pipe_opcode   <= is_opcode;
-			pipe_func3    <= is_func3;
-			pipe_alu_ctrl <= is_alu_ctrl;
-			pipe_pc	      <= is_pc;
-			pipe_id_valid <= is_ce;
-			ir_fetch_stall <= is_ce;
+			pipe_rs1_data 	<= is_rs1_data;
+			pipe_rs2_data 	<= is_rs2_data;
+			pipe_imm_data 	<= is_imm_data;
+			pipe_rd	      	<= is_rd;
+			pipe_opcode   	<= is_opcode;
+			pipe_func3    	<= is_func3;
+			pipe_alu_ctrl 	<= is_alu_ctrl;
+			pipe_pc	      	<= is_pc;
+			pipe_id_valid 	<= is_ce;
+			ir_fetch_stall 	<= ~is_ce;
+		end
+		else if(~rst_n) begin
+			pipe_rs1_data 	<= 0; 
+			pipe_rs2_data 	<= 0; 
+			pipe_imm_data 	<= 0; 
+			pipe_rd	      	<= 0; 
+			pipe_opcode   	<= 0; 
+			pipe_func3    	<= 0; 
+			pipe_alu_ctrl 	<= 0; 
+			pipe_pc	      	<= 0; 
+			pipe_id_valid 	<= 0; 
+			ir_fetch_stall 	<= 0; 
 		end
 	end
 

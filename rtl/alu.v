@@ -27,13 +27,11 @@ module alu(
 input wire [31:0] i_op1, //operand 1
 input wire [31:0] i_op2, //operand 2
 input wire [3:0] i_alu_ctrl, //ALU control signal
-input wire i_stall,
 output reg [31:0] o_result //ALU result
 );
 
 always @(*)
 begin 
-if(~i_stall) begin	
     case(i_alu_ctrl)        
         `ADD:
         	o_result = $signed(i_op1) + $signed(i_op2);
@@ -66,7 +64,6 @@ if(~i_stall) begin
         default:
             	o_result <= 32'd0;
     endcase
-end
 end
 
 endmodule

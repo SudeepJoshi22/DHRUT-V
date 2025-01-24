@@ -9,27 +9,38 @@
 .text
 
 #Start your program from here
+# RISC-V RV32I Assembly Code
 
 _start:
-	# Initialize registers
-	la t2, result     # store address
-	ori t0, zero, 1   # cnt = 1
-	ori a2, zero, 10  # ten = 10
-	ori a0, zero, 0   # out = 0
+    # U-Type Instructions
+    lui x1, 0x12345       # Load upper immediate to x1 (set high bits of x1)
+    auipc x2, 0x200       # Add PC-relative offset to x2
 
-loop:
-	# Calculate sum
-	add a0, t0, a0    # out += cnt
-	sw a0, 0(t2)      # store out at *store_addr
-	addi t0, t0, 1    # cnt++
+    # R-Type Instructions (No dependencies between instructions)
+    add x3, x1, x2        # x3 = x1 + x2
+    sub x4, x1, x2        # x4 = x1 - x2
+    xor x5, x3, x4        # x5 = x3 XOR x4
+    and x6, x1, x2        # x6 = x1 AND x2
+    or  x7, x3, x5        # x7 = x3 OR x5
+    sll x8, x2, x1        # x8 = x2 << x1 (logical shift left)
+    srl x9, x2, x1        # x9 = x2 >> x1 (logical shift right)
+    sra x10, x2, x1       # x10 = x2 >> x1 (arithmetic shift right)
+    slt x11, x1, x2       # x11 = (x1 < x2) ? 1 : 0
 
-	# Check loop condition
-	blt t0, a2, loop  # branch back if cnt < 10
+    # I-Type Instructions (No dependencies between instructions)
+    addi x12, x0, 123     # x12 = x0 + 123 (immediate add)
+    xori x13, x0, 456     # x13 = x0 XOR 456
+    andi x14, x0, 789     # x14 = x0 AND 789
+    ori  x15, x0, 1023    # x15 = x0 OR 1023
+    slli x16, x0, 5       # x16 = x0 << 5 (immediate logical shift left)
+    srli x17, x0, 3       # x17 = x0 >> 3 (immediate logical shift right)
+    srai x18, x0, 2       # x18 = x0 >> 2 (immediate arithmetic shift right)
+    slti x19, x0, 100     # x19 = (x0 < 100) ? 1 : 0
 
-	# Result should be 0x2d.
-	lw t1, 0(t2)      # load the final value
-	addi a1, zero, 0x2d  # expected result (0x2d)
-	beq t1, a1, pass  # pass if as expected
+    # End of the program
+    nop                   # No operation
+    nop                   # Add extra no-ops to ensure the pipeline is clear
+
 
 fail:
 	la t2, tohost

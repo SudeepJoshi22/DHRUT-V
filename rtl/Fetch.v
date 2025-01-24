@@ -73,18 +73,24 @@ module Fetch (
 
 	assign is_next_pc = is_stall ? pc : pc + 32'd4;
 
-	assign is_stall = ~rst_n || i_stall || i_inst_vld; 			// Stall if Decode is asserting stall or I-MEM has not given instruction yet
+	assign is_stall = ~rst_n || i_stall || ~i_inst_vld; 			// Stall if Decode is asserting stall or I-MEM has not given instruction yet
 
 	/*** IMEM Logic ***/
-	assign o_iaddr = o_iaddr_vld ? o_iaddr : 'dz;
+	assign o_iaddr = o_iaddr_vld ? pc : 'dz;
 	assign o_iaddr_vld = is_ce; 					// Send a valid address if the stage is enabled
 
 	/*** Pipeline Register ***/
 	always @(posedge clk, negedge rst_n) begin
-		if(is_ce) 
-			pipe_pc <= ir_prev_pc;
-			pipe_inst <= i_inst;
-			pipe_vld <= is_ce;
+		if(is_ce) begin
+			pipe_pc 	<= 	ir_prev_pc;
+			pipe_inst 	<= 	i_inst;
+			pipe_vld 	<= 	is_ce;
+		end
+		else if(~rst_n) begin
+			pipe_pc 	<=	0; 
+			pipe_inst 	<= 	0;
+			pipe_vld 	<= 	0;
+		end
 	end
 
 	assign o_if_pkt_data = {pipe_pc, pipe_inst};

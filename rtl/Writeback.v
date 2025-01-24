@@ -56,6 +56,11 @@ module Writeback(
 			pipe_rf_rd	<=	i_rd;
 			pipe_rf_data	<=	is_rf_data;
 		end
+		else if(~rst_n) begin
+			pipe_rf_wr	<=	0;	
+			pipe_rf_rd	<=	0;	
+			pipe_rf_data	<=	0;	
+		end
 	end
 	
 	assign		o_rf_wr		=	pipe_rf_wr;

@@ -90,7 +90,17 @@ module Execute(
 			pipe_func3	<= i_func3;
 			pipe_opcode	<= i_opcode;
 			pipe_ex_valid	<= is_ce;
-			ir_decode_stall <= is_ce;
+			ir_decode_stall <= ~is_ce;
+		end
+		else if(~rst_n) begin
+			pipe_result	<= 0; 
+			pipe_data_store <= 0;  
+			pipe_pc		<= 0; 
+			pipe_rd		<= 0; 
+			pipe_func3	<= 0; 
+			pipe_opcode	<= 0; 
+			pipe_ex_valid	<= 0; 
+			ir_decode_stall <= 0; 
 		end
 	end
 

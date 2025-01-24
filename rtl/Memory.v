@@ -96,10 +96,17 @@ module Memory(
 			pipe_opcode	<= 	i_opcode;
 			pipe_wb_data	<= 	is_wb_data;
 			pipe_mem_vld	<=	is_ce;
-			ir_memory_stall	<=	is_ce;
+			ir_memory_stall	<=	~is_ce;
+		end
+		else if(~rst_n) begin
+			pipe_wb_rd	<=	0; 
+			pipe_opcode	<=	0; 
+			pipe_wb_data	<=	0; 
+			pipe_mem_vld	<=	0;	
+			ir_memory_stall	<=	0;	
 		end
 	end
-
+	
 	assign	o_wb_rd		= 	pipe_wb_rd;
 	assign 	o_opcode	=	pipe_opcode;
 	assign	o_wb_data	= 	pipe_wb_data;
