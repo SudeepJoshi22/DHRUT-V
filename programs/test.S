@@ -15,7 +15,9 @@ _start:
     # U-Type Instructions
     lui x1, 0x12345       # Load upper immediate to x1 (set high bits of x1)
     auipc x2, 0x200       # Add PC-relative offset to x2
-
+    
+    nop 
+    nop
     # R-Type Instructions (No dependencies between instructions)
     add x3, x1, x2        # x3 = x1 + x2
     sub x4, x1, x2        # x4 = x1 - x2

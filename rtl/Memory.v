@@ -46,7 +46,8 @@ module Memory(
 	//// Internal Wires ////
 	wire 				is_ce;
 	wire				is_stall;
-	wire				is_wb_data;
+	wire	[`N-1:0]		is_wb_data;
+	wire	[`N-1:0]		is_load_data;
 
 	//// Internal Registers ////
 	reg				ir_memory_stall;
@@ -83,7 +84,10 @@ module Memory(
 	end
 
 	// Selecting the data loaded from data-memory
-	assign	is_wb_data	=	(i_func3 == `B) ? {{24{i_rdata[7]}},i_rdata[7:0]} : ((i_func3 == `H) ? {{16{i_rdata[15]}},i_rdata[15:0]} : ((i_func3 == `LBU)? {24'd0,i_rdata[7:0]} : ((i_func3 == `LHU) ? {16'd0,i_rdata[15:0]} : i_rdata)));
+	assign	is_load_data	=	(i_func3 == `B) ? {{24{i_rdata[7]}},i_rdata[7:0]} : ((i_func3 == `H) ? {{16{i_rdata[15]}},i_rdata[15:0]} : ((i_func3 == `LBU)? {24'd0,i_rdata[7:0]} : ((i_func3 == `LHU) ? {16'd0,i_rdata[15:0]} : i_rdata)));
+
+	// Select the data to write-back into Register File
+	assign	is_wb_data	= 	(i_opcode == `LD) ? is_load_data : i_result;
 
 	/*** Pipelining the Values for Next Stage ***/
 
