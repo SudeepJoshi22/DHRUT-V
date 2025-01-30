@@ -49,7 +49,7 @@ module Writeback(
 	assign 		is_rf_wr 	= 	((i_opcode == `B) | (i_opcode == `S)) ? 1'b0 : 1'b1;
 	assign 		is_rf_data 	= 	(o_rf_wr & rst_n) ? i_wb_data : 32'd0;
 	
-	/*** Pipelining the Values for Next Stage ***/
+	/*** Pipelining the Values for Next Stage 
 	always @(posedge clk, negedge rst_n) begin
 		if(is_ce) begin
 			pipe_rf_wr	<=	is_rf_wr;
@@ -66,5 +66,10 @@ module Writeback(
 	assign		o_rf_wr		=	pipe_rf_wr;
 	assign		o_rf_rd		=	pipe_rf_rd;
 	assign		o_rf_data	=	pipe_rf_data;
+	***/
+	
+	assign		o_rf_wr		=	rst_n ? 	is_rf_wr 	: 	0;
+	assign		o_rf_rd		=	rst_n ? 	i_rd 		: 	0;
+	assign		o_rf_data	=	rst_n ? 	is_rf_data 	: 	0;
 
 endmodule

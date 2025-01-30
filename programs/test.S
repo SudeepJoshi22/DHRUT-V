@@ -18,11 +18,18 @@ _start:
     
     nop 
     nop
+    nop
+    nop
     # R-Type Instructions (No dependencies between instructions)
     add x3, x1, x2        # x3 = x1 + x2
     sub x4, x1, x2        # x4 = x1 - x2
+    nop
+    nop
+    nop
     xor x5, x3, x4        # x5 = x3 XOR x4
     and x6, x1, x2        # x6 = x1 AND x2
+    nop
+    nop
     or  x7, x3, x5        # x7 = x3 OR x5
     sll x8, x2, x1        # x8 = x2 << x1 (logical shift left)
     srl x9, x2, x1        # x9 = x2 >> x1 (logical shift right)
