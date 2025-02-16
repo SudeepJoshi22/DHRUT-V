@@ -43,6 +43,7 @@ module Fetch (
 	wire 				is_ce; 				// Clock Enable for the stage
 
 	//// Internal Registers ////
+	reg				ir_rst_deassert;
 	reg [`ADDR_WIDTH-1:0]		pc;
 	reg [`ADDR_WIDTH-1:0]		ir_prev_pc;
 	reg [`ADDR_WIDTH-1:0] 		ir_araddr;
@@ -54,7 +55,15 @@ module Fetch (
 
 
 	// Stage Enable
-	assign is_ce = rst_n || ~is_stall;
+	assign is_ce = rst_n && ~is_stall;
+
+	// Detect Reset Deasserting
+	always @(rst_n) begin
+		if(~rst_n)
+			ir_rst_deassert <= 1'b0;
+		else
+			ir_rst_deassert <= 1'b1;
+	end
 
 	/*** PC Control ***/
 	always @(posedge clk, negedge rst_n) begin
@@ -77,7 +86,7 @@ module Fetch (
 
 	/*** IMEM Logic ***/
 	assign o_iaddr = o_iaddr_vld ? pc : 'dz;
-	assign o_iaddr_vld = is_ce; 					// Send a valid address if the stage is enabled
+	assign o_iaddr_vld = is_ce || ir_rst_deassert; 					// Send a valid address if the stage is enabled
 
 	/*** Pipeline Register ***/
 	always @(posedge clk, negedge rst_n) begin
