@@ -2,7 +2,6 @@ venv
 *.vcd
 *.dump
 *.vvp
-*.txt
 *.xoj
 *.log
 *.csv

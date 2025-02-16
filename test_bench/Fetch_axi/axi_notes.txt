@@ -1,0 +1,35 @@
+AXI Stream:
+	- Global
+		- clk
+		- rst_n
+	- Write address channel(AW)
+		- awvalid
+		- awready
+		- awaddr
+		- arprot (protection)
+	- Write data channel(W)
+		- wvalid
+		- wready
+		- wdata
+		- wstrb
+	- Write response channel(B)
+		- bvalid
+		- bready
+		- bresp
+	- Read Address channel(AR)
+		- arvalid
+		- arready
+		- araddr
+		- arprot
+	- Read Data channel(R)
+		- rvalid
+		- rready
+		- rdata
+		- rresp
+
+Rules:-
+1. Valid can't depend on ready
+2. Data remains constant when valid stays high
+3. Valid reamins high until the transaction is over
+4. Transaction ends when both ready and valid are deasserted
+5. BVALID must only be asserted after W and SW transactions(for write operation) and AR transaction(for read operation)

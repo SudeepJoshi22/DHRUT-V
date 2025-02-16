@@ -1,0 +1,1 @@
+pip3 install pytest cocotb cocotb-bus cocotb-coverage

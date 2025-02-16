@@ -1,0 +1,8 @@
+- Verify and fix the CPU with instr mem random delay.
+- Support Loads and Stores.
+- Verify and fix the CPU with data mem random delay.
+- Support branches and jumps.
+- Solve data-hazards and control hazards.
+- Support branch prediction in Fetch stage.
+- Support CSRs to support Machine Mode.
+- All the rv32mi tests should pass.

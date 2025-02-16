@@ -1,0 +1,44 @@
+How does a pipelining handshake works?
+
+	- 3 signals per stage
+		- stall
+		- valid
+		- ce(clock enable)
+	- Process the data from the previous stage whenever CE for the stage is set
+	- Each stage has a set of conditions to stall the previous stage
+
+Basic logic of a logic stall
+
+	Current Stage - n
+	Next Stage - n+1
+	assign	stage[n]_stalled = (stage[n]_valid)&&((stage[n+1]_stalled)
+		||(things that would stall this stage))
+
+Basic logic for ce(stepping the data from previous stage to the next stage)
+	
+	assign	stage[n]_ce = (stage[n-1]_valid)&&(!stage[n]_stalled);
+
+Clocking the Valid Value in a Stage
+
+	always @(posedge i_clk)
+	// On any reset or clear pipeline, we clear the stage valid
+	// register
+	if ((i_reset)||(clear_pipeline))
+	begin
+		stage[n]_valid <= 1'b0;
+	end if (stage[n]_ce)
+	begin
+		// Otherwise, we accept the data from the previous
+		// stage, and operate upon it if necessary.
+		stage[n]_valid <= stage[n-1]_valid;
+	end else if (stage[n+1]_ce)
+		// If there's nothing valid to come in, but the next stage
+		// has taken our data, then we are no longer valid here anymore.
+		stage[n]_valid <= 1'b0;
+
+Processing the data of this stage if it is enabled
+
+	always @(posedge i_clk)
+	if (stage[n]_ce)
+		stage[n]_data <= ... // function of stage[n-1]_data
+
