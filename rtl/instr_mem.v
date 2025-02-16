@@ -24,43 +24,64 @@
 `default_nettype none
 
 module instr_mem(
-input wire clk,
-input wire rst_n, // active low reset
-input wire [31:0] i_addr, //instruction address
-input wire i_stb, // request for instruction
-output reg o_ack, // acknowledge signal
-output reg [31:0] o_data //instruction code
+    input wire clk,
+    input wire rst_n, // active low reset
+    input wire [31:0] i_addr, // instruction address
+    input wire i_stb, // request for instruction
+    output reg o_ack, // acknowledge signal
+    output reg [31:0] o_data // instruction code
 );
 
 reg [7:0] memory[`PC_RESET + `INSTR_MEM_SIZE : `PC_RESET];
+reg [31:0] delay_counter; // Countdown for introducing delay
+reg [31:0] latched_addr;  // Latch the address during delay
 
-initial
-begin
-	$readmemh("instr_mem.mem",memory); // read instruction from the .mem file (byte wise)
-	o_data <= 32'd0;
-	o_ack <= 1'b0;
+initial begin
+    $readmemh("instr_mem.mem", memory);
+    o_data <= 32'd0;
+    o_ack <= 1'b0;
+    delay_counter <= 0;
+    latched_addr <= 0;
 end
 
-always @(posedge clk, negedge rst_n)
-begin
-	if(~rst_n) 
-	begin
-		o_ack <= 1'b0;
-		o_data <= 32'd0;
-	end
-	else if(i_stb && ( (i_addr & 2'b11) == 2'b00 )) //checking is the stub signal is high and address is 4 bytes aligned(last two bits are zero)
-	begin
-		o_ack <= 1'b1; // acknowledge that the instruction is on the bus.
-    		o_data <= {memory[i_addr+3],memory[i_addr+2],memory[i_addr+1],memory[i_addr]}; // instructions are present byte wise and are in little-endian format
-	end
-	else
-	begin
-		if( (i_addr & 2'b11) != 2'b00 ) begin
-			$display("\nINSTRUCTION MEMORY: Address %h is not 4-byte aligned!",i_addr);
-		end 
-		o_ack <= 1'b0;
-		o_data <= 32'd0;
-	end
+always @(posedge clk, negedge rst_n) begin
+    if (~rst_n) begin
+        o_ack <= 1'b0;
+        o_data <= 32'd0;
+        delay_counter <= 0;
+        latched_addr <= 0;
+    end else begin
+        if (delay_counter > 0) begin
+            // Handle delay countdown
+            delay_counter <= delay_counter - 1;
+            // Provide response when counter reaches 1 (next cycle it will be 0)
+            if (delay_counter == 1) begin
+                o_ack <= 1'b1;
+                o_data <= {memory[latched_addr+3], memory[latched_addr+2], 
+                           memory[latched_addr+1], memory[latched_addr]};
+            end else begin
+                o_ack <= 1'b0;
+                o_data <= 32'd0;
+            end
+        end else begin
+            // No ongoing delay, check new request
+            o_ack <= 1'b0;
+            o_data <= 32'd0;
+            if (i_stb && ((i_addr & 3) == 0)) begin
+                // 10% chance to introduce delay (simulation only)
+                if ($urandom_range(9) == 0) begin
+                    // Random delay between 1-10 cycles
+                    delay_counter <= $urandom_range(10, 1);
+                    latched_addr <= i_addr; // Latch the current address
+                end else begin
+                    // No delay, respond immediately
+                    o_ack <= 1'b1;
+                    o_data <= {memory[i_addr+3], memory[i_addr+2], 
+                               memory[i_addr+1], memory[i_addr]};
+                end
+            end
+        end
+    end
 end
 
 endmodule

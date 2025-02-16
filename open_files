@@ -1,0 +1,1 @@
+gvim rtl/Fetch.v rtl/Decode.v rtl/Execute.v rtl/Memory.v rtl/Writeback.v rtl/instr_mem.v rtl/data_ram.v rtl/reg_file.v rtl/control_unit.v rtl/alu.v -p
