@@ -1,19 +1,19 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Sat Feb 15 14:43:08 2025
+[*] Sun Feb 16 17:20:05 2025
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Core/dump.vcd"
 [dumpfile_mtime] "Sat Feb 15 14:34:16 2025"
 [dumpfile_size] 119604
 [savefile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Core/signals.gtkw"
-[timestart] 152000
+[timestart] 0
 [size] 1920 1001
 [pos] -27 -24
-*-15.389678 20000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-14.389678 20000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] top_module.
 [treeopen] top_module.core_inst.
 [sst_width] 278
-[signals_width] 671
+[signals_width] 299
 [sst_expanded] 1
 [sst_vpaned_height] 297
 @200
@@ -21,21 +21,20 @@
 @28
 top_module.core_inst.clk
 top_module.core_inst.rst_n
+top_module.core_inst.o_iaddr_vld
+@22
+top_module.core_inst.o_iaddr[31:0]
+@28
+top_module.core_inst.i_d_valid
+@29
 top_module.core_inst.i_inst_vld
 @22
 top_module.core_inst.i_inst[31:0]
-@28
-top_module.core_inst.i_d_valid
-@22
 top_module.core_inst.i_rdata[31:0]
 @28
 top_module.core_inst.o_addr_vld
 @22
 top_module.core_inst.o_addr[31:0]
-@28
-top_module.core_inst.o_iaddr_vld
-@22
-top_module.core_inst.o_iaddr[31:0]
 top_module.core_inst.o_sel[3:0]
 @28
 top_module.core_inst.o_wr_en
@@ -111,7 +110,7 @@ top_module.core_inst.u_execute.o_data_store[31:0]
 top_module.core_inst.u_execute.o_result[31:0]
 @28
 top_module.core_inst.u_execute.o_stall
-@201
+@200
 -Memory
 [pattern_trace] 1
 [pattern_trace] 0
