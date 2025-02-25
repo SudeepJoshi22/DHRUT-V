@@ -79,7 +79,7 @@ module Execute(
 	/*** Pipelining the Values for Next Stage ***/
 
 	// Stage Enable Signal
-	assign is_ce = rst_n || ~i_stall || i_id_valid;
+	assign is_ce = rst_n && ~i_stall && i_id_valid;
 
 	always @(posedge clk, negedge rst_n) begin
 		if(is_ce) begin	

@@ -1,6 +1,6 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1739730298" />
-    <testcase name="test_core" classname="test_core" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Core/test_core.py" lineno="14" time="0.01251077651977539" sim_time_ns="1020.001" ratio_time="81529.7914072493" />
+    <property name="random_seed" value="1740515771" />
+    <testcase name="test_core" classname="test_core" file="/home/sudeep/GitHub/DHRUT-V/test_bench/Core/test_core.py" lineno="14" time="0.00950479507446289" sim_time_ns="1020.001" ratio_time="107314.35996347765" />
   </testsuite>
 </testsuites>

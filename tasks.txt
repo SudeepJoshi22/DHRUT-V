@@ -1,4 +1,4 @@
-- Verify and fix the CPU with instr mem random delay.
+##- Verify and fix the CPU with instr mem random delay.
 - Support Loads and Stores.
 - Verify and fix the CPU with data mem random delay.
 - Support branches and jumps.

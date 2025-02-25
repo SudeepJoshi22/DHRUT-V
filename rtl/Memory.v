@@ -48,11 +48,14 @@ module Memory(
 	wire				is_stall;
 	wire	[`N-1:0]		is_wb_data;
 	wire	[`N-1:0]		is_load_data;
+	wire				is_load_store;
 
 	//// Internal Registers ////
 	reg				ir_memory_stall;
 	reg				ir_sel;
+	reg				ir_data_mem_vld_assert;
 
+	
 	//// Pipeline Registers ////
 	reg				pipe_mem_vld;
 	reg	[4:0]			pipe_wb_rd;
@@ -60,7 +63,7 @@ module Memory(
 	reg	[`N-1:0]		pipe_wb_data; // write back value can be result, data read or pc depending on the opcode
 
 	// Internal Stall
-	assign	is_stall	= 	~i_d_valid;
+	assign	is_stall	= 	~rst_n || (ir_data_mem_vld_assert && (~i_d_valid));
 
 	/*** Data Memory Interaction Logic ***/
 
@@ -68,10 +71,20 @@ module Memory(
 	assign 	o_wr_en		=	(i_opcode == `S);	// write to Data Memory if the instruction is store
 	assign 	o_wdata		=	o_wr_en ? i_data_store : 'dz;
 
-	assign	o_addr_vld	=	(~is_stall) && ((i_opcode == `LD || i_opcode == `S));	// Send valid address if the instruction is a Load/Store and the stage is not stalled
+	assign	o_addr_vld	=	is_load_store;
 	assign	o_addr		=	o_addr_vld ? i_result: 'dz;
 
+	assign  is_load_store	=	(i_opcode == `LD || i_opcode == `S);
+
 	assign 	o_sel		= 	ir_sel;
+
+	// Detect the Data Memory Address Valid Asserting
+	always @(o_addr_vld, rst_n) begin
+		if(is_load_store)
+			ir_data_mem_vld_assert		<=	1'b1;
+		else
+			ir_data_mem_vld_assert		<= 	1'b0;
+	end
 
 	// Combinational Case Structure for Select Signal
 	always @(*) begin
@@ -92,7 +105,7 @@ module Memory(
 	/*** Pipelining the Values for Next Stage ***/
 
 	// Stage Enable Signal
-	assign is_ce = rst_n || ~is_stall || i_ex_valid;
+	assign is_ce = rst_n && ~is_stall && i_ex_valid;
 
 	always @(posedge clk, negedge rst_n) begin
 		if(is_ce) begin
@@ -116,7 +129,7 @@ module Memory(
 	assign	o_wb_data	= 	pipe_wb_data;
 	assign	o_mem_vld	=	pipe_mem_vld;
 
-	assign	o_stall		= 	ir_memory_stall;
+	assign	o_stall		= 	~is_ce;
 
 
 	/*** Data Memory Interaction ***/

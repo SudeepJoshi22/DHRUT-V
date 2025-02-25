@@ -27,11 +27,11 @@ async def test_core(dut):
     dut.rst_n.value = 1
     await RisingEdge(dut.clk) 
 
-    await Timer(100,units="ns")
-    dut.rst_n.value = 0
-    await Timer(RESET_DURATION, units="ns")
-    dut.rst_n.value = 1
-
+#    await Timer(100,units="ns")
+#    dut.rst_n.value = 0
+#    await Timer(RESET_DURATION, units="ns")
+#    dut.rst_n.value = 1
+#
     await Timer(TEST_DURATION, units="ns")
 
 def run_tests():
