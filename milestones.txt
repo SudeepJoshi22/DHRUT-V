@@ -1,0 +1,172 @@
+🧭 RISC-V 5-Stage CPU Project — Milestones
+🟦 M0 — Project Reset & Infra Bring-up
+
+Goal: Clean slate, tools working
+
+Archive old Verilog into legacy/
+
+New repo structure (rtl/, tb/, sim/, docs/)
+
+SystemVerilog-only rule
+
+Verilator + cocotb + pyUVM runs a dummy test
+
+CI or local make sim works
+
+✅ Done when: smoke test runs with no DUT logic
+
+🟦 M1 — Architecture Freeze (no RTL yet)
+
+Goal: Lock decisions so RTL doesn’t churn
+
+Memory interface (valid/ready, byte enables)
+
+Pipeline stage contract (valid/enable/flush)
+
+Stall & flush policy written down
+
+CSR scope frozen (M-mode minimal set)
+
+Reset & trap behavior documented
+
+✅ Done when: architecture doc exists and is agreed
+
+🟦 M2 — DV Bring-up (Before CPU)
+
+Goal: Testbench exists before design
+
+pyUVM env skeleton
+
+Memory agent with:
+
+random wait states
+
+byte-enable correctness
+
+Clock/reset driver
+
+Scoreboard stub
+
+test_smoke.py (reset + NOPs)
+
+✅ Done when: TB runs without a CPU
+
+🟦 M3 — Pipeline Skeleton (No Real ISA Yet)
+
+Goal: Pipeline moves instructions end-to-end
+
+IF stage with real memory handshake
+
+IF/ID, ID/EX, EX/MEM, MEM/WB registers
+
+Stall & flush wiring works
+
+PC update logic correct
+
+All stages propagate valid
+
+✅ Done when: instructions flow without deadlock
+
+🟦 M4 — Minimal RV32I Execution
+
+Goal: First real instructions work
+
+Register file
+
+ADD, ADDI
+
+WB correctness
+
+Load-use stall (no forwarding yet)
+
+✅ Done when: basic arithmetic tests pass
+
+🟦 M5 — Full RV32I ALU + Branches
+
+Goal: Core control flow correctness
+
+All RV32I ALU ops
+
+Branches + jumps
+
+Flush on taken branch
+
+PC redirection correct
+
+✅ Done when: branch-heavy tests pass
+
+🟦 M6 — Real Load/Store Subsystem
+
+Goal: FPGA-realistic memory behavior
+
+Byte/half/word loads & stores
+
+Sign/zero extension
+
+MEM-stage stalls handled
+
+Random-latency memory DV tests
+
+✅ Done when: memory stress tests pass
+
+🟦 M7 — CSR + Trap Support (M-Mode)
+
+Goal: Non-toy CPU
+
+CSRRW / CSRRS / CSRRC
+
+ECALL, EBREAK
+
+Illegal instruction trap
+
+Correct mepc, mcause, mtval, mtvec
+
+mret
+
+✅ Done when: trap tests pass reliably
+
+🟦 M8 — Compliance-Style & Random Testing
+
+Goal: Confidence
+
+Directed ISA tests
+
+Random instruction streams (bounded)
+
+Memory latency fuzzing
+
+No deadlocks, no Xs
+
+✅ Done when: long random sims complete cleanly
+
+🟦 M9 — FPGA Bring-up
+
+Goal: Runs on real hardware
+
+BRAM-backed instruction & data memory
+
+Reset vector & linker script
+
+Bare-metal program boots
+
+Optional UART output
+
+✅ Done when: program runs on FPGA
+
+🟦 M10 — Polish & Documentation
+
+Goal: Repo that others respect
+
+Architecture doc
+
+Pipeline diagrams
+
+DV overview
+
+“How to run” guide
+
+Known limitations listed
+
+✅ Done when: someone else can build it
+
+🎯 Final Reality Check
