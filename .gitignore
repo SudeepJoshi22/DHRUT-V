@@ -5,3 +5,5 @@ venv
 *.xoj
 *.log
 *.csv
+**/*.gtkw
+**/*.swn

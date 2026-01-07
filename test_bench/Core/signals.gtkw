@@ -1,19 +1,19 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Sun Feb 16 17:20:05 2025
+[*] Tue Feb 25 20:37:43 2025
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Core/dump.vcd"
-[dumpfile_mtime] "Sat Feb 15 14:34:16 2025"
-[dumpfile_size] 119604
+[dumpfile_mtime] "Tue Feb 25 20:36:11 2025"
+[dumpfile_size] 71511
 [savefile] "/home/sudeep/GitHub/DHRUT-V/test_bench/Core/signals.gtkw"
 [timestart] 0
 [size] 1920 1001
-[pos] -27 -24
-*-14.389678 20000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[pos] -1 -1
+*-14.976762 234500 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] top_module.
 [treeopen] top_module.core_inst.
 [sst_width] 278
-[signals_width] 299
+[signals_width] 333
 [sst_expanded] 1
 [sst_vpaned_height] 297
 @200
@@ -26,7 +26,6 @@ top_module.core_inst.o_iaddr_vld
 top_module.core_inst.o_iaddr[31:0]
 @28
 top_module.core_inst.i_d_valid
-@29
 top_module.core_inst.i_inst_vld
 @22
 top_module.core_inst.i_inst[31:0]
@@ -87,6 +86,19 @@ top_module.core_inst.u_decode.o_stall
 @200
 -Execute
 @28
+top_module.core_inst.u_execute.o_ex_valid
+@22
+top_module.core_inst.u_execute.i_alu_ctrl[3:0]
+top_module.core_inst.u_execute.i_rs1_data[31:0]
+top_module.core_inst.u_execute.i_rs2_data[31:0]
+top_module.core_inst.u_execute.is_op1[31:0]
+top_module.core_inst.u_execute.is_op2[31:0]
+top_module.core_inst.u_execute.o_result[31:0]
+@28
+top_module.core_inst.u_execute.o_stall
+@22
+top_module.core_inst.u_execute.o_data_store[31:0]
+@28
 top_module.core_inst.u_execute.i_id_valid
 @22
 top_module.core_inst.u_execute.i_rs1_data[31:0]
@@ -106,11 +118,50 @@ top_module.core_inst.u_execute.is_op2[31:0]
 @28
 top_module.core_inst.u_execute.o_ex_valid
 @22
+top_module.core_inst.u_execute.o_rd[4:0]
 top_module.core_inst.u_execute.o_data_store[31:0]
 top_module.core_inst.u_execute.o_result[31:0]
 @28
 top_module.core_inst.u_execute.o_stall
 @200
 -Memory
+@22
+top_module.core_inst.u_memory.i_pc[31:0]
+top_module.core_inst.u_memory.i_rd[4:0]
+top_module.core_inst.u_memory.i_result[31:0]
+top_module.core_inst.u_memory.i_opcode[6:0]
+top_module.core_inst.u_memory.i_data_store[31:0]
+@28
+top_module.core_inst.u_memory.i_func3[2:0]
+top_module.core_inst.u_memory.o_stall
+@29
+top_module.core_inst.u_memory.is_stall
+@28
+top_module.core_inst.u_memory.ir_data_mem_vld_assert
+top_module.core_inst.u_memory.is_load_store
+top_module.core_inst.u_memory.is_ce
+@200
+-Memory<--> Data Mem
+@28
+top_module.core_inst.u_memory.o_addr_vld
+@22
+top_module.core_inst.u_memory.o_addr[31:0]
+@28
+top_module.core_inst.u_memory.i_d_valid
+@22
+top_module.core_inst.u_memory.i_rdata[31:0]
+@28
+top_module.core_inst.u_memory.o_wr_en
+@22
+top_module.core_inst.u_memory.o_sel[3:0]
+top_module.core_inst.u_memory.o_wdata[31:0]
+@200
+-Memory<-->WriteBack
+@28
+top_module.core_inst.u_memory.o_mem_vld
+@22
+top_module.core_inst.u_memory.o_wb_data[31:0]
+top_module.core_inst.u_memory.o_wb_rd[4:0]
+top_module.core_inst.u_memory.o_opcode[6:0]
 [pattern_trace] 1
 [pattern_trace] 0
