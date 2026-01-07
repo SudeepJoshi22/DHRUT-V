@@ -1,0 +1,6 @@
+New age of DHRUT-V With clear milestones and goals to achieve
+
+- Pipeline CPU in SV.
+- Test Bench written in pyUVM
+- RV32I M-mode compliant
+- Proper memory interfacing to make CPU FPGA bootable
