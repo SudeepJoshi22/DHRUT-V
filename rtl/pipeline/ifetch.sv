@@ -2,15 +2,15 @@ module if_stage (
   input  logic        clk,
   input  logic        rst_n,
 
-  input  logic        stall,
-  input  logic        flush,
-  input  logic [31:0] redirect_pc,
+  input  logic        i_stall,
+  input  logic        i_flush,
+  input  logic [31:0] i_redirect_pc,
 
   mem_if.master       imem,
 
-  output logic        if_valid,
-  output logic [31:0] if_pc,
-  output logic [31:0] if_instr
+  output logic        o_if_valid,
+  output logic [31:0] o_if_pc,
+  output logic [31:0] o_if_instr
 );
 
   logic [31:0] pc_q, pc_d;
@@ -20,9 +20,9 @@ module if_stage (
   always_comb begin
     pc_d = pc_q;
 
-    if (flush) begin
-      pc_d = redirect_pc;
-    end else if (!stall && !waiting) begin
+    if (i_flush) begin
+      pc_d = i_redirect_pc;
+    end else if (!i_stall && !waiting) begin
       pc_d = pc_q + 32'd4;
     end
   end
@@ -37,29 +37,29 @@ module if_stage (
   end
 
   // Memory request
-  assign imem.valid = !waiting;
-  assign imem.addr  = pc_q;
-  assign imem.wdata = '0;
-  assign imem.wstrb = 4'b0000;
+  assign imem.m_valid = !waiting;
+  assign imem.m_addr  = pc_q;
+  assign imem.m_wdata = '0;
+  assign imem.m_wstrb = 4'b0000;
 
   // Waiting for memory
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       waiting  <= 1'b0;
-      if_valid <= 1'b0;
+      o_if_valid <= 1'b0;
     end else begin
-      if (imem.valid && !imem.ready) begin
+      if (imem.m_valid && !imem.s_ready) begin
         waiting <= 1'b1;
       end else begin
         waiting <= 1'b0;
       end
 
-      if (imem.ready && !stall) begin
-        if_valid <= 1'b1;
-        if_pc    <= pc_q;
-        if_instr <= imem.rdata;
-      end else if (flush) begin
-        if_valid <= 1'b0;
+      if (imem.s_ready && !i_stall) begin
+        o_if_valid <= 1'b1;
+        o_if_pc    <= pc_q;
+        o_if_instr <= imem.s_rdata;
+      end else if (i_flush) begin
+        o_if_valid <= 1'b0;
       end
     end
   end

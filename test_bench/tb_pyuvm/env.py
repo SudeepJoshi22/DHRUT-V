@@ -4,25 +4,22 @@ import cocotb
 from cocotb.triggers import RisingEdge
 from cocotb.clock import Clock
 
-from .imem_agent import *
+from .imem_agent.imem_agent import IMemAgent
 
-class IfEnv(uvm_env):
-
+class Env(uvm_env):
     def build_phase(self):
-        # CLOCK MUST EXIST HERE (like ALU)
-        self.clk = Clock(cocotb.top.clk, 10, "ns")
-        cocotb.start_soon(self.clk.start())
+        super().build_phase()
 
-        # AGENT CREATION (this was missing)
-        self.imem_agent = ImemAgent(
-            "imem_agent",
-            self,
-            cocotb.top.imem_if
-        )
+        self.imem_agent = IMemAgent("imem_agent", self)
 
-    async def start_of_simulation_phase(self):
-        dut = cocotb.top
-        dut.rst_n.value = 0
-        for _ in range(5):
-            await RisingEdge(dut.clk)
-        dut.rst_n.value = 1
+    def connect_phase(self):
+        super().connect_phase()  # Optional but good practice
+
+        # Future connections go here:
+        # Example: connect monitor to scoreboard
+        # self.imem_agent.monitor.ap.connect(self.scoreboard.imem_fifo.analysis_export)
+
+        # Example: connect control signals to other agents
+        # self.control_agent.ap.connect(self.imem_agent.driver.control_imp)
+
+        pass  # Nothing to connect yet — just imem agent is active

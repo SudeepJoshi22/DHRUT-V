@@ -5,7 +5,7 @@ SIM ?= verilator
 TOPLEVEL = tb_top
 
 # cocotb Python entry
-MODULE = run_if_test
+MODULE = run_test
 
 # Verilog/SystemVerilog sources
 VERILOG_SOURCES = \

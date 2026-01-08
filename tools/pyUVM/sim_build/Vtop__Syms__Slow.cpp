@@ -36,23 +36,23 @@ Vtop__Syms::Vtop__Syms(VerilatedContext* contextp, const char* namep, Vtop* mode
     __Vscopep_tb_top->varInsert("clk", &(TOP.tb_top__DOT__clk), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
     __Vscopep_tb_top->varInsert("rst_n", &(TOP.tb_top__DOT__rst_n), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
     __Vscopep_tb_top__dut->varInsert("clk", &(TOP.tb_top__DOT__dut__DOT__clk), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__dut->varInsert("flush", &(TOP.tb_top__DOT__dut__DOT__flush), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__dut->varInsert("if_instr", &(TOP.tb_top__DOT__dut__DOT__if_instr), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
-    __Vscopep_tb_top__dut->varInsert("if_pc", &(TOP.tb_top__DOT__dut__DOT__if_pc), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
-    __Vscopep_tb_top__dut->varInsert("if_valid", &(TOP.tb_top__DOT__dut__DOT__if_valid), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
+    __Vscopep_tb_top__dut->varInsert("i_flush", &(TOP.tb_top__DOT__dut__DOT__i_flush), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
+    __Vscopep_tb_top__dut->varInsert("i_redirect_pc", &(TOP.tb_top__DOT__dut__DOT__i_redirect_pc), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
+    __Vscopep_tb_top__dut->varInsert("i_stall", &(TOP.tb_top__DOT__dut__DOT__i_stall), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
+    __Vscopep_tb_top__dut->varInsert("o_if_instr", &(TOP.tb_top__DOT__dut__DOT__o_if_instr), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
+    __Vscopep_tb_top__dut->varInsert("o_if_pc", &(TOP.tb_top__DOT__dut__DOT__o_if_pc), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
+    __Vscopep_tb_top__dut->varInsert("o_if_valid", &(TOP.tb_top__DOT__dut__DOT__o_if_valid), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
     __Vscopep_tb_top__dut->varInsert("pc_d", &(TOP.tb_top__DOT__dut__DOT__pc_d), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
     __Vscopep_tb_top__dut->varInsert("pc_q", &(TOP.tb_top__DOT__dut__DOT__pc_q), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
-    __Vscopep_tb_top__dut->varInsert("redirect_pc", &(TOP.tb_top__DOT__dut__DOT__redirect_pc), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
     __Vscopep_tb_top__dut->varInsert("rst_n", &(TOP.tb_top__DOT__dut__DOT__rst_n), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__dut->varInsert("stall", &(TOP.tb_top__DOT__dut__DOT__stall), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
     __Vscopep_tb_top__dut->varInsert("waiting", &(TOP.tb_top__DOT__dut__DOT__waiting), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__imem_if->varInsert("addr", &(TOP__tb_top__DOT__imem_if.addr), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
     __Vscopep_tb_top__imem_if->varInsert("clk", &(TOP__tb_top__DOT__imem_if.clk), false, VLVT_UINT8, VLVD_IN|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__imem_if->varInsert("rdata", &(TOP__tb_top__DOT__imem_if.rdata), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
-    __Vscopep_tb_top__imem_if->varInsert("ready", &(TOP__tb_top__DOT__imem_if.ready), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__imem_if->varInsert("valid", &(TOP__tb_top__DOT__imem_if.valid), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
-    __Vscopep_tb_top__imem_if->varInsert("wdata", &(TOP__tb_top__DOT__imem_if.wdata), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
-    __Vscopep_tb_top__imem_if->varInsert("wstrb", &(TOP__tb_top__DOT__imem_if.wstrb), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,3,0);
+    __Vscopep_tb_top__imem_if->varInsert("m_addr", &(TOP__tb_top__DOT__imem_if.m_addr), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
+    __Vscopep_tb_top__imem_if->varInsert("m_valid", &(TOP__tb_top__DOT__imem_if.m_valid), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
+    __Vscopep_tb_top__imem_if->varInsert("m_wdata", &(TOP__tb_top__DOT__imem_if.m_wdata), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
+    __Vscopep_tb_top__imem_if->varInsert("m_wstrb", &(TOP__tb_top__DOT__imem_if.m_wstrb), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,3,0);
+    __Vscopep_tb_top__imem_if->varInsert("s_rdata", &(TOP__tb_top__DOT__imem_if.s_rdata), false, VLVT_UINT32, VLVD_NODIR|VLVF_PUB_RW, 0, 1 ,31,0);
+    __Vscopep_tb_top__imem_if->varInsert("s_ready", &(TOP__tb_top__DOT__imem_if.s_ready), false, VLVT_UINT8, VLVD_NODIR|VLVF_PUB_RW, 0, 0);
 }
 
 Vtop__Syms::~Vtop__Syms() {

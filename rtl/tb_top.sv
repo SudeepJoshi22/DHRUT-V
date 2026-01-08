@@ -8,13 +8,13 @@ module tb_top;
   if_stage dut (
     .clk         (clk),
     .rst_n       (rst_n),
-    .stall       (1'b0),
-    .flush       (1'b0),
-    .redirect_pc (32'b0),
+    .i_stall       (1'b0),
+    .i_flush       (1'b0),
+    .i_redirect_pc (32'b0),
     .imem        (imem_if),
-    .if_valid    (),
-    .if_pc       (),
-    .if_instr    ()
+    .o_if_valid    (),
+    .o_if_pc       (),
+    .o_if_instr    ()
   );
 
   initial begin

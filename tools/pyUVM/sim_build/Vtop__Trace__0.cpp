@@ -26,22 +26,22 @@ void Vtop___024root__trace_chg_0_sub_0(Vtop___024root* vlSelf, VerilatedVcd::Buf
     bufp->chgBit(oldp+1,(vlSelfRef.tb_top__DOT__rst_n));
     bufp->chgBit(oldp+2,(vlSelfRef.tb_top__DOT__dut__DOT__clk));
     bufp->chgBit(oldp+3,(vlSelfRef.tb_top__DOT__dut__DOT__rst_n));
-    bufp->chgBit(oldp+4,(vlSelfRef.tb_top__DOT__dut__DOT__stall));
-    bufp->chgBit(oldp+5,(vlSelfRef.tb_top__DOT__dut__DOT__flush));
-    bufp->chgIData(oldp+6,(vlSelfRef.tb_top__DOT__dut__DOT__redirect_pc),32);
-    bufp->chgBit(oldp+7,(vlSelfRef.tb_top__DOT__dut__DOT__if_valid));
-    bufp->chgIData(oldp+8,(vlSelfRef.tb_top__DOT__dut__DOT__if_pc),32);
-    bufp->chgIData(oldp+9,(vlSelfRef.tb_top__DOT__dut__DOT__if_instr),32);
+    bufp->chgBit(oldp+4,(vlSelfRef.tb_top__DOT__dut__DOT__i_stall));
+    bufp->chgBit(oldp+5,(vlSelfRef.tb_top__DOT__dut__DOT__i_flush));
+    bufp->chgIData(oldp+6,(vlSelfRef.tb_top__DOT__dut__DOT__i_redirect_pc),32);
+    bufp->chgBit(oldp+7,(vlSelfRef.tb_top__DOT__dut__DOT__o_if_valid));
+    bufp->chgIData(oldp+8,(vlSelfRef.tb_top__DOT__dut__DOT__o_if_pc),32);
+    bufp->chgIData(oldp+9,(vlSelfRef.tb_top__DOT__dut__DOT__o_if_instr),32);
     bufp->chgIData(oldp+10,(vlSelfRef.tb_top__DOT__dut__DOT__pc_q),32);
     bufp->chgIData(oldp+11,(vlSelfRef.tb_top__DOT__dut__DOT__pc_d),32);
     bufp->chgBit(oldp+12,(vlSelfRef.tb_top__DOT__dut__DOT__waiting));
     bufp->chgBit(oldp+13,(vlSymsp->TOP__tb_top__DOT__imem_if.clk));
-    bufp->chgBit(oldp+14,(vlSymsp->TOP__tb_top__DOT__imem_if.valid));
-    bufp->chgBit(oldp+15,(vlSymsp->TOP__tb_top__DOT__imem_if.ready));
-    bufp->chgIData(oldp+16,(vlSymsp->TOP__tb_top__DOT__imem_if.addr),32);
-    bufp->chgIData(oldp+17,(vlSymsp->TOP__tb_top__DOT__imem_if.wdata),32);
-    bufp->chgCData(oldp+18,(vlSymsp->TOP__tb_top__DOT__imem_if.wstrb),4);
-    bufp->chgIData(oldp+19,(vlSymsp->TOP__tb_top__DOT__imem_if.rdata),32);
+    bufp->chgBit(oldp+14,(vlSymsp->TOP__tb_top__DOT__imem_if.m_valid));
+    bufp->chgBit(oldp+15,(vlSymsp->TOP__tb_top__DOT__imem_if.s_ready));
+    bufp->chgIData(oldp+16,(vlSymsp->TOP__tb_top__DOT__imem_if.m_addr),32);
+    bufp->chgIData(oldp+17,(vlSymsp->TOP__tb_top__DOT__imem_if.m_wdata),32);
+    bufp->chgCData(oldp+18,(vlSymsp->TOP__tb_top__DOT__imem_if.m_wstrb),4);
+    bufp->chgIData(oldp+19,(vlSymsp->TOP__tb_top__DOT__imem_if.s_rdata),32);
 }
 
 void Vtop___024root__trace_cleanup(void* voidSelf, VerilatedVcd* /*unused*/) {

@@ -15,12 +15,12 @@ class alignas(VL_CACHE_LINE_BYTES) Vtop_mem_if final {
 
     // DESIGN SPECIFIC STATE
     VL_IN8(clk,0,0);
-    CData/*0:0*/ valid;
-    CData/*0:0*/ ready;
-    CData/*3:0*/ wstrb;
-    IData/*31:0*/ addr;
-    IData/*31:0*/ wdata;
-    IData/*31:0*/ rdata;
+    CData/*0:0*/ m_valid;
+    CData/*0:0*/ s_ready;
+    CData/*3:0*/ m_wstrb;
+    IData/*31:0*/ m_addr;
+    IData/*31:0*/ m_wdata;
+    IData/*31:0*/ s_rdata;
 
     // INTERNAL VARIABLES
     Vtop__Syms* vlSymsp;

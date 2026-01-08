@@ -3,13 +3,15 @@ from pyuvm import *
 
 from cocotb.triggers import RisingEdge
 
-from .env import IfEnv
+from .env import Env
 
 @pyuvm.test()
-class IfSmokeTest(uvm_test):
-
+class IFBringUpTest(uvm_test):
+    """
+    Bring-up test for IF Stage
+    """
     def build_phase(self):
-        self.env = IfEnv("env", self)
+        self.env = Env("env", self)
 
     async def run_phase(self):
         self.raise_objection()

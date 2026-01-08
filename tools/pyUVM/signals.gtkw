@@ -1,0 +1,48 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Thu Jan  8 19:38:42 2026
+[*]
+[dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
+[dumpfile_mtime] "Thu Jan  8 19:33:07 2026"
+[dumpfile_size] 14845
+[savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
+[timestart] 0
+[size] 1920 1001
+[pos] -51 -51
+*-16.031231 40000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_top.
+[sst_width] 278
+[signals_width] 253
+[sst_expanded] 1
+[sst_vpaned_height] 297
+@28
+tb_top.clk
+tb_top.rst_n
+@200
+-IMEM Interface
+@28
+tb_top.dut.imem.m_valid
+@22
+tb_top.dut.imem.m_addr[31:0]
+tb_top.dut.imem.m_wstrb[3:0]
+tb_top.dut.imem.m_wdata[31:0]
+@28
+tb_top.dut.imem.s_ready
+@22
+tb_top.dut.imem.s_rdata[31:0]
+@200
+-Fetch
+@28
+tb_top.dut.i_stall
+tb_top.dut.i_flush
+@22
+tb_top.dut.i_redirect_pc[31:0]
+@28
+tb_top.dut.o_if_valid
+@22
+tb_top.dut.o_if_pc[31:0]
+tb_top.dut.o_if_instr[31:0]
+@29
+tb_top.dut.waiting
+[pattern_trace] 1
+[pattern_trace] 0
