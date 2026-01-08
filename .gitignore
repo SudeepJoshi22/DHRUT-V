@@ -1,4 +1,7 @@
 **/*.swp
+**/sim_build
+**/__pycache__
+**/*.xml
 venv
 *.vcd
 *.dump

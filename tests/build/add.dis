@@ -1,0 +1,38 @@
+
+/home/sudeep/GitHub/DHRUT-V/tests/build/add.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00000000 <_start>:
+   0:	00500093          	addi	x1,x0,5
+   4:	00308113          	addi	x2,x1,3
+   8:	002081b3          	add	x3,x1,x2
+   c:	00500093          	addi	x1,x0,5
+  10:	00358113          	addi	x2,x11,3
+  14:	002701b3          	add	x3,x14,x2
+  18:	00500093          	addi	x1,x0,5
+  1c:	00308113          	addi	x2,x1,3
+  20:	002081b3          	add	x3,x1,x2
+  24:	00550093          	addi	x1,x10,5
+  28:	00308113          	addi	x2,x1,3
+  2c:	002081b3          	add	x3,x1,x2
+  30:	00558093          	addi	x1,x11,5
+  34:	00308113          	addi	x2,x1,3
+  38:	002081b3          	add	x3,x1,x2
+  3c:	0000006f          	jal	x0,3c <_start+0x3c>
+
+Disassembly of section .riscv.attributes:
+
+00000000 <.riscv.attributes>:
+   0:	1941                	.insn	2, 0x1941
+   2:	0000                	.insn	2, 0x
+   4:	7200                	.insn	2, 0x7200
+   6:	7369                	.insn	2, 0x7369
+   8:	01007663          	bgeu	x0,x16,14 <_start+0x14>
+   c:	0000000f          	fence	unknown,unknown
+  10:	7205                	.insn	2, 0x7205
+  12:	3376                	.insn	2, 0x3376
+  14:	6932                	.insn	2, 0x6932
+  16:	7032                	.insn	2, 0x7032
+  18:	0031                	.insn	2, 0x0031

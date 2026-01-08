@@ -1,6 +1,0 @@
-<testsuites name="results">
-  <testsuite name="all" package="all">
-    <property name="random_seed" value="1767900787" />
-    <testcase name="run_test" classname="run_test" file="/home/sudeep/GitHub/DHRUT-V/test_bench/run_test.py" lineno="9" time="0.006048679351806641" sim_time_ns="1030.0" ratio_time="170285.1052424123" />
-  </testsuite>
-</testsuites>

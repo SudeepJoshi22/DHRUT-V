@@ -3,7 +3,7 @@
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import Timer
-from pyuvm import uvm_root, ConfigDB
+from pyuvm import uvm_root
 import tb_pyuvm.test_imem_bringup
 
 @cocotb.test()
