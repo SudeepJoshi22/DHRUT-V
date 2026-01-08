@@ -2,6 +2,9 @@
 **/sim_build
 **/__pycache__
 **/*.xml
+**/*.dis
+**/*.elf
+**/build
 venv
 *.vcd
 *.dump
