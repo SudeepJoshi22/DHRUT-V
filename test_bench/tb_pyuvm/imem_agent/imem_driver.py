@@ -94,5 +94,3 @@ class IMemDriver(uvm_driver):
             # Drive response
             self.imem_if.s_rdata.value = instr
             self.imem_if.s_ready.value = 1
-
-            await RisingEdge(self.imem_if.clk)

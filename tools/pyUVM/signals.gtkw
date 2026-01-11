@@ -1,48 +1,79 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Thu Jan  8 20:39:14 2026
+[*] Sun Jan 11 14:09:04 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Thu Jan  8 20:36:01 2026"
-[dumpfile_size] 18026
+[dumpfile_mtime] "Sun Jan 11 14:06:13 2026"
+[dumpfile_size] 41519
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
 [timestart] 0
 [size] 1920 1001
 [pos] -1 -1
-*-16.031231 70000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-16.205502 70000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
+[treeopen] tb_top.ID.
 [sst_width] 278
 [signals_width] 253
 [sst_expanded] 1
-[sst_vpaned_height] 297
+[sst_vpaned_height] 280
 @28
 tb_top.clk
 tb_top.rst_n
 @200
 -IMEM Interface
 @28
-tb_top.dut.imem.m_valid
+tb_top.imem_if.m_valid
 @22
-tb_top.dut.imem.m_addr[31:0]
-tb_top.dut.imem.m_wstrb[3:0]
-tb_top.dut.imem.m_wdata[31:0]
+tb_top.imem_if.m_addr[31:0]
+tb_top.imem_if.m_wstrb[3:0]
+tb_top.imem_if.m_wdata[31:0]
 @28
-tb_top.dut.imem.s_ready
+tb_top.imem_if.s_ready
 @22
-tb_top.dut.imem.s_rdata[31:0]
+tb_top.imem_if.s_rdata[31:0]
 @200
 -Fetch
 @28
-tb_top.dut.i_stall
-tb_top.dut.i_flush
+tb_top.IF.i_stall
+tb_top.IF.i_flush
 @22
-tb_top.dut.i_redirect_pc[31:0]
+tb_top.IF.i_redirect_pc[31:0]
+tb_top.IF.pc_q[31:0]
+tb_top.IF.pc_next[31:0]
 @28
-tb_top.dut.o_if_valid
+tb_top.IF.o_if_valid
 @22
-tb_top.dut.o_if_pc[31:0]
-tb_top.dut.o_if_instr[31:0]
-@29
-tb_top.dut.fetch_valid
+tb_top.IF.o_if_pc[31:0]
+tb_top.IF.o_if_instr[31:0]
+@200
+-Decode
+@28
+tb_top.ID.i_if_valid
+@22
+tb_top.ID.i_if_instr[31:0]
+tb_top.ID.i_if_pc[31:0]
+@200
+-
+@28
+tb_top.ID.o_uop.valid
+@22
+tb_top.ID.o_uop.opcode[6:0]
+@28
+tb_top.ID.o_uop.is_immediate
+tb_top.ID.o_uop.uses_rs1
+tb_top.ID.o_uop.uses_rs2
+tb_top.ID.o_uop.writes_rd
+@22
+tb_top.ID.o_uop.rs1[4:0]
+tb_top.ID.o_uop.rs2[4:0]
+tb_top.ID.o_uop.rd[4:0]
+tb_top.ID.o_uop.imm[31:0]
+tb_top.ID.o_uop.alu_op[9:0]
+@200
+-
+@28
+tb_top.ID.o_dec_valid
+@23
+tb_top.ID.o_dec_pc[31:0]
 [pattern_trace] 1
 [pattern_trace] 0

@@ -5,12 +5,14 @@ from cocotb.triggers import RisingEdge
 from cocotb.clock import Clock
 
 from .imem_agent.imem_agent import IMemAgent
+from .cpu_agent.cpu_agent import CpuMonitorAgent
 
 class Env(uvm_env):
     def build_phase(self):
         super().build_phase()
 
         self.imem_agent = IMemAgent("imem_agent", self)
+        self.cpu_agent  = CpuMonitorAgent("cpu_agent", self)
 
     def connect_phase(self):
         super().connect_phase()  # Optional but good practice

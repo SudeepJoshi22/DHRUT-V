@@ -80,5 +80,5 @@ export COCOTB_LOG_LEVEL=INFO
 echo "▶ Running simulation (Verilator)"
 cd $SIM_DIR
 make clean
-make SIM=verilator
+make SIM=verilator LOG_LEVEL=DEBUG
 
