@@ -26,8 +26,7 @@ package riscv_uop_pkg;
     ALU_SRL     = 10'b0_101,
     ALU_SRA     = 10'b1_101,
     ALU_OR      = 10'b0_110,
-    ALU_AND     = 10'b0_111,
-    ALU_INVALID = 10'bx_xxx
+    ALU_AND     = 10'b0_111
   } alu_op_t;
 
   // Micro-op structure (will grow later)

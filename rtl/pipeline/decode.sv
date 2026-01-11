@@ -87,7 +87,7 @@ module decode_stage (
   // Arithmetic operation decoding (OP & OP-IMM)
   // ---------------------------------------------------------------------------
   always_comb begin
-    alu_operation = ALU_INVALID;
+    alu_operation = ALU_ADD;
 
     if (opcode == OPCODE_OP_IMM || opcode == OPCODE_OP) begin
       case ({funct7[5], funct3})
@@ -100,7 +100,7 @@ module decode_stage (
         4'b0_101: alu_operation = (funct7[5]) ? ALU_SRA : ALU_SRL;
         4'b0_110: alu_operation = ALU_OR;
         4'b0_111: alu_operation = ALU_AND;
-        default:   alu_operation = ALU_INVALID;
+        default:   alu_operation = ALU_ADD;
       endcase
     end
     // LUI and AUIPC will be handled in main decode logic (no funct7/funct3 needed)

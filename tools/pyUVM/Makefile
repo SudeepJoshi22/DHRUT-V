@@ -8,10 +8,10 @@ TOPLEVEL = tb_top
 MODULE = run_test
 
 # Verilog/SystemVerilog sources
-VERILOG_SOURCES = 			\
+VERILOG_SOURCES = 				\
   ../../rtl/include/*.sv 		\
-  ../../rtl/interfaces/*.sv \
-  ../../rtl/pipeline/*.sv 	\
+  ../../rtl/interfaces/*.sv 	\
+  ../../rtl/pipeline/*.sv 		\
   ../../rtl/tb_top.sv
 
 # Enable SystemVerilog

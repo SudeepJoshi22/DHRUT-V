@@ -83,7 +83,7 @@ class IMemDriver(uvm_driver):
                 instr = self.mem.get(aligned_addr, 0x00000013)  # default NOP if not found
 
             # Rare latency: 90% chance of 0 stall, 10% chance of 1 or 2 stall cycles
-            if random.random() < 0.25:  # 10% chance of introducing latency
+            if random.random() < 0.1:
                 stall_cycles = random.randint(1, 2)  # 1 or 2 cycles of stall
                 self.logger.debug(f"IMem introducing {stall_cycles} stall cycle(s)")
                 

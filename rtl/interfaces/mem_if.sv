@@ -1,4 +1,7 @@
-interface mem_if (input logic clk);
+interface mem_if (
+    input logic clk,
+    input logic rst_n
+    );
 
   logic        m_valid;
   logic        s_ready;

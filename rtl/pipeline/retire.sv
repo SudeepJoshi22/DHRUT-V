@@ -1,0 +1,54 @@
+import riscv_uop_pkg::*;
+
+module retire (
+  input  logic        clk,
+  input  logic        rst_n,
+
+  // From ALU/Compute stage
+  input  logic        i_alu_valid,
+  input  uop_t        i_uop,
+  input  logic [31:0] i_alu_result,
+
+  // Flush from downstream (e.g. exception) or upstream (branch mispredict)
+  input  logic        i_flush,
+
+  // Stall from downstream (rare in in-order, but for future)
+  input  logic        i_stall,
+
+  // To ARF (write-back)
+  output logic        o_wb_en,
+  output logic [4:0]  o_wb_rd,
+  output logic [31:0] o_wb_data
+);
+
+  // ───────────────────────────────────────────────
+  // 1. Pipeline Registers (ALU → Retire)
+  // ───────────────────────────────────────────────
+  logic        valid_q;
+  uop_t        uop_q;
+  logic [31:0] alu_result_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n || i_flush) begin
+      valid_q       <= 1'b0;
+      uop_q         <= '0;
+      alu_result_q  <= '0;
+    end
+    else if (!i_stall) begin
+      valid_q       <= i_alu_valid;
+      uop_q         <= i_uop;
+      alu_result_q  <= i_alu_result;
+    end
+    // else stall → hold current values
+  end
+
+  // ───────────────────────────────────────────────
+  // 2. Register Write-Back (to ARF)
+  // ───────────────────────────────────────────────
+  always_comb begin
+    o_wb_en   = valid_q && uop_q.writes_rd && !i_flush;
+    o_wb_rd   = uop_q.rd;
+    o_wb_data = alu_result_q;
+  end
+
+endmodule

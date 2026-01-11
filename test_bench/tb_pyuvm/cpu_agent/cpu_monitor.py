@@ -51,9 +51,10 @@ class CpuMonitorItem(uvm_sequence_item):
             s += f"uop_valid={int(self.uop_valid):1} "
             s += f"opcode=0x{self.uop_opcode:02x} "
             s += f"rd=x{self.uop_rd:02d} "
-            s += f"rs1={int(self.uop_uses_rs1):1} "
-            s += f"rs2={int(self.uop_uses_rs2):1} "
-            s += f"wr={int(self.uop_writes_rd):1}"
+            s += f"rs1=x{self.uop_rs1:02d} "
+            s += f"rs2=x{self.uop_rs2:02d} "
+            s += f"wr={int(self.uop_writes_rd):1} "
+            s += f"imm={hex(self.uop_imm)}"
         else:
             s += "(idle)"
     
@@ -125,8 +126,6 @@ class CpuMonitor(uvm_monitor):
             item.uop_uses_rs1   = bool(uop_raw[3])
             item.uop_uses_rs2   = bool(uop_raw[2])
             item.uop_writes_rd  = bool(uop_raw[1])
-
-            # Optional: more fields
             item.uop_rs1      = int(uop_raw[50:46])
             item.uop_rs2      = int(uop_raw[45:41])
             item.uop_imm      = int(uop_raw[35:4])
