@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 # Console handler
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
-console_formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(name)s: %(message)s')
+console_formatter = logging.Formatter(' %(levelname)-2s | %(name)s: %(message)s')
 console.setFormatter(console_formatter)
 logger.addHandler(console)
 

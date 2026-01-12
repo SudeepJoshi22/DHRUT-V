@@ -1,87 +1,162 @@
 import logging
+import yaml
+from pathlib import Path
 from pyuvm import uvm_sequence_item, uvm_monitor, uvm_analysis_port
 import cocotb
-from cocotb.triggers import RisingEdge, FallingEdge
-from cocotb.triggers import Timer
+from cocotb.triggers import RisingEdge
 
 # ───────────────────────────────────────────────
-# Monitor Item – Now includes both IF and Decode signals
+# Dynamic Monitor Item - Fields created from YAML
 # ───────────────────────────────────────────────
 class CpuMonitorItem(uvm_sequence_item):
-    def __init__(self, name="CpuMonitorItem"):
+    def __init__(self, name="CpuMonitorItem", config=None):
         super().__init__(name)
-        self.timestamp     = 0.0
-
-        self.if_id_valid   = False     # ← must match assignment
-        self.if_id_pc      = 0
-        self.if_id_instr   = 0
-
-        self.i_stall       = False
-        self.i_flush       = False
-
-        self.id_if_stall   = False
-
-        self.o_dec_valid   = False
-        self.o_dec_pc      = 0
-
-        self.uop_valid     = False
-        self.uop_opcode    = 0
-        self.uop_rd        = 0
-        self.uop_uses_rs1  = False
-        self.uop_uses_rs2  = False
-        self.uop_writes_rd = False
-
+        self.timestamp = 0.0
+        self.config = config
+        
+        # Dynamically create attributes based on YAML config
+        if config:
+            for stage_name, stage_config in config['stages'].items():
+                for signal in stage_config['signals']:
+                    # Initialize all signal attributes
+                    setattr(self, signal['signal_path'], None)
+            
+            # Handle UOP extraction fields if defined
+            if 'uop_extraction' in config:
+                for field in config['uop_extraction']['fields']:
+                    setattr(self, field['name'], None)
+    
     def __str__(self):
-        s = f"@{self.timestamp:6.1f}ns | "
-    
-        # FETCH (IF → ID pipeline register)
-        s += "[FETCH] "
-        s += f"valid={int(self.if_id_valid):1} "
-        s += f"PC=0x{self.if_id_pc:08x} "
-        s += f"instr=0x{self.if_id_instr:08x} "
-        s += f"stall={int(self.i_stall):1} "
-        s += f"flush={int(self.i_flush):1} "
-        s += f"stall_IF={int(self.id_if_stall):1} | "
-    
-        # DECODE (outputs to EX)
-        s += "[DECODE] "
-        s += f"valid={int(self.o_dec_valid):1} "
-        if self.o_dec_valid:
-            s += f"PC=0x{self.o_dec_pc:08x} "
-            s += f"uop_valid={int(self.uop_valid):1} "
-            s += f"opcode=0x{self.uop_opcode:02x} "
-            s += f"rd=x{self.uop_rd:02d} "
-            s += f"rs1=x{self.uop_rs1:02d} "
-            s += f"rs2=x{self.uop_rs2:02d} "
-            s += f"wr={int(self.uop_writes_rd):1} "
-            s += f"imm={hex(self.uop_imm)}"
-        else:
-            s += "(idle)"
-    
+        if not self.config:
+            return f"@{self.timestamp:6.1f}ns | No config loaded"
+        
+        s = f"@{self.timestamp:7.1f}ns \n"
+        
+        # Iterate through stages defined in config
+        display_stages = self.config.get('display_stages', self.config['stages'].keys())
+        
+        for stage_name in display_stages:
+            if stage_name not in self.config['stages']:
+                continue
+            
+            stage_config = self.config['stages'][stage_name]
+            stage_label = f"[{stage_config['display_name']}]"
+            
+            # Build stage output with signals
+            stage_signals = []
+            
+            # Display all signals for this stage
+            for signal in stage_config['signals']:
+                signal_name = signal['name']
+                signal_path = signal['signal_path']
+                signal_format = signal['format']
+                signal_type = signal['type']
+                
+                # Get value from item
+                value = getattr(self, signal_path, None)
+                
+                # Format based on type
+                if value is None:
+                    formatted_value = "---"
+                elif signal_type == "bool":
+                    formatted_value = signal_format.format(int(value))
+                elif signal_type == "int":
+                    formatted_value = signal_format.format(value)
+                else:
+                    formatted_value = str(value)
+                
+                signal_str = f"{signal_name}={formatted_value}"
+                stage_signals.append(signal_str)
+            
+            # Add stage to output
+            if stage_signals:
+                s += f" | {stage_label} " + " ".join(stage_signals)
+                s += f"\n"
+        
         return s
 
 # ───────────────────────────────────────────────
-# CPU Monitor – Observes both IF and Decode stages
+# CPU Monitor – Dynamically configured from YAML
 # ───────────────────────────────────────────────
 class CpuMonitor(uvm_monitor):
-    def __init__(self, name, parent):
+    def __init__(self, name, parent, config_path="monitor_config.yaml"):
         super().__init__(name, parent)
         self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
         self.ap = uvm_analysis_port("ap", self)
-
+        
+        # Load YAML configuration
+        self.config = self._load_config(config_path)
+        self.logger.info(f"Loaded monitor config with {len(self.config['stages'])} stages")
+    
+    def _load_config(self, config_path):
+        """Load monitor configuration from YAML file"""
+        config_file = Path(__file__).parent / config_path
+        
+        if not config_file.exists():
+            self.logger.error(f"Config file not found: {config_file}")
+            return {'stages': {}}
+        
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        return config
+    
     def build_phase(self):
         self.dut = cocotb.top
-
+    
+    def _extract_uop_fields(self, uop_raw):
+        """Extract UOP fields from packed signal based on config"""
+        if 'uop_extraction' not in self.config:
+            return {}
+        
+        extracted = {}
+        for field in self.config['uop_extraction']['fields']:
+            field_name = field['name']
+            bits = field['bits']
+            
+            if len(bits) == 2:
+                msb, lsb = bits
+                if msb == lsb:
+                    # Single bit
+                    extracted[field_name] = bool(uop_raw[msb])
+                else:
+                    # Multi-bit field
+                    extracted[field_name] = int(uop_raw[msb:lsb])
+            else:
+                self.logger.warning(f"Invalid bit specification for {field_name}: {bits}")
+        
+        return extracted
+    
+    def _get_signal_value(self, signal_path):
+        """
+        Recursively get signal value from DUT using dot notation
+        e.g., "alu_if.m_valid" -> self.dut.alu_if.m_valid.value
+        """
+        parts = signal_path.split('.')
+        obj = self.dut
+        
+        try:
+            for part in parts:
+                obj = getattr(obj, part)
+            
+            # Get the value if it's a signal
+            if hasattr(obj, 'value'):
+                return obj.value
+            return obj
+        except AttributeError as e:
+            self.logger.warning(f"Signal not found: {signal_path} - {e}")
+            return None
+    
     async def run_phase(self):
-        # Lazily get DUT only when run_phase starts (safe!)
+        # Lazily get DUT only when run_phase starts
         if self.dut is None:
             self.dut = cocotb.top
             if self.dut is None:
                 self.logger.critical("Failed to get cocotb.top in run_phase!")
                 return
-
+        
         self.logger.info("Monitor now observing DUT successfully!")
-
+        
         # Debug: print all top-level attributes (only once)
         if not hasattr(self, '_printed_attrs'):
             self.logger.info("Available top-level signals in dut:")
@@ -89,49 +164,61 @@ class CpuMonitor(uvm_monitor):
                 if not attr.startswith('_'):
                     self.logger.info(f"  - {attr}")
             self._printed_attrs = True
-
-        item = CpuMonitorItem()
+        
+        # Create monitor item with config
+        item = CpuMonitorItem(config=self.config)
         
         while True:
             await RisingEdge(self.dut.clk)
-            #await FallingEdge(self.dut.clk)
-
-            #await Timer(1, unit="step")
-            
-            #self.logger.info(f"Raw if_id_valid = {self.dut.if_id_valid.value}")
-            #self.logger.info(f"Raw o_dec_valid = {self.dut.id_ex_valid.value}")
             
             item.timestamp = cocotb.utils.get_sim_time(unit="ns")
-
-            # ── IF → ID pipeline register (internal signals) ──
-            item.if_id_valid = bool(self.dut.if_id_valid.value)
-            item.if_id_pc    = int(self.dut.if_id_pc.value)
-            item.if_id_instr = int(self.dut.if_id_instr.value)
-
-            # ── ID → IF stall back-pressure ──
-            item.id_if_stall = bool(self.dut.id_if_stall.value)
-
-            # ── Decode outputs to EX ──
-            item.o_dec_valid = bool(self.dut.id_ex_valid.value)
-            item.o_dec_pc    = int(self.dut.id_ex_pc.value)
-
-            # ── uop contents (only when decode valid) ──
-            uop_raw = self.dut.id_ex_uop.value  # get the full 69-bit LogicArray
-
-            # Extract bits (MSB=68, LSB=0)
-            item.uop_valid      = bool(uop_raw[68])
-            item.uop_opcode     = int(uop_raw[67:61])     # 7 bits
-            item.uop_alu_op   = int(uop_raw[60:51])     # 10 bits - optional
-            item.uop_rd         = int(uop_raw[40:36])     # 5 bits
-            item.uop_uses_rs1   = bool(uop_raw[3])
-            item.uop_uses_rs2   = bool(uop_raw[2])
-            item.uop_writes_rd  = bool(uop_raw[1])
-            item.uop_rs1      = int(uop_raw[50:46])
-            item.uop_rs2      = int(uop_raw[45:41])
-            item.uop_imm      = int(uop_raw[35:4])
-
-            if item.if_id_valid or item.o_dec_valid:
-                self.logger.info(str(item))
-
-            # ── Broadcast for future scoreboard/coverage ──
+            
+            # Dynamically sample all signals from config
+            for stage_name, stage_config in self.config['stages'].items():
+                for signal in stage_config['signals']:
+                    signal_path = signal['signal_path']
+                    signal_type = signal['type']
+                    
+                    # Skip signals that come from UOP extraction
+                    if signal.get('source') == 'uop_extraction':
+                        # These will be populated by the UOP extraction logic below
+                        continue
+                    
+                    # Get raw value from DUT
+                    raw_value = self._get_signal_value(signal_path)
+                    
+                    if raw_value is not None:
+                        # Convert based on type
+                        if signal_type == "bool":
+                            value = bool(raw_value)
+                        elif signal_type == "int":
+                            # Handle cocotb LogicArray
+                            if hasattr(raw_value, 'integer'):
+                                value = raw_value.integer
+                            else:
+                                value = int(raw_value)
+                        else:
+                            value = raw_value
+                        
+                        setattr(item, signal_path, value)
+            
+            # Handle UOP extraction if configured
+            if 'uop_extraction' in self.config:
+                uop_signal_path = self.config['uop_extraction']['signal_path']
+                uop_raw = self._get_signal_value(uop_signal_path)
+                
+                if uop_raw is not None:
+                    extracted_fields = self._extract_uop_fields(uop_raw)
+                    
+                    # Set extracted fields in item
+                    for field_name, field_value in extracted_fields.items():
+                        setattr(item, field_name, field_value)
+                else:
+                    self.logger.debug(f"UOP signal not found: {uop_signal_path}")
+            
+            # Log the item (will use __str__ method)
+            self.logger.info(str(item))
+            
+            # Broadcast for scoreboard/coverage
             self.ap.write(item)
+

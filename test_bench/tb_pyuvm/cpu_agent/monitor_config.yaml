@@ -1,0 +1,305 @@
+# monitor_config.yaml - Configuration for DHRUT-V CPU Pipeline Monitor Display
+# This YAML file defines all pipeline stages, their signals, and display formats
+# It works with the dynamic CpuMonitor that reads this config at runtime
+
+stages:
+  # ─────────────────────────────────────────────────────────────────────────
+  # FETCH Stage - Instruction Fetch from Memory
+  # ─────────────────────────────────────────────────────────────────────────
+  FETCH:
+    display_name: "FETCH"
+    description: "Instruction Fetch stage - retrieves instructions from memory"
+    signals:
+      # Valid signal from IF/ID pipeline register
+      - name: "valid"
+        signal_path: "if_id_valid"
+        format: "{:1d}"
+        type: "bool"
+        description: "Instruction valid"
+      
+      # Program Counter
+      - name: "PC"
+        signal_path: "if_id_pc"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Program Counter"
+      
+      # Instruction encoding (32-bit RISC-V)
+      - name: "instr"
+        signal_path: "if_id_instr"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Raw instruction bits"
+      
+      # Stall signal from decode stage
+      - name: "stall_IF"
+        signal_path: "id_if_stall"
+        format: "{:1d}"
+        type: "bool"
+        description: "Stall signal to IF stage"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DECODE Stage - Instruction Decoding and UOP Generation
+  # ───────────────────────────────────────────────────────────────────────────
+  DECODE:
+    display_name: "DECODE"
+    description: "Instruction Decode stage - translates instructions to microops"
+    signals:
+      # Valid micro-operation signal
+      - name: "valid"
+        signal_path: "id_issue_valid"
+        format: "{:1d}"
+        type: "bool"
+        description: "UOP valid"
+      
+      # Program Counter passed through decode
+      - name: "PC"
+        signal_path: "id_issue_pc"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC of decoded instruction"
+      
+      # UOP opcode/operation type - EXTRACTED from packed id_issue_uop
+      - name: "opcode"
+        signal_path: "uop_opcode"
+        format: "0x{:02x}"
+        type: "int"
+        description: "UOP opcode (7 bits) - extracted from id_issue_uop"
+        source: "uop_extraction"
+      
+      # Destination register - EXTRACTED from packed id_issue_uop
+      - name: "rd"
+        signal_path: "uop_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "Destination register - extracted from id_issue_uop"
+        source: "uop_extraction"
+      
+      # Source register 1 - EXTRACTED from packed id_issue_uop
+      - name: "rs1"
+        signal_path: "uop_rs1"
+        format: "x{:02d}"
+        type: "int"
+        description: "Source register 1 - extracted from id_issue_uop"
+        source: "uop_extraction"
+      
+      # Source register 2 - EXTRACTED from packed id_issue_uop
+      - name: "rs2"
+        signal_path: "uop_rs2"
+        format: "x{:02d}"
+        type: "int"
+        description: "Source register 2 - extracted from id_issue_uop"
+        source: "uop_extraction"
+      
+      # Register write enable - EXTRACTED from packed id_issue_uop
+      - name: "wr"
+        signal_path: "uop_writes_rd"
+        format: "{:1d}"
+        type: "bool"
+        description: "Writes destination register - extracted from id_issue_uop"
+        source: "uop_extraction"
+      
+      # Immediate value - EXTRACTED from packed id_issue_uop
+      - name: "imm"
+        signal_path: "uop_imm"
+        format: "{:#x}"
+        type: "int"
+        description: "Sign-extended immediate - extracted from id_issue_uop"
+        source: "uop_extraction"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ISSUE Stage - Instruction Scheduling and Register File Access
+  # ─────────────────────────────────────────────────────────────────────────
+  ISSUE:
+    display_name: "ISSUE"
+    description: "Issue stage - schedules UOPs and accesses register file"
+    signals:
+      # ALU issue valid
+      - name: "alu_valid"
+        signal_path: "alu_if.m_valid"
+        format: "{:1d}"
+        type: "bool"
+        description: "ALU operation valid"
+      
+      # ALU operand 1 (usually from RS1)
+      - name: "alu_op1"
+        signal_path: "alu_if.m_op1"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU operand 1 (from x[rs1] or zero)"
+      
+      # ALU operand 2 (usually from RS2 or immediate)
+      - name: "alu_op2"
+        signal_path: "alu_if.m_op2"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU operand 2 (from x[rs2] or immediate)"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ALU Stage - Arithmetic/Logic Execution
+  # ─────────────────────────────────────────────────────────────────────────
+  ALU:
+    display_name: "ALU"
+    description: "ALU execution stage - performs arithmetic and logic operations"
+    signals:
+      # ALU result valid
+      - name: "valid"
+        signal_path: "alu_retire_valid"
+        format: "{:1d}"
+        type: "bool"
+        description: "ALU result valid"
+      
+      # ALU result value
+      - name: "result"
+        signal_path: "alu_retire_result"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU result value"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # RETIRE Stage - Writeback to Register File and Commit
+  # ─────────────────────────────────────────────────────────────────────────
+  RETIRE:
+    display_name: "RETIRE"
+    description: "Retire stage - commits results to register file"
+    signals:
+      # Register file write enable
+      - name: "wb_en"
+        signal_path: "retire_wb_en"
+        format: "{:1d}"
+        type: "bool"
+        description: "Write-back enabled"
+      
+      # Destination register (write-back)
+      - name: "wb_rd"
+        signal_path: "retire_wb_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "Write-back register"
+      
+      # Write-back data
+      - name: "wb_data"
+        signal_path: "retire_wb_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Write-back data value"
+
+# ───────────────────────────────────────────────────────────────────────────
+# Optional: Define which stages to display (subset of available stages)
+# ───────────────────────────────────────────────────────────────────────────
+display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "RETIRE"]
+
+# ───────────────────────────────────────────────────────────────────────────
+# UOP Bit Extraction Configuration
+# ───────────────────────────────────────────────────────────────────────────
+# Extracts individual fields from the packed id_issue_uop signal
+# 
+# IMPORTANT: These bit ranges are templates. You MUST verify against your
+# actual uop_t struct definition in riscv_uop_pkg.sv
+#
+# The monitor will dynamically extract these fields from id_issue_uop and
+# make them available to display signals marked with source: "uop_extraction"
+#
+# Bit layout assumptions (adjust to match your actual struct):
+# [68]      - uop_valid     (1 bit)
+# [67:61]   - uop_opcode    (7 bits)
+# [60:51]   - uop_alu_op    (10 bits) [NOT USED IN DISPLAY - for reference]
+# [50:46]   - uop_rs1       (5 bits)
+# [45:41]   - uop_rs2       (5 bits)
+# [40:36]   - uop_rd        (5 bits)
+# [35:4]    - uop_imm       (32 bits)
+# [3]       - uop_uses_rs1  (1 bit)
+# [2]       - uop_uses_rs2  (1 bit)
+# [1]       - uop_writes_rd (1 bit)
+# ───────────────────────────────────────────────────────────────────────────
+uop_extraction:
+  signal_path: "id_issue_uop"
+  fields:
+    # Valid bit (MSB, indicates this is a valid UOP)
+    - name: "uop_valid"
+      bits: [68, 68]
+      description: "Valid micro-operation"
+    
+    # Opcode field (7 bits) - operation type
+    - name: "uop_opcode"
+      bits: [67, 61]
+      description: "7-bit opcode"
+    
+    # ALU operation (10 bits) - ALU suboperation [OPTIONAL - not displayed]
+    - name: "uop_alu_op"
+      bits: [60, 51]
+      description: "10-bit ALU operation type (reference only)"
+    
+    # Source register 1 (5 bits)
+    - name: "uop_rs1"
+      bits: [50, 46]
+      description: "5-bit source register 1"
+    
+    # Source register 2 (5 bits)
+    - name: "uop_rs2"
+      bits: [45, 41]
+      description: "5-bit source register 2"
+    
+    # Destination register (5 bits)
+    - name: "uop_rd"
+      bits: [40, 36]
+      description: "5-bit destination register (rd)"
+    
+    # Immediate value (32 bits)
+    - name: "uop_imm"
+      bits: [35, 4]
+      description: "32-bit sign-extended immediate"
+    
+    # Uses rs1 flag (1 bit)
+    - name: "uop_uses_rs1"
+      bits: [3, 3]
+      description: "Instruction uses rs1"
+    
+    # Uses rs2 flag (1 bit)
+    - name: "uop_uses_rs2"
+      bits: [2, 2]
+      description: "Instruction uses rs2"
+    
+    # Writes rd flag (1 bit)
+    - name: "uop_writes_rd"
+      bits: [1, 1]
+      description: "Instruction writes rd"
+
+# ───────────────────────────────────────────────────────────────────────────
+# Display Configuration
+# ───────────────────────────────────────────────────────────────────────────
+display_config:
+  # Logging level: "DEBUG", "INFO", "WARNING", "ERROR"
+  log_level: "INFO"
+  
+  # Print full transaction at each clock cycle
+  print_full_items: true
+  
+  # Print only when valid signal is high (optional filtering)
+  print_only_valid: false
+  
+  # Timestamp unit: "ns" or "us" or "ms"
+  timestamp_unit: "ns"
+  
+  # Enable color output in logs (if terminal supports ANSI colors)
+  use_colors: true
+
+# ───────────────────────────────────────────────────────────────────────────
+# Register File Snapshot (Optional)
+# Monitors changes to specific registers during execution
+# ───────────────────────────────────────────────────────────────────────────
+register_tracking:
+  enabled: false
+  # Registers to track (can be empty to track all writes)
+  registers: ["x1", "x2", "x10", "x11"]  # ra, sp, a0, a1
+  log_on_write: true
+
+# ───────────────────────────────────────────────────────────────────────────
+# Performance Metrics (Optional)
+# Computes and logs performance indicators
+# ───────────────────────────────────────────────────────────────────────────
+metrics:
+  enabled: false
+  compute_ipc: true           # Instructions Per Cycle
+  compute_stall_ratio: true   # Percentage of cycles with stalls
+  compute_branch_accuracy: false  # Requires branch signals

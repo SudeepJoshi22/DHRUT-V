@@ -53,21 +53,9 @@ module alu_stage (
     .o_result  (alu_result)
   );
 
-  // ───────────────────────────────────────────────
-  // Valid output (pipelined)
-  // ───────────────────────────────────────────────
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
-      o_valid <= 1'b0;
-    end
-    else if (!i_stall) begin
-      o_valid <= valid_q;
-    end
-    // else hold (keeps result alive during stall)
-  end
-
   // Forward results
   assign o_alu_result  = alu_result;
   assign o_uop_forward = uop_q;
+  assign o_valid       = valid_q & !i_flush;
 
 endmodule
