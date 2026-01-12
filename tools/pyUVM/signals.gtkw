@@ -1,16 +1,17 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Mon Jan 12 16:27:16 2026
+[*] Mon Jan 12 16:43:17 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Mon Jan 12 15:25:57 2026"
-[dumpfile_size] 175739
+[dumpfile_mtime] "Mon Jan 12 16:29:36 2026"
+[dumpfile_size] 172109
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
 [timestart] 0
 [size] 1920 1001
 [pos] -1 -1
-*-16.205502 80000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-16.205502 130000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
+[treeopen] tb_top.ALU.issue_if.
 [treeopen] tb_top.ISSUE.alu_if.
 [sst_width] 278
 [signals_width] 341
@@ -49,13 +50,6 @@ tb_top.IF.o_if_instr[31:0]
 @200
 -
 -Decode
-@28
-tb_top.ID.i_if_valid
-@22
-tb_top.ID.i_if_instr[31:0]
-tb_top.ID.i_if_pc[31:0]
-@200
--
 @28
 tb_top.ID.o_dec_valid
 @22
@@ -99,6 +93,16 @@ tb_top.ISSUE.alu_if.m_pc[31:0]
 @28
 tb_top.ALU.o_valid
 @22
+tb_top.ALU.issue_if.m_uop.alu_op[9:0]
 tb_top.ALU.o_alu_result[31:0]
+@200
+-
+-RETIRE
+@28
+tb_top.RETIRE.o_wb_en
+@22
+tb_top.RETIRE.o_wb_data[31:0]
+@23
+tb_top.RETIRE.o_wb_rd[4:0]
 [pattern_trace] 1
 [pattern_trace] 0
