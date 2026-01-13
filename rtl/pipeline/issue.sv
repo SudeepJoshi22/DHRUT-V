@@ -77,7 +77,8 @@ module issue_stage (
 
   always_comb begin
     op1 = uop_q.uses_rs1 ? rs1_data : dec_pc_q;
-    op2 = uop_q.is_immediate ? uop_q.imm : rs2_data;
+    op2 = (uop_q.opcode inside {OPCODE_JAL, OPCODE_JALR}) ? 32'd4 :
+          (uop_q.is_immediate)                            ? uop_q.imm : rs2_data;
   end
 
   // ───────────────────────────────────────────────
@@ -95,9 +96,9 @@ module issue_stage (
           case (uop_q.alu_op)
             ALU_ADD:  o_branch_taken = (op1 == op2);                     // BEQ
             ALU_SUB:  o_branch_taken = (op1 != op2);                     // BNE
-            ALU_SLT:  o_branch_taken = ($signed(op1) < $signed(op2));    // BLT
+            ALU_SLT:  o_branch_taken = (op1[31] != op2[31]) ? op1[31] : (op1[30:0] < op2[30:0]);    // BLT
+            ALU_OR:   o_branch_taken = (op1[31] != op2[31]) ? ~op1[31] : (op1[30:0] >= op2[30:0]);  // BGE
             ALU_SLTU: o_branch_taken = (op1 < op2);                      // BLTU
-            ALU_OR:   o_branch_taken = ($signed(op1) >= $signed(op2));   // BGE
             ALU_AND:  o_branch_taken = (op1 >= op2);                     // BGEU
             default:  o_branch_taken = 1'b0;
           endcase
@@ -110,7 +111,7 @@ module issue_stage (
 
         OPCODE_JALR: begin
           o_branch_taken  = 1'b1;
-          o_branch_target = (op1 + uop_q.imm) & ~32'd1;
+          o_branch_target = (rs1_data + uop_q.imm) & ~32'd1;
         end
         default: begin
           o_branch_taken  = 1'b0;

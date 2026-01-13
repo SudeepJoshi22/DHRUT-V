@@ -103,6 +103,18 @@ module decode_stage (
         default:   alu_operation = ALU_ADD;
       endcase
     end
+    else if (opcode == OPCODE_BRANCH) begin
+    // Reuse ALU op encodings as branch condition selectors (matches your ISSUE logic exactly)
+    case (funct3)
+      3'b000: alu_operation = ALU_ADD;   // BEQ   : ==
+      3'b001: alu_operation = ALU_SUB;   // BNE   : !=
+      3'b100: alu_operation = ALU_SLT;   // BLT   : signed <
+      3'b101: alu_operation = ALU_OR;    // BGE   : signed >=
+      3'b110: alu_operation = ALU_SLTU;  // BLTU  : unsigned <
+      3'b111: alu_operation = ALU_AND;   // BGEU  : unsigned >=
+      default: alu_operation = ALU_ADD;  // unsupported funct3 → treat as invalid later if desired
+    endcase
+  end
     // LUI and AUIPC will be handled in main decode logic (no funct7/funct3 needed)
   end
 
@@ -115,7 +127,7 @@ module decode_stage (
     o_uop       = '0;
 
     if (instr_valid) begin
-      o_dec_valid = 1'b1;
+      o_dec_valid        = 1'b1;
       o_uop.valid        = 1'b1;
       o_uop.opcode       = opcode;
       o_uop.rs1          = rs1;
@@ -158,11 +170,34 @@ module decode_stage (
           o_uop.uses_rs2     = 1'b0;
           o_uop.writes_rd    = (rd != 5'd0);
         end
-
+        OPCODE_BRANCH: begin
+          o_uop.is_immediate = 1'b0;
+          o_uop.imm          = imm_b;
+          o_uop.alu_op       = alu_operation;       // encodes the condition type
+          o_uop.uses_rs1     = 1'b1;
+          o_uop.uses_rs2     = 1'b1;
+          o_uop.writes_rd    = 1'b0;             // branches never write rd
+        end
+        OPCODE_JAL: begin
+          o_uop.is_immediate = 1'b1;
+          o_uop.imm          = imm_j;
+          o_uop.alu_op       = ALU_ADD;             // arbitrary – not used for condition
+          o_uop.uses_rs1     = 1'b0;
+          o_uop.uses_rs2     = 1'b0;
+          o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
+        end
+        OPCODE_JALR: begin
+          o_uop.is_immediate = 1'b1;
+          o_uop.imm          = imm_i;
+          o_uop.alu_op       = ALU_ADD;             // arbitrary – not used for condition
+          o_uop.uses_rs1     = 1'b0;
+          o_uop.uses_rs2     = 1'b0;
+          o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
+        end
         default: begin
           // Unknown/unsupported → mark invalid
-          o_dec_valid = 1'b0;
-          o_uop.valid = 1'b0;
+          o_dec_valid        = 1'b0;
+          o_uop.valid        = 1'b0;
         end
       endcase
     end

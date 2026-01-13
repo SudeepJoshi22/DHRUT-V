@@ -85,7 +85,7 @@ module tb_top;
     .i_uop           (id_issue_uop),
     .i_dec_pc        (id_issue_pc),
     .i_stall         (1'b0),
-    .i_flush         (branch_taken),
+    .i_flush         (1'b0),
     .i_wb_en         (retire_wb_en),
     .i_wb_rd         (retire_wb_rd),
     .i_wb_data       (retire_wb_data),
@@ -104,7 +104,7 @@ module tb_top;
     .rst_n           (rst_n),
     .issue_if        (alu_if),
     .i_stall         (1'b0),
-    .i_flush         (branch_taken),
+    .i_flush         (1'b0),
     .o_valid         (alu_retire_valid),
     .o_alu_result    (alu_retire_result),
     .o_uop_forward   (alu_retire_uop)
