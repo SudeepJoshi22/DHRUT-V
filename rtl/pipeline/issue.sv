@@ -137,7 +137,7 @@ module issue_stage (
     alu_if.m_op1   = op1;
     alu_if.m_op2   = op2;
 
-    lsu_if.m_addr_base   = op1;
+    lsu_if.m_addr_base   = rs1_data;
     lsu_if.m_store_data  = rs2_data;
 
     if (dec_valid_q && !i_flush) begin

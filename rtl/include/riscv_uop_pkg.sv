@@ -40,6 +40,11 @@ package riscv_uop_pkg;
     logic        uses_rs2;
     logic        writes_rd;
     logic        is_immediate;    // OP-IMM vs OP
+    // LSU-specific fields (decoded in decode stage)
+    logic        is_load;
+    logic        is_store;
+    logic        lsu_sign_extend; // 1 = sign-extend load result (LB/LH), 0 = zero-extend (LBU/LHU)
+    logic [1:0]  lsu_access_size; // 00 = byte, 01 = halfword, 10 = word (for loads/stores)
     // Future fields:
     // logic        is_load, is_store;
     // logic        is_branch, is_jump;

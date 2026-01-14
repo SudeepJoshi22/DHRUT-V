@@ -10,6 +10,11 @@ module tb_top;
     .rst_n(rst_n)
   );
 
+  mem_if dmem_if(
+    .clk(clk),
+    .rst_n(rst_n)
+  );
+
   // IF -> ID pipeline registers
   logic        if_id_valid;
   logic [31:0] if_id_pc;
@@ -28,6 +33,11 @@ module tb_top;
 
   // Issue -> LSU (via interface) – instantiated but not used yet
   lsu_issue_if lsu_if(clk, rst_n);
+
+  // LSU -> Retire
+  logic         lsu_valid;
+  uop_t         lsu_uop_forward;
+  logic [31:0]  lsu_load_data;
 
   // ALU -> Retire
   logic        alu_retire_valid;
@@ -111,14 +121,31 @@ module tb_top;
   );
 
   // ───────────────────────────────────────────────
+  // LSU Stage
+  // ───────────────────────────────────────────────
+  lsu lsu_inst (
+      .clk             (clk),
+      .rst_n           (rst_n),
+      .issue_if        (lsu_if),
+      .dmem_if         (dmem_if.master),
+      .o_valid         (lsu_valid),
+      .o_load_data     (lsu_load_data),
+      .o_lsu_uop       (lsu_uop_forward),
+      .o_stall_from_lsu()
+    );
+
+  // ───────────────────────────────────────────────
   // Retire Stage
   // ───────────────────────────────────────────────
   retire RETIRE (
     .clk             (clk),
     .rst_n           (rst_n),
     .i_alu_valid     (alu_retire_valid),
-    .i_uop           (alu_retire_uop),
+    .i_alu_uop           (alu_retire_uop),
     .i_alu_result    (alu_retire_result),
+    .i_lsu_valid     (lsu_valid),             
+    .i_lsu_uop       (lsu_uop_forward),       
+    .i_lsu_load_data (lsu_load_data),
     .i_flush         (1'b0),
     .i_stall         (1'b0),
     .o_wb_en         (retire_wb_en),

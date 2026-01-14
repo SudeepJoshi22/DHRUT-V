@@ -119,6 +119,36 @@ module decode_stage (
   end
 
   // ---------------------------------------------------------------------------
+  // Load/Store type decoding → set lsu_sign_extend and lsu_access_size
+  // ---------------------------------------------------------------------------
+  always_comb begin
+    // Default values (non-load/store)
+    o_uop.lsu_sign_extend  = 1'b0;
+    o_uop.lsu_access_size  = 2'b00;  // byte (default/safe)
+
+    if (instr_valid) begin
+      case (opcode)
+        OPCODE_LOAD: begin
+          o_uop.is_load         = 1'b1;
+          o_uop.is_store        = 1'b0;
+          o_uop.lsu_sign_extend = ~funct3[2];      // 0xxx = sign-extend (LB/LH), 1xxx = zero-extend (LBU/LHU)
+          o_uop.lsu_access_size = funct3[1:0];     // 00=byte, 01=half, 10=word
+        end
+        OPCODE_STORE: begin
+          o_uop.is_load         = 1'b0;
+          o_uop.is_store        = 1'b1;
+          o_uop.lsu_sign_extend = 1'b0;            // stores never extend
+          o_uop.lsu_access_size = funct3[1:0];     // 00=SB, 01=SH, 10=SW
+        end
+
+        default: begin
+          // Non-memory ops → leave defaults
+        end
+      endcase
+    end
+  end
+
+  // ---------------------------------------------------------------------------
   // Main decode logic → fill o_uop (using registered values)
   // ---------------------------------------------------------------------------
   always_comb begin
@@ -193,6 +223,25 @@ module decode_stage (
           o_uop.uses_rs1     = 1'b0;
           o_uop.uses_rs2     = 1'b0;
           o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
+        end
+        // Load & Store cases (now setting LSU fields)
+        OPCODE_LOAD: begin
+          o_uop.is_immediate = 1'b1;
+          o_uop.imm          = imm_i;
+          o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
+          o_uop.uses_rs1     = 1'b1;
+          o_uop.uses_rs2     = 1'b0;
+          o_uop.writes_rd    = (rd != 5'd0);
+          // LSU fields already set above in separate always_comb
+        end
+        OPCODE_STORE: begin
+          o_uop.is_immediate = 1'b1;
+          o_uop.imm          = imm_s;
+          o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
+          o_uop.uses_rs1     = 1'b1;
+          o_uop.uses_rs2     = 1'b1;
+          o_uop.writes_rd    = 1'b0;
+          // LSU fields already set above
         end
         default: begin
           // Unknown/unsupported → mark invalid

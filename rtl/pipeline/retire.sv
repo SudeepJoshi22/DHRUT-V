@@ -6,8 +6,13 @@ module retire (
 
   // From ALU/Compute stage
   input  logic        i_alu_valid,
-  input  uop_t        i_uop,
+  input  uop_t        i_alu_uop,
   input  logic [31:0] i_alu_result,
+
+  // From LSU stage
+  input logic        i_lsu_valid,
+  input uop_t        i_lsu_uop,
+  input logic [31:0] i_lsu_load_data,
 
   // Flush from downstream (e.g. exception) or upstream (branch mispredict)
   input  logic        i_flush,
@@ -26,18 +31,31 @@ module retire (
   // ───────────────────────────────────────────────
   logic        valid_q;
   uop_t        uop_q;
-  logic [31:0] alu_result_q;
+  logic [31:0] result_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n || i_flush) begin
       valid_q       <= 1'b0;
       uop_q         <= '0;
-      alu_result_q  <= '0;
+      result_q  <= '0;
     end
     else if (!i_stall) begin
-      valid_q       <= i_alu_valid;
-      uop_q         <= i_uop;
-      alu_result_q  <= i_alu_result;
+      // In-order: only one should be valid
+      if (i_alu_valid) begin
+        valid_q   <= 1'b1;
+        uop_q     <= i_alu_uop;
+        result_q  <= i_alu_result;
+      end
+      else if (i_lsu_valid) begin
+        valid_q   <= 1'b1;
+        uop_q     <= i_lsu_uop;
+        result_q  <= i_lsu_load_data;
+      end
+      else begin
+        valid_q   <= 1'b0;
+        uop_q     <= '0;
+        result_q  <= '0;
+      end
     end
     // else stall → hold current values
   end
@@ -48,7 +66,7 @@ module retire (
   always_comb begin
     o_wb_en   = valid_q && uop_q.writes_rd && !i_flush;
     o_wb_rd   = uop_q.rd;
-    o_wb_data = alu_result_q;
+    o_wb_data = result_q;
   end
 
 endmodule
