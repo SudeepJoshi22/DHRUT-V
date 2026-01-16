@@ -1,23 +1,23 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Tue Jan 13 20:04:29 2026
+[*] Fri Jan 16 19:12:19 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Tue Jan 13 20:01:16 2026"
-[dumpfile_size] 210869
+[dumpfile_mtime] "Fri Jan 16 18:55:26 2026"
+[dumpfile_size] 149570
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
-[timestart] 513300
+[timestart] 41800
 [size] 1920 1001
 [pos] -1 -1
 *-16.301788 940000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
 [treeopen] tb_top.ALU.issue_if.
-[treeopen] tb_top.ID.
-[treeopen] tb_top.ISSUE.alu_if.
+[treeopen] tb_top.ISSUE.
+[treeopen] tb_top.ISSUE.lsu_if.
 [sst_width] 278
 [signals_width] 341
 [sst_expanded] 1
-[sst_vpaned_height] 395
+[sst_vpaned_height] 372
 @28
 tb_top.clk
 tb_top.rst_n
@@ -45,9 +45,8 @@ tb_top.IF.pc_q[31:0]
 tb_top.IF.pc_next[31:0]
 @28
 tb_top.IF.o_if_valid
-@23
-tb_top.IF.o_if_pc[31:0]
 @22
+tb_top.IF.o_if_pc[31:0]
 tb_top.IF.o_if_instr[31:0]
 @200
 -
@@ -101,6 +100,9 @@ tb_top.ISSUE.rf.i_re
 @22
 tb_top.ISSUE.rs1_data[31:0]
 tb_top.ISSUE.rs2_data[31:0]
+@28
+tb_top.ISSUE.lsu_if.m_uop.lsu_sign_extend
+tb_top.ISSUE.lsu_if.m_uop.lsu_access_size[1:0]
 @200
 -
 @28
@@ -110,12 +112,27 @@ tb_top.ISSUE.alu_if.m_pc[31:0]
 @200
 -
 -ALU COMPUTE
+-
 @28
 tb_top.ALU.o_valid
 @22
 tb_top.ALU.issue_if.m_uop.alu_op[9:0]
 @420
 tb_top.ALU.o_alu_result[31:0]
+@200
+-
+-LSU
+-
+-DMEM Interface
+@28
+tb_top.LSU.dmem_if.m_valid
+@22
+tb_top.LSU.dmem_if.m_addr[31:0]
+tb_top.LSU.dmem_if.m_wstrb[3:0]
+tb_top.LSU.dmem_if.m_wdata[31:0]
+tb_top.LSU.dmem_if.s_rdata[31:0]
+@28
+tb_top.LSU.dmem_if.s_ready
 @200
 -
 -RETIRE

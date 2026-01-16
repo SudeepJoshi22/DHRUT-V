@@ -123,7 +123,7 @@ module tb_top;
   // ───────────────────────────────────────────────
   // LSU Stage
   // ───────────────────────────────────────────────
-  lsu lsu_inst (
+  lsu LSU (
       .clk             (clk),
       .rst_n           (rst_n),
       .issue_if        (lsu_if),

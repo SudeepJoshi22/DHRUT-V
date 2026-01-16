@@ -184,10 +184,74 @@ stages:
         type: "int"
         description: "Write-back data value"
 
+# ─────────────────────────────────────────────────────────────────────────
+# LSU Stage - Load/Store Execution
+# ─────────────────────────────────────────────────────────────────────────
+LSU:
+  display_name: "LSU"
+  description: "Load/Store Unit - handles memory access, forwards loads, signals stalls"
+  signals:
+    # LSU retire valid
+    - name: "valid"
+      signal_path: "lsu_valid"
+      format: "{:1d}"
+      type: "bool"
+      description: "LSU result retire valid"
+
+    # Load result data
+    - name: "load_data"
+      signal_path: "lsu_load_data"
+      format: "0x{:08x}"
+      type: "int"
+      description: "Loaded data from DMEM"
+
+    # Forwarded micro-op (uop)
+    - name: "uop_forward"
+      signal_path: "lsu_uop_forward"
+      format: "0x{:08x}"
+      type: "int"
+      description: "Forwarded LSU uop for replay/forwarding"
+
+    # Stall from LSU
+    - name: "stall"
+      signal_path: "o_stall_from_lsu"
+      format: "{:1d}"
+      type: "bool"
+      description: "Stall signal to pipeline from LSU"
+
+    # Issue valid (from lsu_if)
+    - name: "issue_valid"
+      signal_path: "lsu_if.valid"
+      format: "{:1d}"
+      type: "bool"
+      description: "LSU issue valid"
+
+    # Issue address
+    - name: "issue_addr"
+      signal_path: "lsu_if.addr"
+      format: "0x{:08x}"
+      type: "int"
+      description: "Memory address for load/store"
+
+    # DMEM master valid
+    - name: "dmem_mvalid"
+      signal_path: "dmem_if.master.m_valid"
+      format: "{:1d}"
+      type: "bool"
+      description: "DMEM request valid"
+
+    # DMEM ready (slave response)
+    - name: "dmem_sready"
+      signal_path: "dmem_if.master.s_ready"
+      format: "{:1d}"
+      type: "bool"
+      description: "DMEM slave ready"
+
+
 # ───────────────────────────────────────────────────────────────────────────
 # Optional: Define which stages to display (subset of available stages)
 # ───────────────────────────────────────────────────────────────────────────
-display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "RETIRE"]
+display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE"]
 
 # ───────────────────────────────────────────────────────────────────────────
 # UOP Bit Extraction Configuration

@@ -76,4 +76,10 @@ _start:
     # ───────────────────────────────────────────────
 1:  j     1b
 
-    .end
+
+.section .data
+
+    .word 0xdeadbeef
+    .word 0x000b00b5
+
+.end
