@@ -20,6 +20,11 @@ module retire (
   // Stall from downstream (rare in in-order, but for future)
   input  logic        i_stall,
 
+  // Operand forward to ISSUE 
+  output logic [4:0]  o_retire_fwd_rd,           
+  output logic [31:0] o_retire_fwd_result,       
+  output logic        o_retire_fwd_writes_rd,  // Outputs to next stage (e.g. MEM/Retire)
+  
   // To ARF (write-back)
   output logic        o_wb_en,
   output logic [4:0]  o_wb_rd,

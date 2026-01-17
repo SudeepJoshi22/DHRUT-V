@@ -225,7 +225,7 @@ module decode_stage (
         end
         // Load & Store cases (now setting LSU fields)
         OPCODE_LOAD: begin
-          o_uop.is_immediate = 1'b1;
+          o_uop.is_immediate = 1'b0;
           o_uop.imm          = imm_i;
           o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
           o_uop.uses_rs1     = 1'b1;
@@ -237,7 +237,7 @@ module decode_stage (
           o_uop.lsu_access_size = lsu_access_size;
         end
         OPCODE_STORE: begin
-          o_uop.is_immediate = 1'b1;
+          o_uop.is_immediate = 1'b0;
           o_uop.imm          = imm_s;
           o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
           o_uop.uses_rs1     = 1'b1;

@@ -11,7 +11,12 @@ module alu_stage (
   input  logic        i_stall,    // stall from later stages
   input  logic        i_flush,    // flush from branch/exception
 
-  // Outputs to next stage (e.g. MEM/Retire)
+  // Operand Forwarding to ISSUE
+  output logic [4:0]  o_alu_fwd_rd,           
+  output logic [31:0] o_alu_fwd_result,       
+  output logic        o_alu_fwd_writes_rd,  // Outputs to next stage (e.g. MEM/Retire)
+
+  // Send for Retire
   output logic        o_valid,
   output logic [31:0] o_alu_result,
   output uop_t        o_uop_forward   // pass uop forward (for write-back, etc.)
@@ -53,9 +58,14 @@ module alu_stage (
     .o_result  (alu_result)
   );
 
-  // Forward results
-  assign o_alu_result  = alu_result;
-  assign o_uop_forward = uop_q;
-  assign o_valid       = valid_q & !i_flush;
+  // Outputs for Operand Forwarding
+  assign o_alu_fwd_rd               = uop_q.rd;
+  assign o_alu_fwd_result           = alu_result;
+  assign o_alu_fwd_writes_rd    = uop_q.writes_rd;
+
+  // Send result to Retire
+  assign o_alu_result               = alu_result;
+  assign o_uop_forward              = uop_q;
+  assign o_valid                    = valid_q & !i_flush;
 
 endmodule

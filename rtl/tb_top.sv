@@ -53,6 +53,18 @@ module tb_top;
   logic        branch_taken;
   logic [31:0] branch_target;
 
+  // Operand Forwarding from ALU -> ISSUE
+  
+  logic [4:0]  fwd_alu_issue_rd;
+  logic [31:0] fwd_alu_issue_data;
+  logic        fwd_alu_issue_writes_rd; 
+
+  // Operand Forwarding from RETIRE -> ISSUE
+  
+  logic [4:0]  fwd_retire_issue_rd;
+  logic [31:0] fwd_retire_issue_data;
+  logic        fwd_retire_issue_writes_rd; 
+
   // ───────────────────────────────────────────────
   // IF Stage
   // ───────────────────────────────────────────────
@@ -89,21 +101,27 @@ module tb_top;
   // Issue Stage
   // ───────────────────────────────────────────────
   issue_stage ISSUE (
-    .clk             (clk),
-    .rst_n           (rst_n),
-    .i_dec_valid     (id_issue_valid),
-    .i_uop           (id_issue_uop),
-    .i_dec_pc        (id_issue_pc),
-    .i_stall         (1'b0),
-    .i_flush         (1'b0),
-    .i_wb_en         (retire_wb_en),
-    .i_wb_rd         (retire_wb_rd),
-    .i_wb_data       (retire_wb_data),
-    .o_branch_taken  (branch_taken),
-    .o_branch_target (branch_target),
-    .o_stall_to_decode (),                    // open for now
-    .alu_if          (alu_if),
-    .lsu_if          (lsu_if)
+    .clk                    (clk),
+    .rst_n                  (rst_n),
+    .i_dec_valid            (id_issue_valid),
+    .i_uop                  (id_issue_uop),
+    .i_dec_pc               (id_issue_pc),
+    .i_stall                (1'b0),
+    .i_flush                (1'b0),
+    .i_wb_en                (retire_wb_en),
+    .i_wb_rd                (retire_wb_rd),
+    .i_wb_data              (retire_wb_data),
+    .i_alu_fwd_writes_rd    (fwd_alu_issue_writes_rd),
+    .i_alu_fwd_rd           (fwd_alu_issue_rd),
+    .i_alu_fwd_data         (fwd_alu_issue_data),
+    .i_retire_fwd_writes_rd (fwd_retire_issue_writes_rd),
+    .i_retire_fwd_rd        (fwd_retire_issue_rd),
+    .i_retire_fwd_data      (fwd_retire_issue_data), 
+    .o_branch_taken         (branch_taken),
+    .o_branch_target        (branch_target),
+    .o_stall_to_decode      (),                    // open for now
+    .alu_if                 (alu_if),
+    .lsu_if                 (lsu_if)
   );
 
   // ───────────────────────────────────────────────
@@ -115,6 +133,9 @@ module tb_top;
     .issue_if        (alu_if),
     .i_stall         (1'b0),
     .i_flush         (1'b0),
+    .o_alu_fwd_writes_rd    (fwd_alu_issue_writes_rd),
+    .o_alu_fwd_rd           (fwd_alu_issue_rd),
+    .o_alu_fwd_result       (fwd_alu_issue_data),
     .o_valid         (alu_retire_valid),
     .o_alu_result    (alu_retire_result),
     .o_uop_forward   (alu_retire_uop)
@@ -141,13 +162,16 @@ module tb_top;
     .clk             (clk),
     .rst_n           (rst_n),
     .i_alu_valid     (alu_retire_valid),
-    .i_alu_uop           (alu_retire_uop),
+    .i_alu_uop       (alu_retire_uop),
     .i_alu_result    (alu_retire_result),
     .i_lsu_valid     (lsu_valid),             
     .i_lsu_uop       (lsu_uop_forward),       
     .i_lsu_load_data (lsu_load_data),
     .i_flush         (1'b0),
     .i_stall         (1'b0),
+    .o_retire_fwd_writes_rd (fwd_retire_issue_writes_rd),
+    .o_retire_fwd_rd        (fwd_retire_issue_rd),
+    .o_retire_fwd_result    (fwd_retire_issue_data), 
     .o_wb_en         (retire_wb_en),
     .o_wb_rd         (retire_wb_rd),
     .o_wb_data       (retire_wb_data)

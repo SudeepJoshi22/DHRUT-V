@@ -18,6 +18,16 @@ module issue_stage (
   input  logic [4:0]  i_wb_rd,
   input  logic [31:0] i_wb_data,
 
+  // FORWARDING - From ALU
+  input  logic        i_alu_fwd_writes_rd,
+  input  logic [4:0]  i_alu_fwd_rd,
+  input  logic [31:0] i_alu_fwd_data,
+
+  // FORWARDING - From RETIRE
+  input  logic        i_retire_fwd_writes_rd,
+  input  logic [4:0]  i_retire_fwd_rd,
+  input  logic [31:0] i_retire_fwd_data,
+
   // To Fetch – direct branch/jump signals (no interface)
   output logic        o_branch_taken,
   output logic [31:0] o_branch_target,
@@ -70,15 +80,43 @@ module issue_stage (
     .o_read_data2  (rs2_data)
   );
 
+
+    // Forwarding logic 
+  logic [31:0] fwd_rs1, fwd_rs2;
+  
+  always_comb begin
+    fwd_rs1 = rs1_data;
+    fwd_rs2 = rs2_data;
+  
+    // ALU has highest priority
+    if (i_alu_fwd_writes_rd && (i_alu_fwd_rd == uop_q.rs1) && (uop_q.rs1 != 5'd0)) begin
+      fwd_rs1 = i_alu_fwd_data;
+    end
+    else if (i_retire_fwd_writes_rd && (i_retire_fwd_rd == uop_q.rs1) && (uop_q.rs1 != 5'd0)) begin
+      fwd_rs1 = i_retire_fwd_data;
+    end
+  
+    if (i_alu_fwd_writes_rd && (i_alu_fwd_rd == uop_q.rs2) && (uop_q.rs2 != 5'd0)) begin
+      fwd_rs2 = i_alu_fwd_data;
+    end
+    else if (i_retire_fwd_writes_rd && (i_retire_fwd_rd == uop_q.rs2) && (uop_q.rs2 != 5'd0)) begin
+      fwd_rs2 = i_retire_fwd_data;
+    end
+  end
+
   // ───────────────────────────────────────────────
-  // 3. Operand multiplexing
+  // 3. Operand multiplexing (with forwarding)
   // ───────────────────────────────────────────────
   logic [31:0] op1, op2;
-
+  
   always_comb begin
-    op1 = uop_q.uses_rs1 ? rs1_data : dec_pc_q;
+    // op1: rs1 (forwarded) or PC (for AUIPC)
+    op1 = uop_q.uses_rs1 ? fwd_rs1 : dec_pc_q;
+  
+    // op2: special case for JAL/JALR (return address increment = +4)
+    //       otherwise immediate or rs2 (forwarded)
     op2 = (uop_q.opcode inside {OPCODE_JAL, OPCODE_JALR}) ? 32'd4 :
-          (uop_q.is_immediate)                            ? uop_q.imm : rs2_data;
+          uop_q.is_immediate ? uop_q.imm : fwd_rs2;
   end
 
   // ───────────────────────────────────────────────
@@ -125,20 +163,20 @@ module issue_stage (
   // 5. Dispatch to ALU or LSU
   // ───────────────────────────────────────────────
   always_comb begin
-    alu_if.m_valid = 1'b0;
-    lsu_if.m_valid = 1'b0;
+    alu_if.m_valid       = 1'b0;
+    lsu_if.m_valid       = 1'b0;
 
-    alu_if.m_uop   = '0;
-    lsu_if.m_uop   = '0;
+    alu_if.m_uop         = '0;
+    lsu_if.m_uop         = '0;
 
-    alu_if.m_pc    = dec_pc_q;
-    lsu_if.m_pc    = dec_pc_q;
+    alu_if.m_pc          = dec_pc_q;
+    lsu_if.m_pc          = dec_pc_q;
 
-    alu_if.m_op1   = op1;
-    alu_if.m_op2   = op2;
+    alu_if.m_op1         = op1;
+    alu_if.m_op2         = op2;
 
-    lsu_if.m_addr_base   = rs1_data;
-    lsu_if.m_store_data  = rs2_data;
+    lsu_if.m_addr_base   = op1;
+    lsu_if.m_store_data  = op2;
 
     if (dec_valid_q && !i_flush) begin
       case (uop_q.opcode)
