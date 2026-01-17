@@ -1,23 +1,24 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Fri Jan 16 19:12:19 2026
+[*] Sat Jan 17 16:28:24 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
 [dumpfile_mtime] "Fri Jan 16 18:55:26 2026"
 [dumpfile_size] 149570
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
-[timestart] 41800
+[timestart] 255400
 [size] 1920 1001
 [pos] -1 -1
-*-16.301788 940000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-14.301788 360000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
 [treeopen] tb_top.ALU.issue_if.
+[treeopen] tb_top.ID.
 [treeopen] tb_top.ISSUE.
 [treeopen] tb_top.ISSUE.lsu_if.
 [sst_width] 278
 [signals_width] 341
 [sst_expanded] 1
-[sst_vpaned_height] 372
+[sst_vpaned_height] 351
 @28
 tb_top.clk
 tb_top.rst_n
@@ -82,6 +83,11 @@ tb_top.ID.o_uop.rs2[4:0]
 tb_top.ID.o_uop.rd[4:0]
 tb_top.ID.o_uop.imm[31:0]
 tb_top.ID.o_uop.alu_op[9:0]
+@28
+tb_top.ID.o_uop.is_load
+tb_top.ID.o_uop.is_store
+tb_top.ID.o_uop.lsu_access_size[1:0]
+tb_top.ID.o_uop.lsu_sign_extend
 @200
 -
 -Issue

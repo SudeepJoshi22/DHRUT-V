@@ -62,7 +62,10 @@ module decode_stage (
   logic     [31:0]      imm_i, imm_s, imm_b, imm_u, imm_j;
 
   alu_op_t              alu_operation;
-  
+
+  logic                 lsu_sign_extend;
+  logic     [1:0]       lsu_access_size;
+
   assign instr_valid = id_valid_q && !i_flush;
   // ---------------------------------------------------------------------------
   // Instruction field extraction (only when valid)
@@ -84,7 +87,7 @@ module decode_stage (
   assign imm_j = {{11{id_instr_q[31]}}, id_instr_q[31], id_instr_q[19:12], id_instr_q[20], id_instr_q[30:21], 1'b0};
 
   // ---------------------------------------------------------------------------
-  // Arithmetic operation decoding (OP & OP-IMM)
+  // Arithmetic and Branch operation decoding (OP & OP-IMM)
   // ---------------------------------------------------------------------------
   always_comb begin
     alu_operation = ALU_ADD;
@@ -123,22 +126,18 @@ module decode_stage (
   // ---------------------------------------------------------------------------
   always_comb begin
     // Default values (non-load/store)
-    o_uop.lsu_sign_extend  = 1'b0;
-    o_uop.lsu_access_size  = 2'b00;  // byte (default/safe)
+    lsu_sign_extend  = 1'b0;
+    lsu_access_size  = 2'b00;  // byte (default/safe)
 
     if (instr_valid) begin
       case (opcode)
         OPCODE_LOAD: begin
-          o_uop.is_load         = 1'b1;
-          o_uop.is_store        = 1'b0;
-          o_uop.lsu_sign_extend = ~funct3[2];      // 0xxx = sign-extend (LB/LH), 1xxx = zero-extend (LBU/LHU)
-          o_uop.lsu_access_size = funct3[1:0];     // 00=byte, 01=half, 10=word
+          lsu_sign_extend = ~funct3[2];      // 0xxx = sign-extend (LB/LH), 1xxx = zero-extend (LBU/LHU)
+          lsu_access_size = funct3[1:0];     // 00=byte, 01=half, 10=word
         end
         OPCODE_STORE: begin
-          o_uop.is_load         = 1'b0;
-          o_uop.is_store        = 1'b1;
-          o_uop.lsu_sign_extend = 1'b0;            // stores never extend
-          o_uop.lsu_access_size = funct3[1:0];     // 00=SB, 01=SH, 10=SW
+          lsu_sign_extend = 1'b0;            // stores never extend
+          lsu_access_size = funct3[1:0];     // 00=SB, 01=SH, 10=SW
         end
 
         default: begin
@@ -232,7 +231,10 @@ module decode_stage (
           o_uop.uses_rs1     = 1'b1;
           o_uop.uses_rs2     = 1'b0;
           o_uop.writes_rd    = (rd != 5'd0);
-          // LSU fields already set above in separate always_comb
+          o_uop.is_load      = 1'b1;
+          o_uop.is_store     = 1'b0;
+          o_uop.lsu_sign_extend = lsu_sign_extend;
+          o_uop.lsu_access_size = lsu_access_size;
         end
         OPCODE_STORE: begin
           o_uop.is_immediate = 1'b1;
@@ -241,7 +243,10 @@ module decode_stage (
           o_uop.uses_rs1     = 1'b1;
           o_uop.uses_rs2     = 1'b1;
           o_uop.writes_rd    = 1'b0;
-          // LSU fields already set above
+          o_uop.is_load      = 1'b0;
+          o_uop.is_store     = 1'b1;
+          o_uop.lsu_sign_extend = lsu_sign_extend;
+          o_uop.lsu_access_size = lsu_access_size;
         end
         default: begin
           // Unknown/unsupported → mark invalid

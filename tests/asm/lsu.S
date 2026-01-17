@@ -12,8 +12,23 @@ _start:
     # Setup base address (0x1000) using only addi
     # ───────────────────────────────────────────────
     addi  x10, x0,  0x00     # x10 = 0
+    
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+
+
     addi  x10, x10, 0x10     # x10 = 0x10
-    addi  x10, x10, 0x00     # x10 = 0x10
+    
+
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+    addi  x0, x0, 0x0
+
     slli  x10, x10, 8        # x10 = 0x1000 (base address)
 
     # ───────────────────────────────────────────────
