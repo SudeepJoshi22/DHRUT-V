@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Sat Jan 17 17:00:27 2026
+[*] Sun Jan 18 17:52:21 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Sat Jan 17 16:51:16 2026"
-[dumpfile_size] 179388
+[dumpfile_mtime] "Sun Jan 18 17:44:13 2026"
+[dumpfile_size] 141324
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
-[timestart] 418600
-[size] 1920 1001
+[timestart] 0
+[size] 1366 721
 [pos] -1 -1
-*-14.301788 440000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-18.301788 610000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
 [treeopen] tb_top.ALU.issue_if.
 [treeopen] tb_top.ID.
@@ -17,9 +17,9 @@
 [treeopen] tb_top.ISSUE.lsu_if.
 [treeopen] tb_top.LSU.
 [sst_width] 278
-[signals_width] 341
+[signals_width] 347
 [sst_expanded] 1
-[sst_vpaned_height] 351
+[sst_vpaned_height] 222
 @28
 tb_top.clk
 tb_top.rst_n
@@ -112,6 +112,19 @@ tb_top.ISSUE.lsu_if.m_uop.lsu_sign_extend
 tb_top.ISSUE.lsu_if.m_uop.lsu_access_size[1:0]
 @200
 -
+-Operand Forwarding
+@22
+tb_top.ISSUE.i_alu_fwd_data[31:0]
+tb_top.ISSUE.i_alu_fwd_rd[4:0]
+@28
+tb_top.ISSUE.i_alu_fwd_writes_rd
+@22
+tb_top.ISSUE.i_retire_fwd_data[31:0]
+tb_top.ISSUE.i_retire_fwd_rd[4:0]
+@28
+tb_top.ISSUE.i_retire_fwd_writes_rd
+@200
+-
 -to ALU
 @28
 tb_top.ISSUE.alu_if.m_valid
@@ -136,13 +149,12 @@ tb_top.ISSUE.lsu_if.m_store_data[31:0]
 tb_top.ALU.o_valid
 @22
 tb_top.ALU.issue_if.m_uop.alu_op[9:0]
-@420
 tb_top.ALU.o_alu_result[31:0]
 @200
 -
 -LSU
 -
-@29
+@28
 tb_top.LSU.o_valid
 @22
 tb_top.LSU.o_load_data[31:0]
@@ -164,6 +176,9 @@ tb_top.LSU.dmem_if.s_ready
 tb_top.RETIRE.o_wb_en
 @22
 tb_top.RETIRE.o_wb_data[31:0]
+@25
+tb_top.RETIRE.o_wb_data[31:0]
+@24
 tb_top.RETIRE.o_wb_rd[4:0]
 [pattern_trace] 1
 [pattern_trace] 0

@@ -111,7 +111,7 @@ module issue_stage (
   
   always_comb begin
     // op1: rs1 (forwarded) or PC (for AUIPC)
-    op1 = uop_q.uses_rs1 ? fwd_rs1 : dec_pc_q;
+    op1 = uop_q.uses_rs1 ? fwd_rs1 : (uop_q.opcode == OPCODE_AUIPC) ? dec_pc_q : 'd0;
   
     // op2: special case for JAL/JALR (return address increment = +4)
     //       otherwise immediate or rs2 (forwarded)

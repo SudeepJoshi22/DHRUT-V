@@ -64,9 +64,15 @@ module retire (
     end
     // else stall → hold current values
   end
+  // ───────────────────────────────────────────────
+  // 2. Operand forwarding to ISSUE Stage
+  // ───────────────────────────────────────────────
+  assign    o_retire_fwd_rd         = uop_q.rd;
+  assign    o_retire_fwd_result     = result_q;
+  assign    o_retire_fwd_writes_rd  = uop_q.writes_rd;
 
   // ───────────────────────────────────────────────
-  // 2. Register Write-Back (to ARF)
+  // 3. Register Write-Back (to ARF)
   // ───────────────────────────────────────────────
   always_comb begin
     o_wb_en   = valid_q && uop_q.writes_rd && !i_flush;
