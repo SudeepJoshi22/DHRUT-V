@@ -8,11 +8,14 @@ module lsu (
   // To data memory
   mem_if.master       dmem_if,
 
+  // Load Data Forward to ISSUE
+  //output logic [4:0]  o_lsu_fwd_rd,           
+  //output logic [31:0] o_lsu_fwd_result,       
+
   // Back to pipeline (for write-back or next stage)
   output logic        o_valid,          // load/store completed this cycle
   output logic [31:0] o_load_data,      // sign/zero-extended load result
-  output uop_t        o_lsu_uop,
-  output logic        o_stall_from_lsu  // back-pressure to ISSUE
+  output uop_t        o_lsu_uop
 );
 
   // ───────────────────────────────────────────────
@@ -93,7 +96,7 @@ module lsu (
   // ───────────────────────────────────────────────
   // Stall back to ISSUE (stall when memory not ready)
   // ───────────────────────────────────────────────
-  assign o_stall_from_lsu = dmem_if.m_valid && !dmem_if.s_ready;
+  assign issue_if.s_stall_from_lsu = dmem_if.m_valid && !dmem_if.s_ready;
 
   // ───────────────────────────────────────────────
   // Transaction complete signal

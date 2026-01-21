@@ -28,6 +28,11 @@ module issue_stage (
   input  logic [4:0]  i_retire_fwd_rd,
   input  logic [31:0] i_retire_fwd_data,
 
+  // FORWARDING - From LSU
+  input  logic        i_lsu_fwd_data_valid,
+  input  logic [4:0]  i_lsu_fwd_rd,
+  input  logic [31:0] i_lsu_fwd_data,
+
   // To Fetch – direct branch/jump signals (no interface)
   output logic        o_branch_taken,
   output logic [31:0] o_branch_target,
@@ -55,7 +60,7 @@ module issue_stage (
       uop_q       <= '0;
       dec_pc_q    <= '0;
     end
-    else if (!i_stall) begin
+    else if (!i_stall || !lsu_if.s_stall_from_lsu) begin
       dec_valid_q <= i_dec_valid;
       uop_q       <= i_uop;
       dec_pc_q    <= i_dec_pc;
@@ -95,12 +100,18 @@ module issue_stage (
     else if (i_retire_fwd_writes_rd && (i_retire_fwd_rd == uop_q.rs1) && (uop_q.rs1 != 5'd0)) begin
       fwd_rs1 = i_retire_fwd_data;
     end
-  
+    else if (i_lsu_fwd_data_valid && (i_lsu_fwd_rd == uop_q.rs1) && (uop_q.rs1 != 5'd0)) begin
+      fwd_rs1 = i_lsu_fwd_data;
+    end
+    
     if (i_alu_fwd_writes_rd && (i_alu_fwd_rd == uop_q.rs2) && (uop_q.rs2 != 5'd0)) begin
       fwd_rs2 = i_alu_fwd_data;
     end
     else if (i_retire_fwd_writes_rd && (i_retire_fwd_rd == uop_q.rs2) && (uop_q.rs2 != 5'd0)) begin
       fwd_rs2 = i_retire_fwd_data;
+    end
+    else if (i_lsu_fwd_data_valid && (i_lsu_fwd_rd == uop_q.rs2) && (uop_q.rs2 != 5'd0)) begin
+      fwd_rs2 = i_lsu_fwd_data;
     end
   end
 

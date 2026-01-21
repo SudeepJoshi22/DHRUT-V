@@ -20,9 +20,6 @@ module tb_top;
   logic [31:0] if_id_pc;
   logic [31:0] if_id_instr;
 
-  // ID -> IF stall
-  logic        id_if_stall;
-
   // ID -> Issue
   logic        id_issue_valid;
   uop_t        id_issue_uop;
@@ -59,11 +56,21 @@ module tb_top;
   logic [31:0] fwd_alu_issue_data;
   logic        fwd_alu_issue_writes_rd; 
 
+  // Opeerand Forwarding from LSU -> ISSUE
+  
+  logic [4:0]  fwd_lsu_issue_rd;
+  logic [31:0] fwd_lsu_issue_data;
+  
   // Operand Forwarding from RETIRE -> ISSUE
   
   logic [4:0]  fwd_retire_issue_rd;
   logic [31:0] fwd_retire_issue_data;
   logic        fwd_retire_issue_writes_rd; 
+
+  // Downstream Stalls
+  logic        lsu_to_issue_stall;
+  logic        issue_to_decode_stall;
+  logic        decode_to_fetch_stall;
 
   // ───────────────────────────────────────────────
   // IF Stage
@@ -71,7 +78,7 @@ module tb_top;
   if_stage IF (
     .clk             (clk),
     .rst_n           (rst_n),
-    .i_stall         (id_if_stall),
+    .i_stall         (decode_to_fetch_stall),
     .i_flush         (branch_taken),          // flush on branch taken
     .i_redirect_pc   (branch_target),         // branch/jump target
     .imem            (imem_if),
@@ -89,12 +96,12 @@ module tb_top;
     .i_if_valid      (if_id_valid),
     .i_if_pc         (if_id_pc),
     .i_if_instr      (if_id_instr),
-    .i_stall         (1'b0),
+    .i_stall         (issue_to_decode_stall),
     .i_flush         (branch_taken),
     .o_dec_valid     (id_issue_valid),
     .o_uop           (id_issue_uop),
     .o_dec_pc        (id_issue_pc),
-    .o_stall_to_if   (id_if_stall)
+    .o_stall_to_if   (decode_to_fetch_stall)
   );
 
   // ───────────────────────────────────────────────
@@ -116,10 +123,13 @@ module tb_top;
     .i_alu_fwd_data         (fwd_alu_issue_data),
     .i_retire_fwd_writes_rd (fwd_retire_issue_writes_rd),
     .i_retire_fwd_rd        (fwd_retire_issue_rd),
-    .i_retire_fwd_data      (fwd_retire_issue_data), 
+    .i_retire_fwd_data      (fwd_retire_issue_data),
+    .i_lsu_fwd_data_valid   (lsu_valid),
+    .i_lsu_fwd_rd           (lsu_uop_forward.rd),
+    .i_lsu_fwd_data         (lsu_load_data),
     .o_branch_taken         (branch_taken),
     .o_branch_target        (branch_target),
-    .o_stall_to_decode      (),                    // open for now
+    .o_stall_to_decode      (issue_to_decode_stall),                    
     .alu_if                 (alu_if),
     .lsu_if                 (lsu_if)
   );
@@ -145,14 +155,15 @@ module tb_top;
   // LSU Stage
   // ───────────────────────────────────────────────
   lsu LSU (
-      .clk             (clk),
-      .rst_n           (rst_n),
-      .issue_if        (lsu_if),
-      .dmem_if         (dmem_if.master),
-      .o_valid         (lsu_valid),
-      .o_load_data     (lsu_load_data),
-      .o_lsu_uop       (lsu_uop_forward),
-      .o_stall_from_lsu()
+      .clk                  (clk),
+      .rst_n                (rst_n),
+      .issue_if             (lsu_if),
+      .dmem_if              (dmem_if.master),
+      //.o_lsu_fwd_rd         (fwd_lsu_issue_rd),   
+      //.o_lsu_fwd_result     (fwd_lsu_issue_data),
+      .o_valid              (lsu_valid),
+      .o_load_data          (lsu_load_data),
+      .o_lsu_uop            (lsu_uop_forward)
     );
 
   // ───────────────────────────────────────────────

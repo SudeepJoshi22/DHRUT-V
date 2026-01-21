@@ -1,21 +1,21 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Sun Jan 18 17:52:21 2026
+[*] Wed Jan 21 19:05:49 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Sun Jan 18 17:44:13 2026"
-[dumpfile_size] 141324
+[dumpfile_mtime] "Wed Jan 21 18:59:13 2026"
+[dumpfile_size] 151897
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
 [timestart] 0
 [size] 1366 721
 [pos] -1 -1
-*-18.301788 610000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-16.136271 90000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
 [treeopen] tb_top.ALU.issue_if.
 [treeopen] tb_top.ID.
-[treeopen] tb_top.ISSUE.
 [treeopen] tb_top.ISSUE.lsu_if.
 [treeopen] tb_top.LSU.
+[treeopen] tb_top.LSU.issue_if.
 [sst_width] 278
 [signals_width] 347
 [sst_expanded] 1
@@ -123,6 +123,12 @@ tb_top.ISSUE.i_retire_fwd_data[31:0]
 tb_top.ISSUE.i_retire_fwd_rd[4:0]
 @28
 tb_top.ISSUE.i_retire_fwd_writes_rd
+@22
+tb_top.ISSUE.i_lsu_fwd_data[31:0]
+@28
+tb_top.ISSUE.i_lsu_fwd_data_valid
+@22
+tb_top.ISSUE.i_lsu_fwd_rd[4:0]
 @200
 -
 -to ALU
@@ -158,6 +164,8 @@ tb_top.ALU.o_alu_result[31:0]
 tb_top.LSU.o_valid
 @22
 tb_top.LSU.o_load_data[31:0]
+@29
+tb_top.LSU.issue_if.s_stall_from_lsu
 @200
 -DMEM Interface
 @28
@@ -176,9 +184,8 @@ tb_top.LSU.dmem_if.s_ready
 tb_top.RETIRE.o_wb_en
 @22
 tb_top.RETIRE.o_wb_data[31:0]
-@25
-tb_top.RETIRE.o_wb_data[31:0]
 @24
+tb_top.RETIRE.o_wb_data[31:0]
 tb_top.RETIRE.o_wb_rd[4:0]
 [pattern_trace] 1
 [pattern_trace] 0

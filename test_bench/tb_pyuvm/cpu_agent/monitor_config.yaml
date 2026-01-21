@@ -33,7 +33,7 @@ stages:
       
       # Stall signal from decode stage
       - name: "stall_IF"
-        signal_path: "id_if_stall"
+        signal_path: "decode_to_fetch_stall"
         format: "{:1d}"
         type: "bool"
         description: "Stall signal to IF stage"
