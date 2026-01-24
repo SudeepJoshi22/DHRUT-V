@@ -1,23 +1,21 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Wed Jan 21 19:05:49 2026
+[*] Sat Jan 24 15:56:55 2026
 [*]
 [dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Wed Jan 21 18:59:13 2026"
-[dumpfile_size] 151897
+[dumpfile_mtime] "Sat Jan 24 15:55:54 2026"
+[dumpfile_size] 127556
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
 [timestart] 0
 [size] 1366 721
 [pos] -1 -1
-*-16.136271 90000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-18.136272 350000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
 [treeopen] tb_top.ALU.issue_if.
-[treeopen] tb_top.ID.
 [treeopen] tb_top.ISSUE.lsu_if.
-[treeopen] tb_top.LSU.
 [treeopen] tb_top.LSU.issue_if.
 [sst_width] 278
-[signals_width] 347
+[signals_width] 333
 [sst_expanded] 1
 [sst_vpaned_height] 222
 @28
@@ -41,9 +39,12 @@ tb_top.imem_if.s_rdata[31:0]
 @28
 tb_top.IF.i_stall
 tb_top.IF.i_flush
+tb_top.IF.instr_valid_q
 @22
-tb_top.IF.i_redirect_pc[31:0]
+tb_top.IF.instr_pc_q[31:0]
+tb_top.IF.instr_q[31:0]
 tb_top.IF.pc_q[31:0]
+tb_top.IF.i_redirect_pc[31:0]
 tb_top.IF.pc_next[31:0]
 @28
 tb_top.IF.o_if_valid
@@ -53,6 +54,12 @@ tb_top.IF.o_if_instr[31:0]
 @200
 -
 -Decode
+@28
+tb_top.ID.i_stall
+tb_top.ID.id_valid_q
+@22
+tb_top.ID.id_instr_q[31:0]
+tb_top.ID.id_pc_q[31:0]
 @28
 tb_top.ID.o_dec_valid
 @22
@@ -94,6 +101,11 @@ tb_top.ID.o_uop.lsu_sign_extend
 -Issue
 -
 @28
+tb_top.ISSUE.dec_valid_q
+@22
+tb_top.ISSUE.dec_pc_q[31:0]
+@28
+tb_top.ISSUE.lsu_if.s_stall_from_lsu
 tb_top.ISSUE.o_branch_taken
 @22
 tb_top.ISSUE.o_branch_target[31:0]
@@ -159,12 +171,18 @@ tb_top.ALU.o_alu_result[31:0]
 @200
 -
 -LSU
+@28
+tb_top.LSU.valid_q
+@22
+tb_top.LSU.addr_base_q[31:0]
+tb_top.LSU.store_data_q[31:0]
+@200
 -
 @28
 tb_top.LSU.o_valid
 @22
 tb_top.LSU.o_load_data[31:0]
-@29
+@28
 tb_top.LSU.issue_if.s_stall_from_lsu
 @200
 -DMEM Interface

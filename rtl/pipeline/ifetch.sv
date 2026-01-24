@@ -84,21 +84,21 @@ module if_stage (
        o_if_valid <= 1'b0;
        o_if_pc    <= 32'b0;
        o_if_instr <= 32'b0;
-     end else begin
+     end 
+     else begin
        if (i_flush) begin
          o_if_valid <= 1'b0;
          o_if_pc    <= 32'b0;
          o_if_instr <= 32'b0;
-       end else if (instr_valid_q && !i_stall) begin
-         // Output only when valid and not stalled (downstream ready)
+       end 
+       else if (instr_valid_q && !i_stall) begin
+         // Output only when latched valid, not stalled, and we haven't output it yet
          o_if_valid <= 1'b1;
          o_if_pc    <= instr_pc_q;
          o_if_instr <= instr_q;
-       end else if (i_stall) begin
-         // Hold output during stall
-         // o_if_valid stays as-is (previous value)
-       end else begin
-         o_if_valid <= 1'b0;
+       end 
+       else if(!i_stall) begin
+         o_if_valid <= 1'b0;  // Deassert valid after 1 cycle (or if stalled)
        end
      end
    end

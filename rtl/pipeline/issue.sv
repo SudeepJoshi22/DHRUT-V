@@ -48,11 +48,16 @@ module issue_stage (
 );
 
   // ───────────────────────────────────────────────
-  // 1. Input Pipeline Registers (Decode → Issue)
+  // 1. Input Pipeline Registers + Dispatched Flag
   // ───────────────────────────────────────────────
-  logic        dec_valid_q;
-  uop_t        uop_q;
+  logic dec_valid_q;
+  logic issued;
+  uop_t uop_q;
   logic [31:0] dec_pc_q;
+ 
+  logic        stall_issue;
+
+  assign       stall_issue = i_stall || lsu_if.s_stall_from_lsu;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n || i_flush) begin
@@ -60,7 +65,7 @@ module issue_stage (
       uop_q       <= '0;
       dec_pc_q    <= '0;
     end
-    else if (!i_stall && !lsu_if.s_stall_from_lsu) begin
+    else if (!stall_issue) begin
       dec_valid_q <= i_dec_valid;
       uop_q       <= i_uop;
       dec_pc_q    <= i_dec_pc;
@@ -189,7 +194,9 @@ module issue_stage (
     lsu_if.m_addr_base   = op1;
     lsu_if.m_store_data  = op2;
 
-    if (dec_valid_q && !i_flush) begin
+    issued               = dec_valid_q && !stall_issue && !i_flush;
+
+    if (issued) begin
       case (uop_q.opcode)
         // Compute/arithmetic/jump/branch → ALU
         OPCODE_OP, OPCODE_OP_IMM, OPCODE_LUI, OPCODE_AUIPC,
@@ -215,5 +222,15 @@ module issue_stage (
   // 6. Stall propagation back to Decode/IF
   // ───────────────────────────────────────────────
   assign o_stall_to_decode = i_stall || lsu_if.s_stall_from_lsu;
+
+  // Consume the latched valid when dispatched
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n || i_flush) begin
+      dec_valid_q <= 1'b0;
+    end
+    else if (issued) begin
+      dec_valid_q <= 1'b0;  // clear after dispatch
+    end
+  end
 
 endmodule
