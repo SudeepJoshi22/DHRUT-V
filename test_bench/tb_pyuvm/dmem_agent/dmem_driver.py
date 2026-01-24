@@ -78,13 +78,12 @@ class DMemDriver(uvm_driver):
 
             is_write = int(self.dmem_if.m_wstrb.value) != 0
 
-            # Optional random stall (like IMEM)
-            if random.random() < 0.3:
-                stall_cycles = random.randint(1, 5)
-                self.logger.debug(f"DMem introducing {stall_cycles} stall cycle(s)")
-                self.dmem_if.s_ready.value = 0
-                for _ in range(stall_cycles):
-                    await RisingEdge(self.dmem_if.clk)
+            # Always give 2-5 cycles of delay for Dmem transaction
+            stall_cycles = random.randint(1, 5)
+            self.logger.debug(f"DMem introducing {stall_cycles} stall cycle(s)")
+            self.dmem_if.s_ready.value = 0
+            for _ in range(stall_cycles):
+                await RisingEdge(self.dmem_if.clk)
 
             if is_write:
                 # Write: apply byte enables into backing store

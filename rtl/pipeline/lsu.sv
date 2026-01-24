@@ -26,6 +26,9 @@ module lsu (
   logic [31:0] addr_base_q;
   logic [31:0] store_data_q;
 
+
+  logic        internal_stall;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       valid_q       <= 1'b0;
@@ -33,12 +36,20 @@ module lsu (
       addr_base_q   <= '0;
       store_data_q  <= '0;
     end
-    else begin
+    else if(!internal_stall && !valid_q) begin
       valid_q       <= issue_if.m_valid;
       uop_q         <= issue_if.m_uop;
       addr_base_q   <= issue_if.m_addr_base;
       store_data_q  <= issue_if.m_store_data;
     end
+    else if (valid_q && dmem_if.s_ready) begin
+      // Transaction completed → consume the latched request
+      valid_q       <= 1'b0;
+      uop_q         <= '0;
+      addr_base_q   <= '0;
+      store_data_q  <= '0;
+      // Do NOT clear uop_q/addr_base_q/store_data_q — they can hold until next request
+  end
   end
 
   // ───────────────────────────────────────────────
@@ -96,7 +107,8 @@ module lsu (
   // ───────────────────────────────────────────────
   // Stall back to ISSUE (stall when memory not ready)
   // ───────────────────────────────────────────────
-  assign issue_if.s_stall_from_lsu = dmem_if.m_valid && !dmem_if.s_ready;
+  assign internal_stall            = dmem_if.m_valid && !dmem_if.s_ready;
+  assign issue_if.s_stall_from_lsu = internal_stall;
 
   // ───────────────────────────────────────────────
   // Transaction complete signal

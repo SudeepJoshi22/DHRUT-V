@@ -52,15 +52,6 @@ class IMemDriver(uvm_driver):
         # Get the interface handle from ConfigDB (set in run_test.py)
         self.imem_if = cocotb.top.imem_if
 
-        # Pre-coded instruction memory — exactly like your old driver
-        '''
-        self.mem = {
-            0x00000000: 0x00500093,  # addi x1, x0, 5
-            0x00000004: 0x00308113,  # addi x2, x1, 3
-            0x00000008: 0x00000013,  # nop
-            # You can add more later
-        }
-        '''
         self.mem = {}
         hex_file = os.getenv("TEST_HEX")
         self.mem = self.load_verilog_hex(hex_file)
@@ -71,26 +62,28 @@ class IMemDriver(uvm_driver):
     async def run_phase(self):
 
         # Default signal values
-        self.imem_if.s_ready.value = 0
-        self.imem_if.s_rdata.value = 0
+
 
         while True:
             await RisingEdge(self.imem_if.clk)
-
+            
+            self.imem_if.s_ready.value = 0
+            self.imem_if.s_rdata.value = 0
+            
             if self.imem_if.m_valid.value:
                 addr = self.imem_if.m_addr.value.to_unsigned()
                 aligned_addr = addr & ~3
                 instr = self.mem.get(aligned_addr, 0x00000013)  # default NOP if not found
 
-            # Rare latency: 90% chance of 0 stall, 10% chance of 1 or 2 stall cycles
-            if random.random() < 0.1:
-                stall_cycles = random.randint(1, 2)  # 1 or 2 cycles of stall
-                self.logger.debug(f"IMem introducing {stall_cycles} stall cycle(s)")
+                # Rare latency: 90% chance of 0 stall, 10% chance of 1 or 2 stall cycles
+                if random.random() < 0.1:
+                    stall_cycles = random.randint(1, 2)  # 1 or 2 cycles of stall
+                    self.logger.debug(f"IMem introducing {stall_cycles} stall cycle(s)")
                 
-                self.imem_if.s_ready.value = 0
-                for _ in range(stall_cycles):
-                    await RisingEdge(self.imem_if.clk)
+                    self.imem_if.s_ready.value = 0
+                    for _ in range(stall_cycles):
+                        await RisingEdge(self.imem_if.clk)
 
-            # Drive response
-            self.imem_if.s_rdata.value = instr
-            self.imem_if.s_ready.value = 1
+                # Drive response
+                self.imem_if.s_rdata.value = instr
+                self.imem_if.s_ready.value = 1

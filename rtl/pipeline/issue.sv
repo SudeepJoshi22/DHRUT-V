@@ -60,7 +60,7 @@ module issue_stage (
       uop_q       <= '0;
       dec_pc_q    <= '0;
     end
-    else if (!i_stall || !lsu_if.s_stall_from_lsu) begin
+    else if (!i_stall && !lsu_if.s_stall_from_lsu) begin
       dec_valid_q <= i_dec_valid;
       uop_q       <= i_uop;
       dec_pc_q    <= i_dec_pc;
@@ -160,7 +160,7 @@ module issue_stage (
 
         OPCODE_JALR: begin
           o_branch_taken  = 1'b1;
-          o_branch_target = (rs1_data + uop_q.imm) & ~32'd1;
+          o_branch_target = (fwd_rs1 + uop_q.imm) & ~32'd1;
         end
         default: begin
           o_branch_taken  = 1'b0;

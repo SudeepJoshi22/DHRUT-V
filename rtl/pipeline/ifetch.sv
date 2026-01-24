@@ -15,6 +15,10 @@ module if_stage (
   logic [31:0] pc_q, pc_next;
   logic        fetch_valid;   // internal signal: we want to fetch this cycle
 
+  logic [31:0] instr_q;
+  logic [31:0] instr_pc_q;
+  logic        instr_valid_q;
+
   // =================================================================
   // PC Logic
   // =================================================================
@@ -33,7 +37,8 @@ module if_stage (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       pc_q <= 32'h0000_0000;
-    end else begin
+    end 
+    else if(!i_stall && imem.s_ready) begin
       pc_q <= pc_next;
     end
   end
@@ -55,25 +60,47 @@ module if_stage (
   assign imem.m_wstrb = 4'b0000;
 
   // =================================================================
-  // Output Valid & Data Capture
+  // Latch the Instruction when (valid && ready) are high
   // =================================================================
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      o_if_valid <= 1'b0;
-      o_if_pc    <= 32'b0;
-      o_if_instr <= 32'b0;
-    end else begin
-      if (i_flush) begin
-        o_if_valid <= 1'b0;  // kill output on flush
-      end else if (imem.m_valid && imem.s_ready) begin
+    if (!rst_n || i_flush) begin
+        instr_valid_q         <= 1'b0;
+        instr_q               <= 32'd0;
+        instr_pc_q            <= 32'd0;
+    end
+    else if (imem.m_valid && imem.s_ready) begin
         // Handshake completed → valid instruction fetched
-        o_if_valid <= 1'b1;
-        o_if_pc    <= pc_q;            // PC of the fetched instruction
-        o_if_instr <= imem.s_rdata;
-      end else begin
-        o_if_valid <= 1'b0;  // no completion this cycle
-      end
+        instr_valid_q         <= 1'b1;
+        instr_q               <= imem.s_rdata;
+        instr_pc_q            <= pc_q;
     end
   end
+
+   // =================================================================
+   // Output the latched instruction
+   // =================================================================
+   always_ff @(posedge clk or negedge rst_n) begin
+     if (!rst_n) begin
+       o_if_valid <= 1'b0;
+       o_if_pc    <= 32'b0;
+       o_if_instr <= 32'b0;
+     end else begin
+       if (i_flush) begin
+         o_if_valid <= 1'b0;
+         o_if_pc    <= 32'b0;
+         o_if_instr <= 32'b0;
+       end else if (instr_valid_q && !i_stall) begin
+         // Output only when valid and not stalled (downstream ready)
+         o_if_valid <= 1'b1;
+         o_if_pc    <= instr_pc_q;
+         o_if_instr <= instr_q;
+       end else if (i_stall) begin
+         // Hold output during stall
+         // o_if_valid stays as-is (previous value)
+       end else begin
+         o_if_valid <= 1'b0;
+       end
+     end
+   end
 
 endmodule
