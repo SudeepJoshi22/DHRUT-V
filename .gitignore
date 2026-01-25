@@ -12,3 +12,6 @@ venv
 *.xoj
 *.log
 *.csv
+riscv-gnu-toolchain/
+riscv-isa-sim/
+verilator/

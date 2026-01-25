@@ -4,3 +4,5 @@ New age of DHRUT-V With clear milestones and goals to achieve
 - Test Bench written in pyUVM
 - RV32I M-mode compliant
 - Proper memory interfacing to make CPU FPGA bootable
+- Can it run Doom - YES!
+- Add neccessary features to the pipeline to make it run Doom faster(MDU, FPU, Vectors?)
