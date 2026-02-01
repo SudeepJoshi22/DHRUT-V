@@ -6,6 +6,7 @@
 **/*.elf
 **/build
 venv
+venv.sh
 *.vcd
 *.dump
 *.vvp
