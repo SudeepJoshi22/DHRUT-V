@@ -8,53 +8,8 @@
 .globl _start
 
 _start:
-    # ───────────────────────────────────────────────
-    # Setup base address (0x1000) using only addi
-    # ───────────────────────────────────────────────
-    addi  x10, x0,  0x00     # x10 = 0
     
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-
-
-    addi  x10, x10, 0x10     # x10 = 0x10
-    
-
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-    addi  x0, x0, 0x0
-
-    slli  x10, x10, 8        # x10 = 0x1000 (base address)
-
-    # ───────────────────────────────────────────────
-    # Prepare test values (using only addi)
-    # ───────────────────────────────────────────────
-    addi  x1, x0,  0x7F      # x1 = 127 (for byte test)
-    addi  x2, x0, -0x80      # x2 = -128 (signed byte test)
-    addi  x3, x0,  0x0F      # x3 = 15
-    addi  x3, x3,  0x70      # x3 = 127 (for halfword)
-    addi  x4, x0,  0x7F      # x4 = 127
-    addi  x4, x4,  0x7F      # x4 = 254
-    addi  x4, x4,  0x7F      # x4 = 381
-    addi  x4, x4,  0x7F      # x4 = 508
-    addi  x4, x4,  0x7F      # x4 = 635
-    addi  x4, x4,  0x7F      # x4 = 762
-    addi  x4, x4,  0x7F      # x4 = 889
-    addi  x4, x4,  0x7F      # x4 = 1016
-    addi  x4, x4,  0x7F      # x4 = 1143
-    addi  x4, x4,  0x7F      # x4 = 1270
-    addi  x4, x4,  0x7F      # x4 = 1397
-    addi  x4, x4,  0x7F      # x4 = 1524
-    addi  x4, x4,  0x7F      # x4 = 1651
-    addi  x4, x4,  0x7F      # x4 = 1778
-    addi  x4, x4,  0x7F      # x4 = 1905
-    addi  x4, x4,  0x7F      # x4 = 2032
-    addi  x4, x4,  0x7F      # x4 = 2159 (still within 12-bit)
+    la    x10, test_data
 
     # ───────────────────────────────────────────────
     # Stores (SB, SH, SW)
@@ -86,15 +41,34 @@ _start:
     addi  x22, x0, 123
     addi  x23, x0, 456
 
-    # ───────────────────────────────────────────────
-    # Infinite loop
-    # ───────────────────────────────────────────────
+    la    t0, tohost
+    li    t1, 1
+    sw    t1, 0(t0)
+    sw    x0, 4(t0)      # upstream also writes zero to tohost+4 [page:1]
+
 1:  j     1b
 
 
 .section .data
 
-    .word 0xdeadbeef
-    .word 0x000b00b5
+    test_data:
+        .word 0xdeadbeef
+        .word 0x000b00b5
+
+.pushsection .tohost, "aw", @progbits
+    .align 6
+    .global tohost
+
+    tohost:
+        .dword 0
+        .size tohost, 8
+
+    .align 6
+    .global fromhost
+    fromhost:
+        .dword 0
+        .size fromhost, 8
+
+.popsection
 
 .end

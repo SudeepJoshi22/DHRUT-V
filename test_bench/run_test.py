@@ -19,19 +19,13 @@ file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(console_formatter)
 logger.addHandler(file_handler)
 
-# Use this logger everywhere instead of self.logger
-# Example in monitor:
-logger.info("Monitor started")
-
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import Timer
 from pyuvm import uvm_root
-import tb_pyuvm.test_imem_bringup
 
-# Optional: make it more verbose for debug
-# logging.getLogger('pyuvm').setLevel(logging.DEBUG)
-# logging.getLogger('cocotb').setLevel(logging.INFO)
+import tb_pyuvm.test_imem_bringup
+import tb_pyuvm.test_dhrut_v
 
 @cocotb.test()
 async def run_test(dut):
@@ -47,4 +41,5 @@ async def run_test(dut):
     dut.rst_n.value = 1
     cocotb.log.info("Reset released")
 
-    await uvm_root().run_test("IFBringUpTest")
+    # await uvm_root().run_test("IFBringUpTest")
+    await uvm_root().run_test("DhrutVTest")

@@ -1,26 +1,19 @@
+OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
 SECTIONS
 {
-  /* Start everything at address 0x0 */
-  . = 0x00000000;
+  . = 0x80000000;
 
-  /* Code */
-  .text : {
-    *(.text*)
-  }
+  .text : { *(.text.init) *(.text*) }   /* code stays contiguous at base */
 
-  /* Optional: keep these empty for now */
-  .rodata : {
-    *(.rodata*)
-  }
+  . = ALIGN(0x1000);
+  .tohost : { *(.tohost) }              /* tohost after code */
 
-  .data : {
-    *(.data*)
-  }
-
-  .bss : {
-    *(.bss*)
-    *(COMMON)
-  }
+  .rodata : { *(.rodata*) }
+  .data   : { *(.data*) }
+  .sdata  : { *(.sdata*) }
+  .sbss   : { *(.sbss*) *(.scommon) }
+  .bss    : { *(.bss*) *(COMMON) }
+  _end = .;
 }

@@ -1,6 +1,7 @@
 # test_bench/tb_pyuvm/agents/dmem_agent/dmem_agent.py
 from pyuvm import uvm_agent
 from .dmem_driver import DMemDriver
+from .dmem_monitor import DMemMonitor
 # from .dmem_monitor import DMemMonitor
 # from .dmem_sequencer import DMemSequencer
 # from pyuvm import ConfigDB   # only if you decide to use a sequencer
@@ -10,6 +11,7 @@ class DMemAgent(uvm_agent):
     def build_phase(self):
         # Active agent with only a driver for now
         self.driver = DMemDriver.create("dmem_driver", self)
+        self.monitor = DMemMonitor.create("demm_monitor", self)
 
         # If you later add sequencer/monitor, uncomment and wire like IMemAgent
         # self.monitor = DMemMonitor.create("dmem_monitor", self)

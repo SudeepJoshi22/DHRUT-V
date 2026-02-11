@@ -217,7 +217,7 @@ class CpuMonitor(uvm_monitor):
                     self.logger.debug(f"UOP signal not found: {uop_signal_path}")
             
             # Log the item (will use __str__ method)
-            self.logger.info(str(item))
+            #self.logger.info(str(item))
             
             # Broadcast for scoreboard/coverage
             self.ap.write(item)

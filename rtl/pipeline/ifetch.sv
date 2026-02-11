@@ -19,6 +19,8 @@ module if_stage (
   logic [31:0] instr_pc_q;
   logic        instr_valid_q;
 
+  parameter logic [31:0] RESET_PC = 32'h8000_0000;
+  
   // =================================================================
   // PC Logic
   // =================================================================
@@ -36,7 +38,7 @@ module if_stage (
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      pc_q <= 32'h0000_0000;
+      pc_q <= RESET_PC;
     end 
     else if(!i_stall && imem.s_ready) begin
       pc_q <= pc_next;

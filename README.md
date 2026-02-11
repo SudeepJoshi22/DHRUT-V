@@ -28,11 +28,9 @@ Designed for learning, verification, FPGA/ASIC exploration, and as a foundation 
 
 DHRUT-V/
 ├── rtl/                    # Core RTL and interfaces
-│   ├── legacy/             # (older/previous versions)
+│   ├── legacy/             # older/previous versions
 │   └── ...                 # pipeline modules, interfaces, packages
 ├── test_bench/             # pyUVM testbench environment
-│   ├── legacy/
-│   ├── pycache/
 │   └── run_test.py
 ├── tests/                  # Assembly tests & build artifacts
 │   ├── asm/                # assembly source files
@@ -42,7 +40,6 @@ DHRUT-V/
 │   ├── install.sh          # one-click tool setup
 │   ├── lint.sh             # RTL linting
 │   ├── simulate.sh         # simulation launcher
-│   └── legacy/
 ├── LICENSE
 ├── README.md
 

@@ -17,7 +17,6 @@ VERILOG_SOURCES = 				\
 # Enable SystemVerilog
 VERILATOR_ARGS += --sv --trace --trace-structs
 
-# Clock name
 TOPLEVEL_LANG = verilog
 
 # Python path for pyUVM

@@ -15,15 +15,33 @@ ARCH=rv32i
 ABI=ilp32
 
 # ----------------------------------------
-# ARG CHECK
+# ARG CHECK (+ optional -CYCLE_TIMEOUT=...)
 # ----------------------------------------
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <test_name>"
-    echo "Example: $0 add"
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <test_name> [-CYCLE_TIMEOUT=<value>]"
+    echo "Example: $0 add -CYCLE_TIMEOUT=10000"
     exit 1
 fi
 
-TEST_NAME=$1
+TEST_NAME="$1"
+shift
+
+# default if not provided
+CYCLE_TIMEOUT=100
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -CYCLE_TIMEOUT=*)
+            CYCLE_TIMEOUT="${1#*=}"
+            shift
+            ;;
+        *)
+            echo "ERROR: Unknown option $1 (supported: -CYCLE_TIMEOUT=<value>)" >&2
+            exit 1
+            ;;
+    esac
+done
+
 ASM_FILE=$ASM_DIR/${TEST_NAME}.S
 
 if [ ! -f "$ASM_FILE" ]; then
@@ -73,6 +91,7 @@ echo "  DIS: $DIS"
 # ----------------------------------------
 export TEST_HEX=$HEX
 export COCOTB_LOG_LEVEL=INFO
+export CYCLE_TIMEOUT
 
 # ----------------------------------------
 # RUN SIMULATION
