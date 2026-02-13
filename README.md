@@ -4,7 +4,7 @@ A fully pipelined, in-order superscalar RV32I RISC-V core written in SystemVeril
 
 Designed for learning, verification, FPGA/ASIC exploration, and as a foundation for further extensions.
 
-**Doom port in progress.**
+**It will run DOOM one day!**
 
 ## Features
 
@@ -22,10 +22,10 @@ Designed for learning, verification, FPGA/ASIC exploration, and as a foundation 
 - Basic pipeline bring-up complete
 - All RV32I instructions supported
 - Forwarding, stalls, and branch handling working
-- Doom port in progress (requires M extension + CSR support)
 
 ## Directory Structure
 
+```text
 DHRUT-V/
 ├── rtl/                    # Core RTL and interfaces
 │   ├── legacy/             # older/previous versions
@@ -42,6 +42,7 @@ DHRUT-V/
 │   ├── simulate.sh         # simulation launcher
 ├── LICENSE
 ├── README.md
+```
 
 ## Getting Started
 
