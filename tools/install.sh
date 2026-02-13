@@ -7,6 +7,7 @@ echo "  - RISC-V GNU Toolchain (RV32IMAC / RV64IMAC support)"
 echo "  - Spike (RISC-V ISA Simulator)"
 echo "  - Verilator (Verilog/SystemVerilog Simulator)"
 echo "  - Python virtual environment with cocotb, pyuvm, find_libpython, PyYAML"
+echo "  - RISCOF (RISC-V Architectural Test Framework)"
 echo "Target: Ubuntu/Debian-based systems"
 echo "Install location: /opt/riscv (toolchain & spike), system-wide Verilator"
 echo "Python env: ~/riscv_pyenv"
@@ -93,7 +94,7 @@ sudo make install
 cd ..
 
 # ===================================================================
-# 4. Python Virtual Environment + cocotb + pyuvm + extras
+# 4. Python Virtual Environment + cocotb + pyuvm + extras + RISCOF
 # ===================================================================
 echo ""
 echo "Creating Python virtual environment at ~/riscv_pyenv..."
@@ -104,7 +105,16 @@ source ~/riscv_pyenv/bin/activate
 
 echo "Upgrading pip and installing packages..."
 pip install --upgrade pip
+
+# Existing packages
 pip install cocotb==2.0.1 pyuvm==4.0.1 find_libpython==0.5.0 PyYAML==6.0.3
+
+# RISCOF (preferred install per docs: latest from upstream git)
+pip install git+https://github.com/riscv/riscof.git@d38859f
+
+echo ""
+echo "Verifying RISCOF installation..."
+riscof --help >/dev/null
 
 deactivate
 
@@ -118,7 +128,7 @@ echo "export RISCV=\"$INSTALL_PREFIX\"" >> ~/.bashrc
 
 # Add virtual env activation note
 echo ""
-echo "To activate Python environment with cocotb/pyuvm and extras:"
+echo "To activate Python environment with cocotb/pyuvm/riscof:"
 echo "  source ~/riscv_pyenv/bin/activate"
 
 echo ""
@@ -126,11 +136,11 @@ echo "=== Installation Complete! ==="
 echo "Toolchain: $INSTALL_PREFIX/bin/riscv64-unknown-elf-gcc (etc.)"
 echo "Spike:     $INSTALL_PREFIX/bin/spike"
 echo "Verilator: verilator (system-wide)"
-echo "Python env: ~/riscv_pyenv (with cocotb==2.0.1, pyuvm==4.0.1, find_libpython==0.5.0, PyYAML==6.0.3)"
+echo "Python env: ~/riscv_pyenv (with cocotb==2.0.1, pyuvm==4.0.1, riscof installed)"
 echo ""
 echo "Reload your shell or run: source ~/.bashrc"
 echo "Verify:"
 echo "  riscv64-unknown-elf-gcc --version"
 echo "  spike --version"
 echo "  verilator --version"
-echo "  source ~/riscv_pyenv/bin/activate && pip list"
+echo "  source ~/riscv_pyenv/bin/activate && riscof --version && pip list"
