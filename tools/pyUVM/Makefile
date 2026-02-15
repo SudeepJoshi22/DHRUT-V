@@ -1,30 +1,25 @@
-# Simulator
 SIM ?= verilator
-
-# Top-level module
 TOPLEVEL = tb_top
-
-# cocotb Python entry
 MODULE = run_test
-
-# Verilog/SystemVerilog sources
-VERILOG_SOURCES = 				\
-  ../../rtl/include/*.sv 		\
-  ../../rtl/interfaces/*.sv 	\
-  ../../rtl/pipeline/*.sv 		\
-  ../../rtl/tb_top.sv
-
-# Enable SystemVerilog
-VERILATOR_ARGS += --sv --trace --trace-structs
-
 TOPLEVEL_LANG = verilog
 
-# Python path for pyUVM
-export PYTHONPATH := $(PWD)/../../test_bench
+# Directory where THIS Makefile lives (works even when called via `make -f ...`)
+MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-# Generate Waveform
-export VERILATOR_TRACE = 1
-export VERILATOR_TRACE_DEPTH = 99
+# Repo root (pyUVM is tools/pyUVM, so repo root is two levels up)
+REPO_ROOT := $(abspath $(MAKEFILE_DIR)/../..)
 
-# Include cocotb makefiles
+# Verilog/SystemVerilog sources (absolute paths, globs ok)
+VERILOG_SOURCES = \
+  $(REPO_ROOT)/rtl/include/*.sv \
+  $(REPO_ROOT)/rtl/interfaces/*.sv \
+  $(REPO_ROOT)/rtl/pipeline/*.sv \
+  $(REPO_ROOT)/rtl/tb_top.sv
+
+# pyUVM python path (absolute)
+export PYTHONPATH := $(REPO_ROOT)/test_bench:$(PYTHONPATH)
+
+# Verilator args
+EXTRA_ARGS += --sv --trace --trace-structs
+
 include $(shell cocotb-config --makefiles)/Makefile.sim

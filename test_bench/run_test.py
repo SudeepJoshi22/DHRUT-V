@@ -15,7 +15,8 @@ logger.addHandler(console)
 
 # File handler
 file_handler = logging.FileHandler("simulation.log", mode='w')
-file_handler.setLevel(logging.INFO)
+file_handler.setLevel(logging.DEBUG)   # or logging.NOTSET
+logger.setLevel(logging.DEBUG)
 file_handler.setFormatter(console_formatter)
 logger.addHandler(file_handler)
 

@@ -108,77 +108,97 @@ class dhrutv(pluginTemplate):
       self.compile_cmd = self.compile_cmd+' -mabi='+('lp64 ' if 64 in ispec['supported_xlen'] else 'ilp32 ')
 
     def runTests(self, testList):
+    
+        # Delete Makefile if it already exists.
+        mk = os.path.join(self.work_dir, "Makefile." + self.name[:-1])
+        if os.path.exists(mk):
+            os.remove(mk)
+    
+        make = utils.makeUtil(makefilePath=mk)
+        make.makeCommand = "make -k -j" + self.num_jobs
+    
+        # Absolute path to your cocotb/pyUVM Makefile
+        # Best: set this in config.ini and read it in __init__ as self.pyuvm_makefile
+        pyuvm_makefile = getattr(self, "pyuvm_makefile", None)
+        if pyuvm_makefile is None:
+            # Assumes: pluginpath = tools/riscof/dhrutv and Makefile is tools/pyUVM/Makefile
+            pyuvm_makefile = os.path.abspath(os.path.join(self.pluginpath, "..", "..", "pyUVM", "Makefile"))
+    
+        # Toolchain helpers (switch to riscv32-unknown-elf-* once installed)
+        objcopy = "riscv64-unknown-elf-objcopy"
+        objdump = "riscv64-unknown-elf-objdump"
+        nm      = "riscv64-unknown-elf-nm"
 
-      # Delete Makefile if it already exists.
-      if os.path.exists(self.work_dir+ "/Makefile." + self.name[:-1]):
-            os.remove(self.work_dir+ "/Makefile." + self.name[:-1])
-      # create an instance the makeUtil class that we will use to create targets.
-      make = utils.makeUtil(makefilePath=os.path.join(self.work_dir, "Makefile." + self.name[:-1]))
+        for testname in testList:
+    
+            testentry = testList[testname]
+            test = testentry["test_path"]
+            test_dir = testentry["work_dir"]
+    
+            elf = "my.elf"
+            hexfile = "my.hex"
+            disfile = "my.dis"
+    
+            sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
+    
+            compile_macros = " -D" + " -D".join(testentry["macros"])
+    
+            # Compile (your initialise() created self.compile_cmd)
+            compile_cmd = self.compile_cmd.format(
+                testentry["isa"].lower(),
+                "64",
+                test,
+                elf,
+                compile_macros
+            )
+    
+            # ELF -> HEX (written into test_dir because we cd there)
+            objcopy_cmd = f"{objcopy} -O verilog {shlex.quote(elf)} {shlex.quote(hexfile)}"
+    
+            # Optional: disassembly artifact per test_dir
+            objdump_cmd = f"{objdump} -D -M numeric,no-aliases {shlex.quote(elf)} > {shlex.quote(disfile)}"
+    
+            # Extract begin and end signatures
+            sig_begin_cmd = (
+                f"{nm} -n {shlex.quote(elf)} | "
+                f"awk '$3==\"begin_signature\" {{print \"0x\"$1; exit}}'"
+            )
+            sig_end_cmd = (
+                f"{nm} -n {shlex.quote(elf)} | "
+                f"awk '$3==\"end_signature\" {{print \"0x\"$1; exit}}'"
+            )
 
-      # set the make command that will be used. The num_jobs parameter was set in the __init__
-      # function earlier
-      make.makeCommand = 'make -k -j' + self.num_jobs
-
-      # we will iterate over each entry in the testList. Each entry node will be refered to by the
-      # variable testname.
-      for testname in testList:
-
-          # for each testname we get all its fields (as described by the testList format)
-          testentry = testList[testname]
-
-          # we capture the path to the assembly file of this test
-          test = testentry['test_path']
-
-          # capture the directory where the artifacts of this test will be dumped/created. RISCOF is
-          # going to look into this directory for the signature files
-          test_dir = testentry['work_dir']
-
-          # name of the elf file after compilation of the test
-          elf = 'my.elf'
-
-          # name of the signature file as per requirement of RISCOF. RISCOF expects the signature to
-          # be named as DUT-<dut-name>.signature. The below variable creates an absolute path of
-          # signature file.
-          sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
-
-          # for each test there are specific compile macros that need to be enabled. The macros in
-          # the testList node only contain the macros/values. For the gcc toolchain we need to
-          # prefix with "-D". The following does precisely that.
-          compile_macros= ' -D' + " -D".join(testentry['macros'])
-
-          # substitute all variables in the compile command that we created in the initialize
-          # function
-          cmd = self.compile_cmd.format(testentry['isa'].lower(), '64', test, elf, compile_macros)
-
-	  # if the user wants to disable running the tests and only compile the tests, then
-	  # the "else" clause is executed below assigning the sim command to simple no action
-	  # echo statement.
-          if self.target_run:
-            # set up the simulation command. Template is for spike. Please change.
-            simcmd = self.dut_exe + ' --isa={0} +signature={1} +signature-granularity=4 {2}'.format(self.isa, sig_file, elf)
-          else:
-            simcmd = 'echo "NO RUN"'
-
-          # concatenate all commands that need to be executed within a make-target.
-          execute = '@cd {0}; {1}; {2};'.format(testentry['work_dir'], cmd, simcmd)
-
-          # create a target. The makeutil will create a target with the name "TARGET<num>" where num
-          # starts from 0 and increments automatically for each new target that is added
-          make.add_target(execute)
-
-      # if you would like to exit the framework once the makefile generation is complete uncomment the
-      # following line. Note this will prevent any signature checking or report generation.
-      #raise SystemExit
-
-      # once the make-targets are done and the makefile has been created, run all the targets in
-      # parallel using the make command set above.
-      make.execute_all(self.work_dir)
-
-      # if target runs are not required then we simply exit as this point after running all
-      # the makefile targets.
-      if not self.target_run:
-          raise SystemExit(0)
-
+            if self.target_run:
+                # Option A: run make *from inside* test_dir so dump.vcd/simulation.log become per-test.
+                # We call the pyUVM Makefile by absolute path with -f.
+                simcmd = (
+                    f"SIG_BEGIN=$({sig_begin_cmd}) "
+                    f"SIG_END=$({sig_end_cmd}) "
+                    f"TEST_HEX={shlex.quote(os.path.join(test_dir, hexfile))} "
+                    f"CYCLE_TIMEOUT=1000 "
+                    f"SIGNATURE_FILE={shlex.quote(sig_file)} "
+                    f"COCOTB_LOG_LEVEL=INFO "
+                    f"make -f {shlex.quote(pyuvm_makefile)} SIM=verilator LOG_LEVEL=DEBUG"
+                )
+            else:
+                simcmd = 'echo "NO RUN"'
+    
+            # Run everything from inside test_dir so outputs are unique per test.
+            execute = (
+                f"@cd {shlex.quote(test_dir)}; "
+                f"{compile_cmd}; "
+                f"{objcopy_cmd}; "
+                f"{objdump_cmd}; "
+                f"{simcmd};"
+            )
+    
+            make.add_target(execute)
+    
+        make.execute_all(self.work_dir)
+    
+        if not self.target_run:
+            raise SystemExit(0)
+  
 #The following is an alternate template that can be used instead of the above.
 #The following template only uses shell commands to compile and run the tests.
 
