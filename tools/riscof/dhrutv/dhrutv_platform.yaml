@@ -1,0 +1,16 @@
+# dhrutv_platform.yaml
+reset:
+  address: 0x80000000   # your TB start PC
+
+# If you don't implement NMI yet, either remove this whole node
+# or specify only ONE of label/address.
+nmi:
+  label: nmi_vector      # OR: address: 0xXXXXXXXX, but not both
+
+mtime:
+  implemented: false
+  address: 0x0
+
+mtimecmp:
+  implemented: false
+  address: 0x0
