@@ -1,19 +1,57 @@
 # test_bench/tb_pyuvm/agents/dmem_agent/dmem_monitor.py
+import logging
 import cocotb
+import os
+import subprocess
 from cocotb.triggers import RisingEdge, ReadOnly
 from pyuvm import uvm_monitor, uvm_analysis_port
 
-class DMemMonitor(uvm_monitor):
-    # Set it here (EDIT THIS):
-    TOHOST_ADDR = 0x80001000
+class MemWrite:
+    def __init__(self, addr, data, wstrb, size=4):
+        self.addr = addr
+        self.data = data
+        self.wstrb = wstrb
+        self.size = size
 
+class DMemMonitor(uvm_monitor):
     def build_phase(self):
+        self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
         self.dmem_if = cocotb.top.dmem_if
 
+        # Dynamically determine TOHOST_ADDR
+        self.tohost_addr = self._get_tohost_addr()
+        self.logger.info(f"Monitoring tohost at 0x{self.tohost_addr:08x}")
+
         self.ap = uvm_analysis_port("ap", self)               # all transactions
+        self.memwr_ap = uvm_analysis_port("memwr_ap", self)   # only writes (for signature)
         self.tohost_ap = uvm_analysis_port("tohost_ap", self) # tohost “event” channel
 
         self.shadow = {}  # for merging partial writes via wstrb
+
+    def _get_tohost_addr(self):
+        """Try to find tohost address from environment or ELF."""
+        # 1. Check environment variable (set by riscof plugin)
+        env_addr = os.environ.get("TOHOST_ADDR")
+        if env_addr:
+            try:
+                return int(env_addr, 16) if env_addr.startswith("0x") else int(env_addr)
+            except ValueError:
+                pass
+
+        # 2. Try to extract from ELF if available
+        elf_path = os.environ.get("TEST_ELF")
+        if elf_path and os.path.exists(elf_path):
+            try:
+                # Use nm to find tohost symbol
+                cmd = f"riscv64-unknown-elf-nm -n {elf_path} | awk '$3==\"tohost\" {{print $1}}'"
+                addr_str = subprocess.check_output(cmd, shell=True).decode().strip()
+                if addr_str:
+                    return int(addr_str, 16)
+            except Exception as e:
+                self.logger.debug(f"Failed to extract tohost from ELF: {e}")
+
+        # 3. Fallback default
+        return 0x80001000
 
     async def run_phase(self):
         while True:
@@ -47,10 +85,14 @@ class DMemMonitor(uvm_monitor):
                     f"wstrb=0x{wstrb:x} merged=0x{new_word:08x}"
                 )
 
+                # Broadcast to generic AP
                 self.ap.write(("W", aligned, wdata, wstrb, new_word))
+                
+                # Broadcast to signature AP
+                self.memwr_ap.write(MemWrite(aligned, wdata, wstrb))
 
-                if aligned == self.TOHOST_ADDR:
-                    self.logger.warning(f"TOHOST WRITE value=0x{new_word:08x}")
+                if aligned == self.tohost_addr:
+                    self.logger.info(f"TOHOST WRITE value=0x{new_word:08x}")
                     self.tohost_ap.write(new_word)
 
             else:

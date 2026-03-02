@@ -72,11 +72,11 @@ class spike(pluginTemplate):
        # Note the march is not hardwired here, because it will change for each
        # test. Similarly the output elf name and compile macros will be assigned later in the
        # runTests function
-       self.compile_cmd = 'riscv{1}-unknown-elf-gcc -march={0} \
+       self.compile_cmd = 'riscv64-unknown-elf-gcc -march={0} \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
          -T '+self.pluginpath+'/env/link.ld\
          -I '+self.pluginpath+'/env/\
-         -I ' + archtest_env + ' {2} -o {3} {4}'
+         -I ' + archtest_env + ' {1} -o {2} {3}'
 
        # add more utility snippets here
 
@@ -148,14 +148,15 @@ class spike(pluginTemplate):
 
           # substitute all variables in the compile command that we created in the initialize
           # function
-          cmd = self.compile_cmd.format(testentry['isa'].lower(), self.xlen, test, elf, compile_macros)
+          cmd = self.compile_cmd.format(testentry['isa'].lower(), test, elf, compile_macros)
 
 	  # if the user wants to disable running the tests and only compile the tests, then
 	  # the "else" clause is executed below assigning the sim command to simple no action
 	  # echo statement.
           if self.target_run:
             # set up the simulation command. Template is for spike. Please change.
-            simcmd = self.dut_exe + ' --isa={0} +signature={1} +signature-granularity=4 {2}'.format(self.isa, sig_file, elf)
+            # Added -l for log/trace and redirect to spike.log
+            simcmd = self.dut_exe + ' -l --isa={0} +signature={1} +signature-granularity=4 {2} 2> spike.log'.format(self.isa, sig_file, elf)
           else:
             simcmd = 'echo "NO RUN"'
 

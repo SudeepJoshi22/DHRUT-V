@@ -14,6 +14,9 @@ class Env(uvm_env):
         self.dmem_agent = DMemAgent("dmem_agent", self)
 
         self.scoreboard = Scoreboard("scoreboard", self)
+        
+        # Enable memwrite capture in build phase so ports exist during connect phase
+        self.scoreboard.enable_memwrite_capture()
 
     def connect_phase(self):
         super().connect_phase()
@@ -21,10 +24,9 @@ class Env(uvm_env):
         # Always connect tohost (PASS/FAIL)
         self.dmem_agent.monitor.tohost_ap.connect(self.scoreboard.tohost_export)
     
-        # Optionally connect mem write channel (signature support)
+        # Connect mem write channel (signature support)
         mon = self.dmem_agent.monitor
         if hasattr(mon, "memwr_ap"):
-            self.scoreboard.enable_memwrite_capture()
             mon.memwr_ap.connect(self.scoreboard.memwr_export)
         else:
             self.logger.warning("DMemMonitor has no memwr_ap; signature dump will be empty/disabled.")

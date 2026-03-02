@@ -107,6 +107,22 @@ stages:
         description: "Sign-extended immediate - extracted from id_issue_uop"
         source: "uop_extraction"
 
+      # Load signal - EXTRACTED from packed id_issue_uop
+      - name: "load"
+        signal_path: "uop_is_load"
+        format: "{:1d}"
+        type: "bool"
+        description: "Is load instruction - extracted from id_issue_uop"
+        source: "uop_extraction"
+
+      # Store signal - EXTRACTED from packed id_issue_uop
+      - name: "store"
+        signal_path: "uop_is_store"
+        format: "{:1d}"
+        type: "bool"
+        description: "Is store instruction - extracted from id_issue_uop"
+        source: "uop_extraction"
+
   # ─────────────────────────────────────────────────────────────────────────
   # ISSUE Stage - Instruction Scheduling and Register File Access
   # ─────────────────────────────────────────────────────────────────────────
@@ -142,19 +158,113 @@ stages:
     display_name: "ALU"
     description: "ALU execution stage - performs arithmetic and logic operations"
     signals:
-      # ALU result valid
+      # Valid micro-operation signal
       - name: "valid"
-        signal_path: "alu_retire_valid"
+        signal_path: "ALU.valid_q"
         format: "{:1d}"
         type: "bool"
-        description: "ALU result valid"
-      
+        description: "ALU operation in progress"
+
+      # Program Counter
+      - name: "PC"
+        signal_path: "ALU.pc_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC of instruction in ALU"
+
+      # ALU opcode
+      - name: "opcode"
+        signal_path: "uop_alu_opcode"
+        format: "0x{:02x}"
+        type: "int"
+        description: "UOP opcode in ALU"
+        source: "uop_alu_extraction"
+
+      # ALU operand 1
+      - name: "op1"
+        signal_path: "ALU.op1_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU operand 1"
+
+      # ALU operand 2
+      - name: "op2"
+        signal_path: "ALU.op2_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU operand 2"
+
       # ALU result value
       - name: "result"
-        signal_path: "alu_retire_result"
+        signal_path: "ALU.alu_result"
         format: "0x{:08x}"
         type: "int"
         description: "ALU result value"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # LSU Stage - Load/Store Execution
+  # ─────────────────────────────────────────────────────────────────────────
+  LSU:
+    display_name: "LSU"
+    description: "Load/Store Unit - handles memory access, forwards loads, signals stalls"
+    signals:
+      # LSU retire valid
+      - name: "valid"
+        signal_path: "LSU.valid_q"
+        format: "{:1d}"
+        type: "bool"
+        description: "LSU operation in progress"
+
+      # Instruction PC in LSU
+      - name: "PC"
+        signal_path: "LSU.pc_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC of instruction in LSU"
+
+      # Is load instruction
+      - name: "load"
+        signal_path: "uop_lsu_is_load"
+        format: "{:1d}"
+        type: "bool"
+        description: "Instruction is a load"
+        source: "uop_lsu_extraction"
+
+      # Is store instruction
+      - name: "store"
+        signal_path: "uop_lsu_is_store"
+        format: "{:1d}"
+        type: "bool"
+        description: "Instruction is a store"
+        source: "uop_lsu_extraction"
+
+      # Computed memory address
+      - name: "addr"
+        signal_path: "LSU.mem_addr"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Final memory address"
+
+      # Store data (if store)
+      - name: "sdata"
+        signal_path: "LSU.store_data_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Store data"
+
+      # Load result data
+      - name: "ldata"
+        signal_path: "LSU.o_load_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Processed load data"
+
+      # Stall from LSU
+      - name: "stall"
+        signal_path: "lsu_if.s_stall_from_lsu"
+        format: "{:1d}"
+        type: "bool"
+        description: "Stall signal to pipeline from LSU"
 
   # ─────────────────────────────────────────────────────────────────────────
   # RETIRE Stage - Writeback to Register File and Commit
@@ -184,70 +294,6 @@ stages:
         type: "int"
         description: "Write-back data value"
 
-# ─────────────────────────────────────────────────────────────────────────
-# LSU Stage - Load/Store Execution
-# ─────────────────────────────────────────────────────────────────────────
-LSU:
-  display_name: "LSU"
-  description: "Load/Store Unit - handles memory access, forwards loads, signals stalls"
-  signals:
-    # LSU retire valid
-    - name: "valid"
-      signal_path: "lsu_valid"
-      format: "{:1d}"
-      type: "bool"
-      description: "LSU result retire valid"
-
-    # Load result data
-    - name: "load_data"
-      signal_path: "lsu_load_data"
-      format: "0x{:08x}"
-      type: "int"
-      description: "Loaded data from DMEM"
-
-    # Forwarded micro-op (uop)
-    - name: "uop_forward"
-      signal_path: "lsu_uop_forward"
-      format: "0x{:08x}"
-      type: "int"
-      description: "Forwarded LSU uop for replay/forwarding"
-
-    # Stall from LSU
-    - name: "stall"
-      signal_path: "o_stall_from_lsu"
-      format: "{:1d}"
-      type: "bool"
-      description: "Stall signal to pipeline from LSU"
-
-    # Issue valid (from lsu_if)
-    - name: "issue_valid"
-      signal_path: "lsu_if.valid"
-      format: "{:1d}"
-      type: "bool"
-      description: "LSU issue valid"
-
-    # Issue address
-    - name: "issue_addr"
-      signal_path: "lsu_if.addr"
-      format: "0x{:08x}"
-      type: "int"
-      description: "Memory address for load/store"
-
-    # DMEM master valid
-    - name: "dmem_mvalid"
-      signal_path: "dmem_if.master.m_valid"
-      format: "{:1d}"
-      type: "bool"
-      description: "DMEM request valid"
-
-    # DMEM ready (slave response)
-    - name: "dmem_sready"
-      signal_path: "dmem_if.master.s_ready"
-      format: "{:1d}"
-      type: "bool"
-      description: "DMEM slave ready"
-
-
 # ───────────────────────────────────────────────────────────────────────────
 # Optional: Define which stages to display (subset of available stages)
 # ───────────────────────────────────────────────────────────────────────────
@@ -256,78 +302,94 @@ display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE"]
 # ───────────────────────────────────────────────────────────────────────────
 # UOP Bit Extraction Configuration
 # ───────────────────────────────────────────────────────────────────────────
-# Extracts individual fields from the packed id_issue_uop signal
-# 
-# IMPORTANT: These bit ranges are templates. You MUST verify against your
-# actual uop_t struct definition in riscv_uop_pkg.sv
-#
-# The monitor will dynamically extract these fields from id_issue_uop and
-# make them available to display signals marked with source: "uop_extraction"
-#
-# Bit layout assumptions (adjust to match your actual struct):
-# [68]      - uop_valid     (1 bit)
-# [67:61]   - uop_opcode    (7 bits)
-# [60:51]   - uop_alu_op    (10 bits) [NOT USED IN DISPLAY - for reference]
-# [50:46]   - uop_rs1       (5 bits)
-# [45:41]   - uop_rs2       (5 bits)
-# [40:36]   - uop_rd        (5 bits)
-# [35:4]    - uop_imm       (32 bits)
-# [3]       - uop_uses_rs1  (1 bit)
-# [2]       - uop_uses_rs2  (1 bit)
-# [1]       - uop_writes_rd (1 bit)
-# ───────────────────────────────────────────────────────────────────────────
 uop_extraction:
   signal_path: "id_issue_uop"
   fields:
     # Valid bit (MSB, indicates this is a valid UOP)
     - name: "uop_valid"
-      bits: [68, 68]
+      bits: [73, 73]
       description: "Valid micro-operation"
     
     # Opcode field (7 bits) - operation type
     - name: "uop_opcode"
-      bits: [67, 61]
+      bits: [72, 66]
       description: "7-bit opcode"
     
     # ALU operation (10 bits) - ALU suboperation [OPTIONAL - not displayed]
     - name: "uop_alu_op"
-      bits: [60, 51]
+      bits: [65, 56]
       description: "10-bit ALU operation type (reference only)"
     
     # Source register 1 (5 bits)
     - name: "uop_rs1"
-      bits: [50, 46]
+      bits: [55, 51]
       description: "5-bit source register 1"
     
     # Source register 2 (5 bits)
     - name: "uop_rs2"
-      bits: [45, 41]
+      bits: [50, 46]
       description: "5-bit source register 2"
     
     # Destination register (5 bits)
     - name: "uop_rd"
-      bits: [40, 36]
+      bits: [45, 41]
       description: "5-bit destination register (rd)"
     
     # Immediate value (32 bits)
     - name: "uop_imm"
-      bits: [35, 4]
+      bits: [40, 9]
       description: "32-bit sign-extended immediate"
     
     # Uses rs1 flag (1 bit)
     - name: "uop_uses_rs1"
-      bits: [3, 3]
+      bits: [8, 8]
       description: "Instruction uses rs1"
     
     # Uses rs2 flag (1 bit)
     - name: "uop_uses_rs2"
-      bits: [2, 2]
+      bits: [7, 7]
       description: "Instruction uses rs2"
     
     # Writes rd flag (1 bit)
     - name: "uop_writes_rd"
-      bits: [1, 1]
+      bits: [6, 6]
       description: "Instruction writes rd"
+    
+    # Is load flag (1 bit)
+    - name: "uop_is_load"
+      bits: [4, 4]
+      description: "Is load instruction"
+    
+    # Is store flag (1 bit)
+    - name: "uop_is_store"
+      bits: [3, 3]
+      description: "Is store instruction"
+
+# ───────────────────────────────────────────────────────────────────────────
+# UOP Bit Extraction for ALU Stage
+# ───────────────────────────────────────────────────────────────────────────
+uop_alu_extraction:
+  signal_path: "ALU.uop_q"
+  fields:
+    - name: "uop_alu_opcode"
+      bits: [72, 66]
+      description: "Opcode in ALU stage"
+
+# ───────────────────────────────────────────────────────────────────────────
+# UOP Bit Extraction for LSU Stage
+# ───────────────────────────────────────────────────────────────────────────
+uop_lsu_extraction:
+  signal_path: "LSU.uop_q"
+  fields:
+    # Is load flag (bit 4)
+    - name: "uop_lsu_is_load"
+      bits: [4, 4]
+      description: "Is load instruction in LSU"
+    
+    # Is store flag (bit 3)
+    - name: "uop_lsu_is_store"
+      bits: [3, 3]
+      description: "Is store instruction in LSU"
 
 # ───────────────────────────────────────────────────────────────────────────
 # Display Configuration
@@ -347,23 +409,3 @@ display_config:
   
   # Enable color output in logs (if terminal supports ANSI colors)
   use_colors: true
-
-# ───────────────────────────────────────────────────────────────────────────
-# Register File Snapshot (Optional)
-# Monitors changes to specific registers during execution
-# ───────────────────────────────────────────────────────────────────────────
-register_tracking:
-  enabled: false
-  # Registers to track (can be empty to track all writes)
-  registers: ["x1", "x2", "x10", "x11"]  # ra, sp, a0, a1
-  log_on_write: true
-
-# ───────────────────────────────────────────────────────────────────────────
-# Performance Metrics (Optional)
-# Computes and logs performance indicators
-# ───────────────────────────────────────────────────────────────────────────
-metrics:
-  enabled: false
-  compute_ipc: true           # Instructions Per Cycle
-  compute_stall_ratio: true   # Percentage of cycles with stalls
-  compute_branch_accuracy: false  # Requires branch signals

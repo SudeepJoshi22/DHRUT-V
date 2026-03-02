@@ -21,10 +21,11 @@ class CpuMonitorItem(uvm_sequence_item):
                     # Initialize all signal attributes
                     setattr(self, signal['signal_path'], None)
             
-            # Handle UOP extraction fields if defined
-            if 'uop_extraction' in config:
-                for field in config['uop_extraction']['fields']:
-                    setattr(self, field['name'], None)
+            # Handle all extraction sections (keys ending in _extraction)
+            for key, val in config.items():
+                if key.endswith('_extraction') and isinstance(val, dict) and 'fields' in val:
+                    for field in val['fields']:
+                        setattr(self, field['name'], None)
     
     def __str__(self):
         if not self.config:
@@ -104,13 +105,10 @@ class CpuMonitor(uvm_monitor):
     def build_phase(self):
         self.dut = cocotb.top
     
-    def _extract_uop_fields(self, uop_raw):
-        """Extract UOP fields from packed signal based on config"""
-        if 'uop_extraction' not in self.config:
-            return {}
-        
+    def _extract_fields(self, raw_val, extraction_config):
+        """Extract fields from packed signal based on config"""
         extracted = {}
-        for field in self.config['uop_extraction']['fields']:
+        for field in extraction_config['fields']:
             field_name = field['name']
             bits = field['bits']
             
@@ -118,10 +116,15 @@ class CpuMonitor(uvm_monitor):
                 msb, lsb = bits
                 if msb == lsb:
                     # Single bit
-                    extracted[field_name] = bool(uop_raw[msb])
+                    extracted[field_name] = bool(raw_val[msb])
                 else:
                     # Multi-bit field
-                    extracted[field_name] = int(uop_raw[msb:lsb])
+                    # Use cocotb slice if possible or manual shift/mask
+                    try:
+                        extracted[field_name] = int(raw_val[msb:lsb])
+                    except:
+                        # Fallback for non-standard objects
+                        extracted[field_name] = int(raw_val) >> lsb & ((1 << (msb - lsb + 1)) - 1)
             else:
                 self.logger.warning(f"Invalid bit specification for {field_name}: {bits}")
         
@@ -144,7 +147,7 @@ class CpuMonitor(uvm_monitor):
                 return obj.value
             return obj
         except AttributeError as e:
-            self.logger.warning(f"Signal not found: {signal_path} - {e}")
+            self.logger.debug(f"Signal not found: {signal_path}")
             return None
     
     async def run_phase(self):
@@ -157,14 +160,6 @@ class CpuMonitor(uvm_monitor):
         
         self.logger.info("Monitor now observing DUT successfully!")
         
-        # Debug: print all top-level attributes (only once)
-        if not hasattr(self, '_printed_attrs'):
-            self.logger.info("Available top-level signals in dut:")
-            for attr in dir(self.dut):
-                if not attr.startswith('_'):
-                    self.logger.info(f"  - {attr}")
-            self._printed_attrs = True
-        
         # Create monitor item with config
         item = CpuMonitorItem(config=self.config)
         
@@ -173,16 +168,15 @@ class CpuMonitor(uvm_monitor):
             
             item.timestamp = cocotb.utils.get_sim_time(unit="ns")
             
-            # Dynamically sample all signals from config
+            # 1. Dynamically sample all regular signals from config
             for stage_name, stage_config in self.config['stages'].items():
                 for signal in stage_config['signals']:
+                    # Skip signals that come from any extraction section
+                    if signal.get('source'):
+                        continue
+                        
                     signal_path = signal['signal_path']
                     signal_type = signal['type']
-                    
-                    # Skip signals that come from UOP extraction
-                    if signal.get('source') == 'uop_extraction':
-                        # These will be populated by the UOP extraction logic below
-                        continue
                     
                     # Get raw value from DUT
                     raw_value = self._get_signal_value(signal_path)
@@ -193,32 +187,33 @@ class CpuMonitor(uvm_monitor):
                             value = bool(raw_value)
                         elif signal_type == "int":
                             # Handle cocotb LogicArray
-                            if hasattr(raw_value, 'integer'):
-                                value = raw_value.integer
+                            if hasattr(raw_value, 'to_unsigned'):
+                                value = raw_value.to_unsigned()
                             else:
-                                value = int(raw_value)
+                                try:
+                                    value = int(raw_value)
+                                except:
+                                    value = 0
                         else:
                             value = raw_value
                         
                         setattr(item, signal_path, value)
             
-            # Handle UOP extraction if configured
-            if 'uop_extraction' in self.config:
-                uop_signal_path = self.config['uop_extraction']['signal_path']
-                uop_raw = self._get_signal_value(uop_signal_path)
-                
-                if uop_raw is not None:
-                    extracted_fields = self._extract_uop_fields(uop_raw)
+            # 2. Handle all extraction sections (keys ending in _extraction)
+            for key, extraction_config in self.config.items():
+                if key.endswith('_extraction') and isinstance(extraction_config, dict) and 'signal_path' in extraction_config:
+                    uop_signal_path = extraction_config['signal_path']
+                    uop_raw = self._get_signal_value(uop_signal_path)
                     
-                    # Set extracted fields in item
-                    for field_name, field_value in extracted_fields.items():
-                        setattr(item, field_name, field_value)
-                else:
-                    self.logger.debug(f"UOP signal not found: {uop_signal_path}")
+                    if uop_raw is not None:
+                        extracted_fields = self._extract_fields(uop_raw, extraction_config)
+                        
+                        # Set extracted fields in item
+                        for field_name, field_value in extracted_fields.items():
+                            setattr(item, field_name, field_value)
             
             # Log the item (will use __str__ method)
-            #self.logger.info(str(item))
+            self.logger.info(str(item))
             
             # Broadcast for scoreboard/coverage
             self.ap.write(item)
-

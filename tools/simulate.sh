@@ -89,9 +89,14 @@ echo "  DIS: $DIS"
 # ----------------------------------------
 # EXPORT TO SIM
 # ----------------------------------------
+# ----------------------------------------
+# EXPORT ENV VARS
+# ----------------------------------------
 export TEST_HEX=$HEX
+export TEST_ELF=$ELF
+export TOHOST_ADDR=0x80001000
+export CYCLE_TIMEOUT=10000
 export COCOTB_LOG_LEVEL=INFO
-export CYCLE_TIMEOUT
 
 # ----------------------------------------
 # RUN SIMULATION

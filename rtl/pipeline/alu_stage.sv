@@ -27,6 +27,7 @@ module alu_stage (
   // ───────────────────────────────────────────────
   logic        valid_q;
   uop_t        uop_q;
+  logic [31:0] pc_q;
   logic [31:0] op1_q;
   logic [31:0] op2_q;
 
@@ -34,12 +35,14 @@ module alu_stage (
     if (!rst_n || i_flush) begin
       valid_q <= 1'b0;
       uop_q   <= '0;
+      pc_q    <= '0;
       op1_q   <= '0;
       op2_q   <= '0;
     end
     else if (!i_stall) begin
       valid_q <= issue_if.m_valid;
       uop_q   <= issue_if.m_uop;
+      pc_q    <= issue_if.m_pc;
       op1_q   <= issue_if.m_op1;
       op2_q   <= issue_if.m_op2;
     end

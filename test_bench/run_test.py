@@ -6,19 +6,25 @@ import logging
 logger = logging.getLogger("my_cpu_tb")
 logger.setLevel(logging.INFO)
 
-# Console handler
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-console_formatter = logging.Formatter(' %(levelname)-2s | %(name)s: %(message)s')
-console.setFormatter(console_formatter)
-logger.addHandler(console)
+# File handler - ensure we start fresh and don't duplicate handlers
+root_logger = logging.getLogger()
+for h in root_logger.handlers[:]:
+    if isinstance(h, logging.FileHandler):
+        root_logger.removeHandler(h)
 
-# File handler
 file_handler = logging.FileHandler("simulation.log", mode='w')
-file_handler.setLevel(logging.DEBUG)   # or logging.NOTSET
-logger.setLevel(logging.DEBUG)
+file_handler.setLevel(logging.DEBUG)
+console_formatter = logging.Formatter(' %(levelname)-2s | %(name)s: %(message)s')
 file_handler.setFormatter(console_formatter)
-logger.addHandler(file_handler)
+
+# Attach to root logger to capture everything in simulation.log
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(file_handler)
+
+# For our specific monitor logger, just set its level; it will propagate to root
+logger = logging.getLogger("my_cpu_tb")
+logger.setLevel(logging.DEBUG)
+# No manual console handler needed, cocotb handles console output
 
 import cocotb
 from cocotb.clock import Clock

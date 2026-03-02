@@ -1,4 +1,5 @@
 # test_bench/tb_pyuvm/agents/imem_agent/imem_driver.py
+import logging
 import random
 import cocotb
 import pathlib
@@ -50,6 +51,7 @@ class IMemDriver(uvm_driver):
 
     def build_phase(self):
         # Get the interface handle from ConfigDB (set in run_test.py)
+        self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
         self.imem_if = cocotb.top.imem_if
 
         self.mem = {}

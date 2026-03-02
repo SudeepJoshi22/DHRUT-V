@@ -11,7 +11,7 @@ class DMemAgent(uvm_agent):
     def build_phase(self):
         # Active agent with only a driver for now
         self.driver = DMemDriver.create("dmem_driver", self)
-        self.monitor = DMemMonitor.create("demm_monitor", self)
+        self.monitor = DMemMonitor.create("dmem_monitor", self)
 
         # If you later add sequencer/monitor, uncomment and wire like IMemAgent
         # self.monitor = DMemMonitor.create("dmem_monitor", self)

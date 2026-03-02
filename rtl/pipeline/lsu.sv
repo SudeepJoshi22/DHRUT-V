@@ -23,6 +23,7 @@ module lsu (
   // ───────────────────────────────────────────────
   logic        valid_q;
   uop_t        uop_q;
+  logic [31:0] pc_q;
   logic [31:0] addr_base_q;
   logic [31:0] store_data_q;
 
@@ -33,12 +34,14 @@ module lsu (
     if (!rst_n) begin
       valid_q       <= 1'b0;
       uop_q         <= '0;
+      pc_q          <= '0;
       addr_base_q   <= '0;
       store_data_q  <= '0;
     end
     else if(!internal_stall && !valid_q) begin
       valid_q       <= issue_if.m_valid;
       uop_q         <= issue_if.m_uop;
+      pc_q          <= issue_if.m_pc;
       addr_base_q   <= issue_if.m_addr_base;
       store_data_q  <= issue_if.m_store_data;
     end
@@ -46,6 +49,7 @@ module lsu (
       // Transaction completed → consume the latched request
       valid_q       <= 1'b0;
       uop_q         <= '0;
+      pc_q          <= '0;
       addr_base_q   <= '0;
       store_data_q  <= '0;
       // Do NOT clear uop_q/addr_base_q/store_data_q — they can hold until next request

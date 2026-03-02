@@ -1,3 +1,4 @@
+import logging
 import os
 import cocotb
 from cocotb.triggers import Timer
@@ -9,21 +10,21 @@ from pyuvm import (
 )
 
 class Scoreboard(uvm_component):
+    def __init__(self, name, parent):
+        super().__init__(name, parent)
+        self.memwr_fifo = None
+        self.memwr_export = None
+        self.memwr_get_port = None
+        self.mem = {}
+
     def build_phase(self):
         super().build_phase()
+        self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
 
         # tohost (PASS/FAIL)
         self.tohost_fifo = uvm_tlm_analysis_fifo("tohost_fifo", self)
         self.tohost_export = self.tohost_fifo.analysis_export
         self.tohost_get_port = uvm_get_port("tohost_get_port", self)
-
-        # Memory model (byte-addressed) for signature dump
-        self.mem = {}
-
-        # Optional mem-write capture plumbing (disabled by default)
-        self.memwr_fifo = None
-        self.memwr_export = None
-        self.memwr_get_port = None
 
     def connect_phase(self):
         super().connect_phase()
@@ -88,12 +89,11 @@ class Scoreboard(uvm_component):
         begin_s  = os.environ.get("SIG_BEGIN")
         end_s    = os.environ.get("SIG_END")
 
-        print(f"sig being: {hex(begin_s)}")
-        print(f"sig end:   {hex(end_s)}")
-
         if not sig_path:
             # Not running under RISCOF (or not configured). Nothing to do.
             return
+
+        self.logger.debug(f"Signature requested: {sig_path}, begin={begin_s}, end={end_s}")
 
         # If we can't compute a range, still create an empty file so RISCOF doesn't fail on missing file.
         if not begin_s or not end_s:

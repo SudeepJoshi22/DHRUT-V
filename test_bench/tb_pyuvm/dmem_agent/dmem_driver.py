@@ -2,6 +2,7 @@
 import random
 import cocotb
 import os
+import logging
 
 from cocotb.triggers import RisingEdge
 from pyuvm import uvm_driver
@@ -11,56 +12,69 @@ class DMemDriver(uvm_driver):
     Simple DMEM slave:
     - Preloaded memory from TEST_HEX (same format as IMEM).
     - Handles word-aligned loads/stores.
-    - Random response stalls (0–2 cycles).
+    - Random response stalls (1–5 cycles).
     """
 
     def load_verilog_hex(self, path):
-        # Same helper as IMemDriver, reused for data memory
-        mem = {}
+        """
+        Load a Verilog-style @address hex file into a byte-oriented dictionary.
+        Then pack it into 32-bit words for our backing store.
+        """
+        bytes_mem = {}
         addr = 0
 
-        with open(path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("//"):
+                        continue
 
-                if line.startswith("@"):
-                    addr = int(line[1:], 16)
-                else:
-                    bytestr = line.split()
-                    for b in bytestr:
-                        mem[addr] = int(b, 16)
-                        addr += 1
+                    if line.startswith("@"):
+                        addr = int(line[1:], 16)
+                    else:
+                        bytestr = line.split()
+                        for b in bytestr:
+                            bytes_mem[addr] = int(b, 16)
+                            addr += 1
+        except FileNotFoundError:
+            self.logger.warning(f"Hex file {path} not found; memory starts empty.")
+            return {}
 
-        # Pack bytes → 32‑bit words
+        # Pack bytes into 32-bit little-endian words
         word_mem = {}
-        for a in sorted(mem.keys()):
-            if a % 4 == 0:
+        if bytes_mem:
+            # Find all 4-byte aligned addresses covered by the byte memory
+            min_a = min(bytes_mem.keys()) & ~3
+            max_a = max(bytes_mem.keys()) | 3
+            
+            for a in range(min_a, max_a + 1, 4):
                 word = (
-                    mem.get(a, 0)
-                    | (mem.get(a + 1, 0) << 8)
-                    | (mem.get(a + 2, 0) << 16)
-                    | (mem.get(a + 3, 0) << 24)
+                    bytes_mem.get(a, 0)
+                    | (bytes_mem.get(a + 1, 0) << 8)
+                    | (bytes_mem.get(a + 2, 0) << 16)
+                    | (bytes_mem.get(a + 3, 0) << 24)
                 )
-                word_mem[a] = word
+                if any(x in bytes_mem for x in range(a, a+4)):
+                    word_mem[a] = word
 
         return word_mem
 
     def build_phase(self):
-        # Get the DMEM interface from top (match your DUT)
+        # Use prefix-based logger
+        self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
         self.dmem_if = cocotb.top.dmem_if
-
-        # Initialize backing store from same TEST_HEX (or a separate env var)
+        
+        # Initialize memory once
         hex_file = os.getenv("TEST_HEX")
-        self.mem = self.load_verilog_hex(hex_file) if hex_file else {}
-
-        self.logger.info("DMEM initial contents:")
-        for a, w in self.mem.items():
-            self.logger.info(f"0x{a:08x}: 0x{w:08x}")
+        if hex_file:
+            self.mem = self.load_verilog_hex(hex_file)
+            self.logger.info(f"DMEM preloaded from {hex_file} ({len(self.mem)} words)")
+        else:
+            self.mem = {}
+            self.logger.info("DMEM initialized empty (no TEST_HEX)")
 
     async def run_phase(self):
-
         # Default bus values
         self.dmem_if.s_ready.value = 0
         self.dmem_if.s_rdata.value = 0
@@ -73,20 +87,23 @@ class DMemDriver(uvm_driver):
                 self.dmem_if.s_ready.value = 0
                 continue
 
-            addr = self.dmem_if.m_addr.value.to_unsigned()
+            # Capture request signals
+            try:
+                addr = int(self.dmem_if.m_addr.value)
+            except:
+                addr = 0
+                
             aligned_addr = addr & ~3
+            is_write = (int(self.dmem_if.m_wstrb.value) != 0)
 
-            is_write = int(self.dmem_if.m_wstrb.value) != 0
-
-            # Always give 2-5 cycles of delay for Dmem transaction
+            # Random stall (1-5 cycles)
             stall_cycles = random.randint(1, 5)
-            self.logger.debug(f"DMem introducing {stall_cycles} stall cycle(s)")
             self.dmem_if.s_ready.value = 0
             for _ in range(stall_cycles):
                 await RisingEdge(self.dmem_if.clk)
 
             if is_write:
-                # Write: apply byte enables into backing store
+                # Capture write data and strobes
                 wdata = int(self.dmem_if.m_wdata.value)
                 wstrb = int(self.dmem_if.m_wstrb.value)
 
@@ -100,23 +117,20 @@ class DMemDriver(uvm_driver):
                         new_word |= byte << (8 * i)
 
                 self.mem[aligned_addr] = new_word
-                self.logger.debug(
-                    f"DMEM WRITE addr=0x{aligned_addr:08x}, "
-                    f"wdata=0x{wdata:08x}, wstrb=0x{wstrb:x}, "
-                    f"new_word=0x{new_word:08x}"
-                )
-
-                # For a pure write, rdata is typically don't‑care
+                # self.logger.debug(
+                #     f"DMEM WRITE addr=0x{addr:08x} (aligned=0x{aligned_addr:08x}) "
+                #     f"wdata=0x{wdata:08x} wstrb=0x{wstrb:x} -> word=0x{new_word:08x}"
+                # )
                 self.dmem_if.s_rdata.value = 0
-
             else:
                 # Read: fetch word, default to 0
                 rdata = self.mem.get(aligned_addr, 0)
                 self.dmem_if.s_rdata.value = rdata
-                self.logger.debug(
-                    f"DMEM READ addr=0x{aligned_addr:08x}, rdata=0x{rdata:08x}"
-                )
+                # self.logger.debug(
+                #     f"DMEM READ  addr=0x{addr:08x} (aligned=0x{aligned_addr:08x}) -> rdata=0x{rdata:08x}"
+                # )
 
-            # Complete bus handshake
+            # Complete handshake
             self.dmem_if.s_ready.value = 1
-
+            await RisingEdge(self.dmem_if.clk)
+            self.dmem_if.s_ready.value = 0
