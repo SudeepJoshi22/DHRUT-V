@@ -89,7 +89,9 @@ class DMemMonitor(uvm_monitor):
                 self.ap.write(("W", aligned, wdata, wstrb, new_word))
                 
                 # Broadcast to signature AP
-                self.memwr_ap.write(MemWrite(aligned, wdata, wstrb))
+                txn = MemWrite(aligned, wdata, wstrb)
+                self.logger.debug(f"Emitting MemWrite: addr=0x{txn.addr:08x} data=0x{txn.data:08x} wstrb=0x{txn.wstrb:x}")
+                self.memwr_ap.write(txn)
 
                 if aligned == self.tohost_addr:
                     self.logger.info(f"TOHOST WRITE value=0x{new_word:08x}")

@@ -1,8 +1,10 @@
 import pyuvm
 from pyuvm import *
 import os
+import logging
 
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import RisingEdge, Event
+import cocotb
 
 from .env import Env
 
@@ -12,33 +14,37 @@ class DhrutVTest(uvm_test):
     Single test with PASS/FAIL mechanism
     """
     def build_phase(self):
-        
-        #self.logger.info(f"DEBUG: cocotb.plusargs = {cocotb.plusargs}")
-        #self.logger.info(f"DEBUG: cocotb.argv = {cocotb.argv}")
-        #self.logger.info(f"DEBUG: os.environ keys with CYCLE = {[k for k in os.environ if 'CYCLE' in k]}")  # Optional debug
-        
-        # Parse CYCLE_TIMEOUT from environment variable
-        try:
-            cycle_timeout = int(os.environ["CYCLE_TIMEOUT"])
-            print(f"[DEBUG] got cycle_timeout = {cycle_timeout}")
-            ConfigDB().set(None, "*", "CYCLE_TIMEOUT", cycle_timeout)
-            self.logger.info(f"✓ Set CYCLE_TIMEOUT={cycle_timeout}")
-        except KeyError:
-            default = 100
-            ConfigDB().set(None, "*", "CYCLE_TIMEOUT", default)
-            self.logger.info(f"⚠ Default CYCLE_TIMEOUT={default}")
-
+        super().build_phase()
         self.env = Env("env", self)
+        
+        # Create a standard cocotb event
+        self.end_event = Event("end_event")
+        ConfigDB().set(None, "*", "end_event", self.end_event)
 
     async def run_phase(self):
         self.raise_objection()
         
-        cycle_timeout = ConfigDB().get(None, "", "CYCLE_TIMEOUT", 100)
+        # Get timeout from env var
+        try:
+            cycle_timeout = int(os.environ.get("CYCLE_TIMEOUT", "100000"))
+        except:
+            cycle_timeout = 100000
+            
+        self.logger.info(f"Running with max timeout of {cycle_timeout} cycles")
         
-        self.logger.info(f"Running for {cycle_timeout} cycles")
-        
-        for _ in range(cycle_timeout):
-            await RisingEdge(cocotb.top.clk)
+        # Start a timeout watchdog
+        async def timeout_watcher():
+            for _ in range(cycle_timeout):
+                await RisingEdge(cocotb.top.clk)
+            
+            if not self.end_event.is_set():
+                self.logger.error("WATCHDOG TIMEOUT reached!")
+                self.end_event.set()
+
+        cocotb.start_soon(timeout_watcher())
+
+        # Wait for the event (set by either scoreboard or watchdog)
+        await self.end_event.wait()
+        self.logger.info(f"Test termination triggered at {cocotb.utils.get_sim_time(unit='ns')}ns")
         
         self.drop_objection()
-

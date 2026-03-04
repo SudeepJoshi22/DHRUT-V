@@ -117,18 +117,14 @@ class DMemDriver(uvm_driver):
                         new_word |= byte << (8 * i)
 
                 self.mem[aligned_addr] = new_word
-                # self.logger.debug(
-                #     f"DMEM WRITE addr=0x{addr:08x} (aligned=0x{aligned_addr:08x}) "
-                #     f"wdata=0x{wdata:08x} wstrb=0x{wstrb:x} -> word=0x{new_word:08x}"
-                # )
+                # Redundant prints silenced per user request
+                # self.logger.info(...)
                 self.dmem_if.s_rdata.value = 0
             else:
                 # Read: fetch word, default to 0
                 rdata = self.mem.get(aligned_addr, 0)
                 self.dmem_if.s_rdata.value = rdata
-                # self.logger.debug(
-                #     f"DMEM READ  addr=0x{addr:08x} (aligned=0x{aligned_addr:08x}) -> rdata=0x{rdata:08x}"
-                # )
+                # self.logger.info(...)
 
             # Complete handshake
             self.dmem_if.s_ready.value = 1

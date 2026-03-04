@@ -141,7 +141,7 @@ module tb_top;
     .clk             (clk),
     .rst_n           (rst_n),
     .issue_if        (alu_if),
-    .i_stall         (1'b0),
+    .i_stall         (lsu_if.s_stall_from_lsu),
     .i_flush         (1'b0),
     .o_alu_fwd_writes_rd    (fwd_alu_issue_writes_rd),
     .o_alu_fwd_rd           (fwd_alu_issue_rd),

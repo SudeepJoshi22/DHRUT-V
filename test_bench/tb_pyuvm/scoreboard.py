@@ -7,6 +7,7 @@ from pyuvm import (
     uvm_component,
     uvm_tlm_analysis_fifo,
     uvm_get_port,
+    ConfigDB
 )
 
 class Scoreboard(uvm_component):
@@ -17,14 +18,47 @@ class Scoreboard(uvm_component):
         self.memwr_get_port = None
         self.mem = {}
 
+    def load_verilog_hex(self, path):
+        """
+        Load a Verilog-style @address hex file into the byte-oriented memory model.
+        """
+        if not path or not os.path.exists(path):
+            return
+
+        addr = 0
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("//"):
+                        continue
+                    if line.startswith("@"):
+                        addr = int(line[1:], 16)
+                    else:
+                        bytestr = line.split()
+                        for b in bytestr:
+                            self.mem[addr] = int(b, 16)
+                            addr += 1
+        except Exception as e:
+            self.logger.warning(f"Failed to load hex file {path} into scoreboard: {e}")
+
     def build_phase(self):
         super().build_phase()
         self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
+
+        # Pre-load memory from HEX file to capture initial values (required for some signature lines)
+        hex_file = os.getenv("TEST_HEX")
+        if hex_file:
+            self.load_verilog_hex(hex_file)
+            self.logger.info(f"Scoreboard pre-loaded {len(self.mem)} bytes from {hex_file}")
 
         # tohost (PASS/FAIL)
         self.tohost_fifo = uvm_tlm_analysis_fifo("tohost_fifo", self)
         self.tohost_export = self.tohost_fifo.analysis_export
         self.tohost_get_port = uvm_get_port("tohost_get_port", self)
+        
+        # Get the end_event from ConfigDB
+        self.end_event = ConfigDB().get(self, "", "end_event")
 
     def connect_phase(self):
         super().connect_phase()
@@ -45,18 +79,29 @@ class Scoreboard(uvm_component):
             # Should never be started unless capture is enabled, but keep it safe.
             if self.memwr_get_port is None:
                 return
+            
+            # Cache sig range for fast check in loop
+            begin_s = os.environ.get("SIG_BEGIN")
+            end_s = os.environ.get("SIG_END")
+            sig_begin = int(begin_s, 16) if begin_s else 0
+            sig_end = int(end_s, 16) if end_s else 0
+
             while True:
                 txn = await self.memwr_get_port.get()
-
-                # Adapt these field names to your txn object
                 addr = int(txn.addr)
                 data = int(txn.data)
                 size = int(txn.size)
                 wstrb = int(txn.wstrb)
 
+                self.logger.debug(f"Received MemWrite at 0x{addr:08x}, wstrb=0x{wstrb:x}")
+
                 for i in range(size):
                     if (wstrb >> i) & 1:
-                        self.mem[addr + i] = (data >> (8 * i)) & 0xFF
+                        byte = (data >> (8 * i)) & 0xFF
+                        self.mem[addr + i] = byte
+                        if sig_begin <= (addr + i) < sig_end:
+                            # Use debug to keep simulation log cleaner
+                            self.logger.debug(f"Signature updated at 0x{(addr+i):08x} with 0x{byte:02x}")
 
         async def watch_tohost():
             while True:
@@ -69,11 +114,14 @@ class Scoreboard(uvm_component):
                 exit_code = (val >> 1)
                 if exit_code == 0:
                     self.logger.info(f"PASS: tohost=0x{val:08x}")
-                    cocotb.pass_test(f"PASS: tohost=0x{val:08x}")
+                    if self.end_event and not self.end_event.is_set():
+                        self.end_event.set()
                     return
                 else:
                     msg = f"FAIL: tohost=0x{val:08x}, exit_code={exit_code}"
                     self.logger.error(msg)
+                    if self.end_event and not self.end_event.is_set():
+                        self.end_event.set()
                     assert False, msg
 
         # Only start the collector if enabled
@@ -90,12 +138,10 @@ class Scoreboard(uvm_component):
         end_s    = os.environ.get("SIG_END")
 
         if not sig_path:
-            # Not running under RISCOF (or not configured). Nothing to do.
             return
 
         self.logger.debug(f"Signature requested: {sig_path}, begin={begin_s}, end={end_s}")
 
-        # If we can't compute a range, still create an empty file so RISCOF doesn't fail on missing file.
         if not begin_s or not end_s:
             self.logger.warning("SIG_BEGIN/SIG_END not set; creating empty signature file.")
             open(sig_path, "w").close()
@@ -103,17 +149,7 @@ class Scoreboard(uvm_component):
 
         begin = int(begin_s, 16)
         end   = int(end_s, 16)
-
-        if end <= begin or ((end - begin) % 4) != 0:
-            self.logger.warning(f"Bad signature range begin={begin_s} end={end_s}; creating empty signature file.")
-            open(sig_path, "w").close()
-            return
-
-        # If you didn't enable mem-write capture, you can't produce correct signature contents.
-        if self.memwr_get_port is None:
-            self.logger.warning("Mem-write capture not enabled; creating empty signature file.")
-            open(sig_path, "w").close()
-            return
+        self.logger.info(f"Dumping signature from 0x{begin:08x} to 0x{end:08x} ({ (end-begin)//4 } words)")
 
         # Dump 32-bit words, low addr to high, one per line
         with open(sig_path, "w") as f:
@@ -125,4 +161,4 @@ class Scoreboard(uvm_component):
                 word = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
                 f.write(f"{word:08x}\n")
 
-        self.logger.info(f"Wrote signature: {sig_path}")
+        self.logger.info(f"Successfully wrote signature: {sig_path}")

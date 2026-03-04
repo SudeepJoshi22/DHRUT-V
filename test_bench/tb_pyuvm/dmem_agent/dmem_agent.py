@@ -4,7 +4,6 @@ from .dmem_driver import DMemDriver
 from .dmem_monitor import DMemMonitor
 # from .dmem_monitor import DMemMonitor
 # from .dmem_sequencer import DMemSequencer
-# from pyuvm import ConfigDB   # only if you decide to use a sequencer
 
 class DMemAgent(uvm_agent):
 
@@ -19,7 +18,6 @@ class DMemAgent(uvm_agent):
         # ConfigDB().set(None, "*", "dmem_sequencer", self.sequencer)
 
     def connect_phase(self):
-        # When sequencer/monitor exist, connect TLM ports here
         # self.driver.seq_item_port.connect(self.sequencer.seq_item_export)
         # self.monitor.addr_ph_port.connect(self.sequencer.addr_port.analysis_export)
         pass
