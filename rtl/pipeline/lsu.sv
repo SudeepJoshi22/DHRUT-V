@@ -31,29 +31,36 @@ module lsu (
   logic        internal_stall;
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      valid_q       <= 1'b0;
-      uop_q         <= '0;
-      pc_q          <= '0;
-      addr_base_q   <= '0;
-      store_data_q  <= '0;
-    end
-    else if(!internal_stall && !valid_q) begin
-      valid_q       <= issue_if.m_valid;
-      uop_q         <= issue_if.m_uop;
-      pc_q          <= issue_if.m_pc;
-      addr_base_q   <= issue_if.m_addr_base;
-      store_data_q  <= issue_if.m_store_data;
-    end
-    else if (valid_q && dmem_if.s_ready) begin
-      // Transaction completed → consume the latched request
-      valid_q       <= 1'b0;
-      uop_q         <= '0;
-      pc_q          <= '0;
-      addr_base_q   <= '0;
-      store_data_q  <= '0;
-      // Do NOT clear uop_q/addr_base_q/store_data_q — they can hold until next request
-  end
+      if (!rst_n) begin
+          valid_q       <= 1'b0;
+          uop_q         <= '0;
+          pc_q          <= '0;
+          addr_base_q   <= '0;
+          store_data_q  <= '0;
+      end
+      else if (!internal_stall && !valid_q) begin
+          // Idle → normal new request (when no transaction was pending)
+          valid_q       <= issue_if.m_valid;
+          uop_q         <= issue_if.m_uop;
+          pc_q          <= issue_if.m_pc;
+          addr_base_q   <= issue_if.m_addr_base;
+          store_data_q  <= issue_if.m_store_data;
+      end
+      else if (valid_q && dmem_if.s_ready) begin
+          // Transaction completes this cycle → consume old, and opportunistically accept new if present
+          if (issue_if.m_valid) begin
+              // Zero-bubble: latch new request immediately
+              valid_q       <= 1'b1;
+              uop_q         <= issue_if.m_uop;
+              pc_q          <= issue_if.m_pc;
+              addr_base_q   <= issue_if.m_addr_base;
+              store_data_q  <= issue_if.m_store_data;
+          end else begin
+              // No new request → go idle
+              valid_q       <= 1'b0;
+          end
+      end
+      // Implicit else: stalled → hold current state (valid_q stays 1, data stays latched)
   end
 
   // ───────────────────────────────────────────────

@@ -19,16 +19,35 @@ module if_stage (
   logic [31:0] instr_pc_q;
   logic        instr_valid_q;
 
+  logic [31:0] redirect_pc_q;
+  logic        redirecting_q;
+
   parameter logic [31:0] RESET_PC = 32'h8000_0000;
   
   // =================================================================
   // PC Logic
   // =================================================================
+  // New: Capture redirect on flush pulse, hold state until advanced
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      redirect_pc_q   <= 32'h0;  // Or RESET_PC
+      redirecting_q   <= 1'b0;
+    end else begin
+      if (i_flush) begin
+        redirect_pc_q <= i_redirect_pc;  // Latch target immediately
+        redirecting_q <= 1'b1;           // Set pending
+      end else if (!i_stall && imem.s_ready) begin
+        redirecting_q <= 1'b0;           // Clear only after successful advance (latches pc_next = redirect)
+      end
+      // If stalled during redirect, hold state (redirecting stays high)
+    end
+  end
+
   always_comb begin
     pc_next = pc_q;
 
-    if (i_flush) begin
-      pc_next = i_redirect_pc;
+    if (i_flush || redirecting_q) begin
+      pc_next = (redirecting_q ? redirect_pc_q: i_redirect_pc);
     end else if (!i_stall && imem.s_ready) begin
       // Advance only when transaction completes (handshake) and not stalled
       pc_next = pc_q + 32'd4;

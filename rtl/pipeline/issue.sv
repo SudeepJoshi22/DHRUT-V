@@ -142,7 +142,7 @@ module issue_stage (
     o_branch_taken  = 1'b0;
     o_branch_target = 32'b0;
 
-    if (dec_valid_q) begin
+    if (dec_valid_q && !stall_issue) begin
       case (uop_q.opcode)
         OPCODE_BRANCH: begin
           o_branch_target = dec_pc_q + uop_q.imm;
@@ -178,6 +178,21 @@ module issue_stage (
   // ───────────────────────────────────────────────
   // 5. Dispatch to ALU or LSU
   // ───────────────────────────────────────────────
+  
+  // Keep the issue sequential
+  always_ff @(posedge clk, negedge rst_n) begin
+        if(!rst_n || i_flush) begin
+            issued <= 1'b0;
+        end
+        else if(dec_valid_q && !stall_issue && !issued) begin
+            issued <= 1'b1;
+        end
+        // drop the issued when stall is lifted after an issue
+        else if(issued && !stall_issue) begin
+            issued <= 1'b0;
+        end
+  end
+
   always_comb begin
     alu_if.m_valid       = 1'b0;
     lsu_if.m_valid       = 1'b0;
@@ -194,7 +209,7 @@ module issue_stage (
     lsu_if.m_addr_base   = op1;
     lsu_if.m_store_data  = op2;
 
-    issued               = dec_valid_q && !stall_issue && !i_flush;
+    //issued               = dec_valid_q && !stall_issue && !i_flush;
 
     if (issued) begin
       case (uop_q.opcode)
@@ -224,13 +239,13 @@ module issue_stage (
   assign o_stall_to_decode = i_stall || lsu_if.s_stall_from_lsu;
 
   // Consume the latched valid when dispatched
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
-      dec_valid_q <= 1'b0;
-    end
-    else if (issued) begin
-      dec_valid_q <= 1'b0;  // clear after dispatch
-    end
-  end
+  // always_ff @(posedge clk or negedge rst_n) begin
+  //  if (!rst_n || i_flush) begin
+  //    dec_valid_q <= 1'b0;
+  //  end
+  //  else if (issued) begin
+  //    dec_valid_q <= 1'b0;  // clear after dispatch
+  //  end
+  //end
 
 endmodule
