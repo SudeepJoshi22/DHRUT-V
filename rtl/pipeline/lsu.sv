@@ -38,29 +38,33 @@ module lsu (
           addr_base_q   <= '0;
           store_data_q  <= '0;
       end
-      else if (!internal_stall && !valid_q) begin
-          // Idle → normal new request (when no transaction was pending)
-          valid_q       <= issue_if.m_valid;
+      else if (!internal_stall && !valid_q && issue_if.m_valid) begin  // ← Added explicit && issue_if.m_valid gate
+          // Idle → normal new request
+          valid_q       <= 1'b1;  // ← Set to 1 (always accept if valid)
           uop_q         <= issue_if.m_uop;
           pc_q          <= issue_if.m_pc;
           addr_base_q   <= issue_if.m_addr_base;
           store_data_q  <= issue_if.m_store_data;
       end
       else if (valid_q && dmem_if.s_ready) begin
-          // Transaction completes this cycle → consume old, and opportunistically accept new if present
+          // Transaction completes → consume old, opportunistically accept new
           if (issue_if.m_valid) begin
-              // Zero-bubble: latch new request immediately
+              // Zero-bubble: latch new
               valid_q       <= 1'b1;
               uop_q         <= issue_if.m_uop;
               pc_q          <= issue_if.m_pc;
               addr_base_q   <= issue_if.m_addr_base;
               store_data_q  <= issue_if.m_store_data;
           end else begin
-              // No new request → go idle
+              // No new → go idle AND clear data (prevents stale re-latch)
               valid_q       <= 1'b0;
+              uop_q         <= '0;      // ← NEW: Clear data fields
+              pc_q          <= '0;
+              addr_base_q   <= '0;
+              store_data_q  <= '0;
           end
       end
-      // Implicit else: stalled → hold current state (valid_q stays 1, data stays latched)
+      // Implicit else: stalled → hold (valid_q stays 1, data unchanged)
   end
 
   // ───────────────────────────────────────────────

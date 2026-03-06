@@ -81,47 +81,37 @@ module if_stage (
   assign imem.m_wstrb = 4'b0000;
 
   // =================================================================
-  // Latch the Instruction when (valid && ready) are high
+  // Unified Instruction Buffer: Latch on fetch handshake, hold until downstream accept
   // =================================================================
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
-        instr_valid_q         <= 1'b0;
-        instr_q               <= 32'd0;
-        instr_pc_q            <= 32'd0;
-    end
-    else if (imem.m_valid && imem.s_ready) begin
-        // Handshake completed → valid instruction fetched
-        instr_valid_q         <= 1'b1;
-        instr_q               <= imem.s_rdata;
-        instr_pc_q            <= pc_q;
-    end
+      if (!rst_n || i_flush) begin
+          instr_valid_q <= 1'b0;
+          instr_q       <= 32'd0;
+          instr_pc_q    <= 32'd0;
+      end
+      else begin
+          // Latch new instr on IMEM handshake (fetch complete)
+          if (imem.m_valid && imem.s_ready) begin
+              instr_valid_q <= 1'b1;          // Mark as ready for downstream
+              instr_q       <= imem.s_rdata;
+              instr_pc_q    <= pc_q;          // Or imem.m_addr if using that
+          end
+          // Consume (deassert) when downstream accepts
+          else if (instr_valid_q && !i_stall) begin
+              instr_valid_q <= 1'b0;          // One-shot: clear after accept
+              // Data holds stable this cycle (for downstream sampling)
+          end
+          // Implicit else: hold during stall (instr_valid_q stays 1, data stable)
+      end
   end
-
-   // =================================================================
-   // Output the latched instruction
-   // =================================================================
-   always_ff @(posedge clk or negedge rst_n) begin
-     if (!rst_n) begin
-       o_if_valid <= 1'b0;
-       o_if_pc    <= 32'b0;
-       o_if_instr <= 32'b0;
-     end 
-     else begin
-       if (i_flush) begin
-         o_if_valid <= 1'b0;
-         o_if_pc    <= 32'b0;
-         o_if_instr <= 32'b0;
-       end 
-       else if (instr_valid_q && !i_stall) begin
-         // Output only when latched valid, not stalled, and we haven't output it yet
-         o_if_valid <= 1'b1;
-         o_if_pc    <= instr_pc_q;
-         o_if_instr <= instr_q;
-       end 
-       else if(!i_stall) begin
-         o_if_valid <= 1'b0;  // Deassert valid after 1 cycle (or if stalled)
-       end
-     end
-   end
+  
+  // =================================================================
+  // Output: Combinatorial, stable while valid high
+  // =================================================================
+  always_comb begin
+      o_if_valid = instr_valid_q;     // Level-sensitive: high until consumed
+      o_if_pc    = instr_pc_q;
+      o_if_instr = instr_q;
+  end
 
 endmodule
