@@ -1,0 +1,11 @@
+/home/sudeep/GitHub/DHRUT-V/tools/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/andi-01.S:
+  commit_id: b91f98f3a0e908bad4680c2e3901fbc24b63a563
+  work_dir: /home/sudeep/GitHub/DHRUT-V/tools/riscof/riscof_work/andi-01.S
+  macros:
+  - TEST_CASE_1=True
+  - XLEN=32
+  isa: RV32I
+  coverage_labels:
+  - andi
+  test_path: 
+    /home/sudeep/GitHub/DHRUT-V/tools/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/andi-01.S

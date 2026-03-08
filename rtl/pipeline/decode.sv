@@ -89,36 +89,50 @@ module decode_stage (
   // ---------------------------------------------------------------------------
   // Arithmetic and Branch operation decoding (OP & OP-IMM)
   // ---------------------------------------------------------------------------
-  always_comb begin
-    alu_operation = ALU_ADD;
 
-    if (opcode == OPCODE_OP_IMM || opcode == OPCODE_OP) begin
-      case ({funct7[5], funct3})
-        4'b0_000: alu_operation = ALU_ADD;
-        4'b1_000: alu_operation = (opcode == OPCODE_OP) ? ALU_SUB : ALU_ADD; // sub only for OP
-        4'b0_001: alu_operation = ALU_SLL;
-        4'b0_010: alu_operation = ALU_SLT;
-        4'b0_011: alu_operation = ALU_SLTU;
-        4'b0_100: alu_operation = ALU_XOR;
-        4'b0_101: alu_operation = (funct7[5]) ? ALU_SRA : ALU_SRL;
-        4'b0_110: alu_operation = ALU_OR;
-        4'b0_111: alu_operation = ALU_AND;
-        default:   alu_operation = ALU_ADD;
-      endcase
-    end
-    else if (opcode == OPCODE_BRANCH) begin
-    // Reuse ALU op encodings as branch condition selectors (matches your ISSUE logic exactly)
-    case (funct3)
-      3'b000: alu_operation = ALU_ADD;   // BEQ   : ==
-      3'b001: alu_operation = ALU_SUB;   // BNE   : !=
-      3'b100: alu_operation = ALU_SLT;   // BLT   : signed <
-      3'b101: alu_operation = ALU_OR;    // BGE   : signed >=
-      3'b110: alu_operation = ALU_SLTU;  // BLTU  : unsigned <
-      3'b111: alu_operation = ALU_AND;   // BGEU  : unsigned >=
-      default: alu_operation = ALU_ADD;  // unsupported funct3 → treat as invalid later if desired
-    endcase
-  end
-    // LUI and AUIPC will be handled in main decode logic (no funct7/funct3 needed)
+  always_comb begin
+  
+      unique if (opcode == OPCODE_OP_IMM) begin : decode_op_imm
+          // ─────────────── OP-IMM (I-type immediates) ───────────────
+          case (funct3)
+              3'b000:   alu_operation = ALU_ADD;   // addi
+              3'b001:   alu_operation = ALU_SLL;   // slli
+              3'b010:   alu_operation = ALU_SLT;   // slti
+              3'b011:   alu_operation = ALU_SLTU;  // sltiu
+              3'b100:   alu_operation = ALU_XOR;   // xori
+              3'b101: begin   // srli / srai
+                if (funct7[5] == 1'b1)          // bit 30 set → assume srai (funct7 should be 0100000)
+                        alu_operation = ALU_SRA;
+                else
+                        alu_operation = ALU_SRL;    // srli, or any non-srai
+              end
+              3'b110:   alu_operation = ALU_OR;    // ori
+              3'b111:   alu_operation = ALU_AND;   // andi
+              default:  alu_operation = ALU_ADD;  // or ALU_INVALID if you want strict checking
+          endcase
+
+      end else if (opcode == OPCODE_OP) begin : decode_op
+          // ─────────────── OP (R-type, register-register) ───────────────
+          // Here funct7[5] selects sub/sra vs add/srl
+          case ({funct7[5], funct3})
+              4'b0_000: alu_operation = ALU_ADD;  // add
+              4'b1_000: alu_operation = ALU_SUB;  // sub
+              4'b0_001: alu_operation = ALU_SLL;  // sll
+              4'b0_010: alu_operation = ALU_SLT;  // slt
+              4'b0_011: alu_operation = ALU_SLTU; // sltu
+              4'b0_100: alu_operation = ALU_XOR;  // xor
+              4'b0_101: alu_operation = ALU_SRL;  // srl
+              4'b1_101: alu_operation = ALU_SRA;  // sra
+              4'b0_110: alu_operation = ALU_OR;   // or
+              4'b0_111: alu_operation = ALU_AND;  // and
+              default:  alu_operation = ALU_ADD;  
+          endcase
+      
+      end else begin
+                        alu_operation = ALU_ADD;
+      end
+      // Note: LUI / AUIPC usually don't use the ALU in the same way
+      //       (they generate immediate directly → handled elsewhere)
   end
 
   // ---------------------------------------------------------------------------
@@ -159,13 +173,17 @@ module decode_stage (
       o_dec_valid        = 1'b1;
       o_uop.valid        = 1'b1;
       o_uop.opcode       = opcode;
+      o_uop.funct3       = funct3;
       o_uop.rs1          = rs1;
+
       o_uop.rs2          = rs2;
       o_uop.rd           = rd;
 
       case (opcode)
         OPCODE_OP_IMM: begin
           o_uop.is_immediate = 1'b1;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = imm_i;
           o_uop.alu_op       = alu_operation;
           o_uop.uses_rs1     = 1'b1;
@@ -175,6 +193,8 @@ module decode_stage (
 
         OPCODE_OP: begin
           o_uop.is_immediate = 1'b0;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = 32'b0;
           o_uop.alu_op       = alu_operation;
           o_uop.uses_rs1     = 1'b1;
@@ -184,6 +204,8 @@ module decode_stage (
 
         OPCODE_LUI: begin
           o_uop.is_immediate = 1'b1;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = imm_u;
           o_uop.alu_op       = ALU_ADD;  // LUI = rd = imm_u (upper 20 bits)
           o_uop.uses_rs1     = 1'b0;
@@ -193,6 +215,8 @@ module decode_stage (
 
         OPCODE_AUIPC: begin
           o_uop.is_immediate = 1'b1;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = imm_u;
           o_uop.alu_op       = ALU_ADD;  // rd = pc + imm_u
           o_uop.uses_rs1     = 1'b0;     // uses pc instead
@@ -201,31 +225,39 @@ module decode_stage (
         end
         OPCODE_BRANCH: begin
           o_uop.is_immediate = 1'b0;
+          o_uop.is_branch    = 1'b1;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = imm_b;
-          o_uop.alu_op       = alu_operation;       // encodes the condition type
+          o_uop.alu_op       = ALU_ADD;          // Not used for branch condition anymore
           o_uop.uses_rs1     = 1'b1;
           o_uop.uses_rs2     = 1'b1;
           o_uop.writes_rd    = 1'b0;             // branches never write rd
         end
         OPCODE_JAL: begin
           o_uop.is_immediate = 1'b1;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b1;
           o_uop.imm          = imm_j;
-          o_uop.alu_op       = ALU_ADD;             // arbitrary – not used for condition
+          o_uop.alu_op       = ALU_ADD;             // Link value (pc+4)
           o_uop.uses_rs1     = 1'b0;
           o_uop.uses_rs2     = 1'b0;
           o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
         end
         OPCODE_JALR: begin
           o_uop.is_immediate = 1'b1;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b1;
           o_uop.imm          = imm_i;
-          o_uop.alu_op       = ALU_ADD;             // arbitrary – not used for condition
-          o_uop.uses_rs1     = 1'b0;
+          o_uop.alu_op       = ALU_ADD;             // Link value (pc+4)
+          o_uop.uses_rs1     = 1'b1;
           o_uop.uses_rs2     = 1'b0;
           o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
         end
         // Load & Store cases (now setting LSU fields)
         OPCODE_LOAD: begin
           o_uop.is_immediate = 1'b0;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = imm_i;
           o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
           o_uop.uses_rs1     = 1'b1;
@@ -238,6 +270,8 @@ module decode_stage (
         end
         OPCODE_STORE: begin
           o_uop.is_immediate = 1'b0;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
           o_uop.imm          = imm_s;
           o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
           o_uop.uses_rs1     = 1'b1;

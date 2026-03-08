@@ -47,11 +47,33 @@ echo "  HEX: $HEX"
 echo "  DIS: $DIS"
 
 # ----------------------------------------
+# VERIFY WITH SPIKE
+# ----------------------------------------
+SPIKE_LOG=$BUILD_DIR/$TEST_NAME.spike.log
+echo "▶ Verifying test logic with Spike (Detailed Log: $SPIKE_LOG)"
+
+# -l: Generate execution log
+# --log-commits: Log register commits
+# 2>&1: Redirect all output to log file
+spike -l --log-commits --isa=rv32i -m0x80000000:0x10000 "$ELF" > "$SPIKE_LOG" 2>&1 || true
+
+# Check for success in the generated log
+# We check if a write of '1' occurred to the tohost address (0x80001000)
+if grep -q "mem 0x80001000 0x00000001" "$SPIKE_LOG"; then
+    echo "✅ Spike verification PASSED (tohost=1 detected in trace)"
+elif grep -q "tohost = 0000000000000001" "$SPIKE_LOG" || grep -q "tohost = 1" "$SPIKE_LOG"; then
+    echo "✅ Spike verification PASSED (tohost=1 detected in summary)"
+else
+    echo "❌ Spike verification FAILED!"
+    echo "Check log for details: $SPIKE_LOG"
+    exit 1
+fi
+
+# ----------------------------------------
 # EXPORT ENV VARS
 # ----------------------------------------
 export TEST_HEX=$HEX
 export TEST_ELF=$ELF
-export TOHOST_ADDR=0x80001000
 export CYCLE_TIMEOUT=10000
 export COCOTB_LOG_LEVEL=INFO
 

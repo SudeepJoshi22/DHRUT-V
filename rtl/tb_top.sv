@@ -114,7 +114,7 @@ module tb_top;
     .i_uop                  (id_issue_uop),
     .i_dec_pc               (id_issue_pc),
     .i_stall                (1'b0),
-    .i_flush                (1'b0),
+    .i_flush                (branch_taken),
     .i_wb_en                (retire_wb_en),
     .i_wb_rd                (retire_wb_rd),
     .i_wb_data              (retire_wb_data),

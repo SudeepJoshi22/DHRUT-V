@@ -130,26 +130,74 @@ stages:
     display_name: "ISSUE"
     description: "Issue stage - schedules UOPs and accesses register file"
     signals:
-      # ALU issue valid
-      - name: "alu_valid"
+      # Valid micro-operation in issue buffer
+      - name: "valid"
+        signal_path: "ISSUE.buf_valid_q"
+        format: "{:1d}"
+        type: "bool"
+        description: "UOP in issue buffer is valid"
+
+      # Program Counter in issue buffer
+      - name: "PC"
+        signal_path: "ISSUE.buf_pc_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC of instruction in issue buffer"
+
+      # Opcode in issue buffer
+      - name: "opcode"
+        signal_path: "uop_iss_opcode"
+        format: "0x{:02x}"
+        type: "int"
+        description: "Opcode of instruction in issue buffer"
+        source: "uop_issue_extraction"
+
+      # Dispatch destination
+      - name: "to_ALU"
         signal_path: "alu_if.m_valid"
         format: "{:1d}"
         type: "bool"
-        description: "ALU operation valid"
+        description: "Issued to ALU"
       
-      # ALU operand 1 (usually from RS1)
-      - name: "alu_op1"
-        signal_path: "alu_if.m_op1"
+      - name: "to_LSU"
+        signal_path: "lsu_if.m_valid"
+        format: "{:1d}"
+        type: "bool"
+        description: "Issued to LSU"
+
+      # Branch/Jump resolution
+      - name: "br_taken"
+        signal_path: "ISSUE.o_branch_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "Branch/Jump decision"
+
+      # Branch/Jump target
+      - name: "br_target"
+        signal_path: "ISSUE.o_branch_target"
         format: "0x{:08x}"
         type: "int"
-        description: "ALU operand 1 (from x[rs1] or zero)"
+        description: "Branch/Jump target address"
       
-      # ALU operand 2 (usually from RS2 or immediate)
-      - name: "alu_op2"
-        signal_path: "alu_if.m_op2"
+      # ALU operands (from ISSUE stage perspectives)
+      - name: "op1"
+        signal_path: "ISSUE.op1"
         format: "0x{:08x}"
         type: "int"
-        description: "ALU operand 2 (from x[rs2] or immediate)"
+        description: "Resolved operand 1 (with forwarding)"
+      
+      - name: "op2"
+        signal_path: "ISSUE.op2"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Resolved operand 2 (with forwarding)"
+
+      # Stall signal to decode
+      - name: "stall_ID"
+        signal_path: "issue_to_decode_stall"
+        format: "{:1d}"
+        type: "bool"
+        description: "Stall signal back to decode stage"
 
   # ─────────────────────────────────────────────────────────────────────────
   # ALU Stage - Arithmetic/Logic Execution
@@ -300,112 +348,74 @@ stages:
 display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE"]
 
 # ───────────────────────────────────────────────────────────────────────────
-# UOP Bit Extraction Configuration
+# UOP Bit Extraction Configuration (For 79-bit uop_t)
 # ───────────────────────────────────────────────────────────────────────────
 uop_extraction:
   signal_path: "id_issue_uop"
   fields:
-    # Valid bit (MSB, indicates this is a valid UOP)
     - name: "uop_valid"
-      bits: [73, 73]
-      description: "Valid micro-operation"
-    
-    # Opcode field (7 bits) - operation type
+      bits: [78, 78]
     - name: "uop_opcode"
-      bits: [72, 66]
-      description: "7-bit opcode"
-    
-    # ALU operation (10 bits) - ALU suboperation [OPTIONAL - not displayed]
+      bits: [77, 71]
     - name: "uop_alu_op"
-      bits: [65, 56]
-      description: "10-bit ALU operation type (reference only)"
-    
-    # Source register 1 (5 bits)
+      bits: [70, 61]
     - name: "uop_rs1"
-      bits: [55, 51]
-      description: "5-bit source register 1"
-    
-    # Source register 2 (5 bits)
+      bits: [60, 56]
     - name: "uop_rs2"
-      bits: [50, 46]
-      description: "5-bit source register 2"
-    
-    # Destination register (5 bits)
+      bits: [55, 51]
     - name: "uop_rd"
-      bits: [45, 41]
-      description: "5-bit destination register (rd)"
-    
-    # Immediate value (32 bits)
+      bits: [50, 46]
+    - name: "uop_funct3"
+      bits: [45, 43]
     - name: "uop_imm"
-      bits: [40, 9]
-      description: "32-bit sign-extended immediate"
-    
-    # Uses rs1 flag (1 bit)
+      bits: [42, 11]
     - name: "uop_uses_rs1"
-      bits: [8, 8]
-      description: "Instruction uses rs1"
-    
-    # Uses rs2 flag (1 bit)
+      bits: [10, 10]
     - name: "uop_uses_rs2"
-      bits: [7, 7]
-      description: "Instruction uses rs2"
-    
-    # Writes rd flag (1 bit)
+      bits: [9, 9]
     - name: "uop_writes_rd"
+      bits: [8, 8]
+    - name: "uop_is_immediate"
+      bits: [7, 7]
+    - name: "uop_is_branch"
       bits: [6, 6]
-      description: "Instruction writes rd"
-    
-    # Is load flag (1 bit)
+    - name: "uop_is_jump"
+      bits: [5, 5]
     - name: "uop_is_load"
       bits: [4, 4]
-      description: "Is load instruction"
-    
-    # Is store flag (1 bit)
     - name: "uop_is_store"
       bits: [3, 3]
-      description: "Is store instruction"
 
-# ───────────────────────────────────────────────────────────────────────────
-# UOP Bit Extraction for ALU Stage
-# ───────────────────────────────────────────────────────────────────────────
+uop_issue_extraction:
+  signal_path: "ISSUE.buf_uop_q"
+  fields:
+    - name: "uop_iss_opcode"
+      bits: [77, 71]
+    - name: "uop_iss_is_branch"
+      bits: [6, 6]
+    - name: "uop_iss_is_jump"
+      bits: [5, 5]
+
 uop_alu_extraction:
   signal_path: "ALU.uop_q"
   fields:
     - name: "uop_alu_opcode"
-      bits: [72, 66]
-      description: "Opcode in ALU stage"
+      bits: [77, 71]
 
-# ───────────────────────────────────────────────────────────────────────────
-# UOP Bit Extraction for LSU Stage
-# ───────────────────────────────────────────────────────────────────────────
 uop_lsu_extraction:
   signal_path: "LSU.uop_q"
   fields:
-    # Is load flag (bit 4)
     - name: "uop_lsu_is_load"
       bits: [4, 4]
-      description: "Is load instruction in LSU"
-    
-    # Is store flag (bit 3)
     - name: "uop_lsu_is_store"
       bits: [3, 3]
-      description: "Is store instruction in LSU"
 
 # ───────────────────────────────────────────────────────────────────────────
 # Display Configuration
 # ───────────────────────────────────────────────────────────────────────────
 display_config:
-  # Logging level: "DEBUG", "INFO", "WARNING", "ERROR"
   log_level: "INFO"
-  
-  # Print full transaction at each clock cycle
   print_full_items: true
-  
-  # Print only when valid signal is high (optional filtering)
   print_only_valid: false
-  
-  # Timestamp unit: "ns" or "us" or "ms"
   timestamp_unit: "ns"
-  
-  # Enable color output in logs (if terminal supports ANSI colors)
   use_colors: true

@@ -1,3 +1,5 @@
+import riscv_uop_pkg::*;
+
 module if_stage (
   input  logic        clk,
   input  logic        rst_n,
@@ -12,106 +14,75 @@ module if_stage (
   output logic [31:0] o_if_instr
 );
 
-  logic [31:0] pc_q, pc_next;
-  logic        fetch_valid;   // internal signal: we want to fetch this cycle
+  parameter logic [31:0] RESET_PC = 32'h8000_0000;
 
+  logic [31:0] pc_q;
+  
+  // Instruction Buffer Registers
   logic [31:0] instr_q;
   logic [31:0] instr_pc_q;
   logic        instr_valid_q;
 
-  logic [31:0] redirect_pc_q;
-  logic        redirecting_q;
-
-  parameter logic [31:0] RESET_PC = 32'h8000_0000;
-  
   // =================================================================
-  // PC Logic
+  // PC Update Logic
   // =================================================================
-  // New: Capture redirect on flush pulse, hold state until advanced
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      redirect_pc_q   <= 32'h0;  // Or RESET_PC
-      redirecting_q   <= 1'b0;
-    end else begin
-      if (i_flush) begin
-        redirect_pc_q <= i_redirect_pc;  // Latch target immediately
-        redirecting_q <= 1'b1;           // Set pending
-      end else if (!i_stall && imem.s_ready) begin
-        redirecting_q <= 1'b0;           // Clear only after successful advance (latches pc_next = redirect)
-      end
-      // If stalled during redirect, hold state (redirecting stays high)
-    end
-  end
-
-  always_comb begin
-    pc_next = pc_q;
-
-    if (i_flush || redirecting_q) begin
-      pc_next = (redirecting_q ? redirect_pc_q: i_redirect_pc);
-    end else if (!i_stall && imem.s_ready) begin
-      // Advance only when transaction completes (handshake) and not stalled
-      pc_next = pc_q + 32'd4;
-    end
-    // else hold current PC
-  end
-
+  // Rule 1: Flush (Branch/Jump) always has highest priority.
+  // Rule 2: Only increment PC when a fetch actually completes.
+  // Rule 3: Hold PC during stalls.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       pc_q <= RESET_PC;
     end 
-    else if(!i_stall && imem.s_ready) begin
-      pc_q <= pc_next;
+    else if (i_flush) begin
+      // Immediate redirection on flush pulse
+      pc_q <= i_redirect_pc;
+    end
+    else if (!i_stall && imem.m_valid && imem.s_ready) begin
+      // Advance to next sequential instruction
+      pc_q <= pc_q + 32'd4;
     end
   end
 
   // =================================================================
-  // Fetch Request Control (Standard Valid-Ready)
+  // Memory Interface
   // =================================================================
-  // We assert m_valid whenever:
-  // - We are not stalled
-  // - There is no flush (flush kills pending request)
-  // - And we always want the next instruction unless stalled
-  always_comb begin
-    fetch_valid = !i_stall && !i_flush;
-  end
-
-  assign imem.m_valid = fetch_valid;
+  // Request a new instruction whenever:
+  // - We aren't stalled by downstream
+  // - We aren't currently being flushed
+  // - The buffer is empty OR is being consumed this cycle
+  assign imem.m_valid = !i_flush && (!instr_valid_q || !i_stall);
   assign imem.m_addr  = pc_q;
   assign imem.m_wdata = '0;
   assign imem.m_wstrb = 4'b0000;
 
   // =================================================================
-  // Unified Instruction Buffer: Latch on fetch handshake, hold until downstream accept
+  // Instruction Buffer
   // =================================================================
   always_ff @(posedge clk or negedge rst_n) begin
-      if (!rst_n || i_flush) begin
-          instr_valid_q <= 1'b0;
-          instr_q       <= 32'd0;
-          instr_pc_q    <= 32'd0;
+    if (!rst_n || i_flush) begin
+      instr_valid_q <= 1'b0;
+      instr_q       <= 32'd0;
+      instr_pc_q    <= 32'd0;
+    end
+    else begin
+      if (imem.m_valid && imem.s_ready) begin
+        // Latch new instruction from memory
+        instr_valid_q <= 1'b1;
+        instr_q       <= imem.s_rdata;
+        instr_pc_q    <= pc_q;
       end
-      else begin
-          // Latch new instr on IMEM handshake (fetch complete)
-          if (imem.m_valid && imem.s_ready) begin
-              instr_valid_q <= 1'b1;          // Mark as ready for downstream
-              instr_q       <= imem.s_rdata;
-              instr_pc_q    <= pc_q;          // Or imem.m_addr if using that
-          end
-          // Consume (deassert) when downstream accepts
-          else if (instr_valid_q && !i_stall) begin
-              instr_valid_q <= 1'b0;          // One-shot: clear after accept
-              // Data holds stable this cycle (for downstream sampling)
-          end
-          // Implicit else: hold during stall (instr_valid_q stays 1, data stable)
+      else if (!i_stall) begin
+        // Downstream accepted the current instruction, buffer now empty
+        instr_valid_q <= 1'b0;
       end
+    end
   end
   
   // =================================================================
-  // Output: Combinatorial, stable while valid high
+  // Output Assignments
   // =================================================================
-  always_comb begin
-      o_if_valid = instr_valid_q;     // Level-sensitive: high until consumed
-      o_if_pc    = instr_pc_q;
-      o_if_instr = instr_q;
-  end
+  assign o_if_valid = instr_valid_q;
+  assign o_if_pc    = instr_pc_q;
+  assign o_if_instr = instr_q;
 
 endmodule

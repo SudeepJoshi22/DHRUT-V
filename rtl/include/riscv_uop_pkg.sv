@@ -35,11 +35,14 @@ package riscv_uop_pkg;
     riscv_opcode_t opcode;
     alu_op_t     alu_op;          // for arithmetic ops
     logic [4:0]  rs1, rs2, rd;    // source/dest registers
+    logic [2:0]  funct3;          // original funct3 from instruction
     logic [31:0] imm;             // immediate (sign-extended)
     logic        uses_rs1;
     logic        uses_rs2;
     logic        writes_rd;
     logic        is_immediate;    // OP-IMM vs OP
+    logic        is_branch;       // branch instruction
+    logic        is_jump;         // jump instruction (JAL/JALR)
     // LSU-specific fields (decoded in decode stage)
     logic        is_load;
     logic        is_store;

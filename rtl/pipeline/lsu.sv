@@ -38,9 +38,9 @@ module lsu (
           addr_base_q   <= '0;
           store_data_q  <= '0;
       end
-      else if (!internal_stall && !valid_q && issue_if.m_valid) begin  // ← Added explicit && issue_if.m_valid gate
+      else if (!internal_stall && !valid_q && issue_if.m_valid) begin
           // Idle → normal new request
-          valid_q       <= 1'b1;  // ← Set to 1 (always accept if valid)
+          valid_q       <= 1'b1;
           uop_q         <= issue_if.m_uop;
           pc_q          <= issue_if.m_pc;
           addr_base_q   <= issue_if.m_addr_base;
@@ -56,15 +56,14 @@ module lsu (
               addr_base_q   <= issue_if.m_addr_base;
               store_data_q  <= issue_if.m_store_data;
           end else begin
-              // No new → go idle AND clear data (prevents stale re-latch)
+              // No new → go idle AND clear data
               valid_q       <= 1'b0;
-              uop_q         <= '0;      // ← NEW: Clear data fields
+              uop_q         <= '0;
               pc_q          <= '0;
               addr_base_q   <= '0;
               store_data_q  <= '0;
           end
       end
-      // Implicit else: stalled → hold (valid_q stays 1, data unchanged)
   end
 
   // ───────────────────────────────────────────────
@@ -99,7 +98,7 @@ module lsu (
           case (mem_addr[1:0])
             2'b00: wstrb = 4'b0011;
             2'b10: wstrb = 4'b1100;
-            default: wstrb = 4'b0000; // misaligned → ignore or trap later
+            default: wstrb = 4'b0000;
           endcase
         end
 
@@ -120,7 +119,7 @@ module lsu (
   assign dmem_if.m_wstrb  = wstrb;
 
   // ───────────────────────────────────────────────
-  // Stall back to ISSUE (stall when memory not ready)
+  // Stall back to ISSUE
   // ───────────────────────────────────────────────
   assign internal_stall            = dmem_if.m_valid && !dmem_if.s_ready;
   assign issue_if.s_stall_from_lsu = internal_stall;
@@ -151,7 +150,7 @@ module lsu (
           case (mem_addr[1:0])
             2'b00: o_load_data = {{16{uop_q.lsu_sign_extend & dmem_if.s_rdata[15]}},  dmem_if.s_rdata[15:0]};
             2'b10: o_load_data = {{16{uop_q.lsu_sign_extend & dmem_if.s_rdata[31]}},  dmem_if.s_rdata[31:16]};
-            default: o_load_data = 32'b0;  // misaligned
+            default: o_load_data = 32'b0;
           endcase
         end
 
@@ -164,7 +163,6 @@ module lsu (
     end
   end
 
-  // Forward latched uop to next stage
   assign o_lsu_uop = uop_q;
 
 endmodule

@@ -62,7 +62,7 @@ module issue_stage (
   logic operands_ready = 1'b1;  // FUTURE: && !pending reads etc.
   logic issue_en;
 
-  assign issue_en   =   buf_valid_q && operands_ready && !i_flush;
+  assign issue_en   =   buf_valid_q && operands_ready;
 
   // Ack from downstream (simple version: no stall = ready)
   // FUTURE: use per-unit s_ready signals
@@ -153,44 +153,6 @@ module issue_stage (
   assign o_stall_to_decode = downstream_stall;
 
   // ───────────────────────────────────────────────
-  // OLD CODE COMMENTED OUT – for comparison/testing
-  // ───────────────────────────────────────────────
-  /*
-  logic dec_valid_q;
-  logic issued;
-  uop_t uop_q;
-  logic [31:0] dec_pc_q;
-  logic stall_issue;
-  assign stall_issue = i_stall || lsu_if.s_stall_from_lsu;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
-      dec_valid_q <= 1'b0;
-      uop_q <= '0;
-      dec_pc_q <= '0;
-    end
-    else if (!stall_issue) begin
-      dec_valid_q <= i_dec_valid;
-      uop_q <= i_uop;
-      dec_pc_q <= i_dec_pc;
-    end
-  end
-
-  // Issued FF (old toggle logic)
-  always_ff @(posedge clk, negedge rst_n) begin
-    if(!rst_n || i_flush) begin
-      issued <= 1'b0;
-    end
-    else if(dec_valid_q && !stall_issue && !issued) begin
-      issued <= 1'b1;
-    end
-    else if(issued && !stall_issue) begin
-      issued <= 1'b0;
-    end
-  end
-  */
-
-  // ───────────────────────────────────────────────
   // 2. Register File (ARF) inside Issue – updated to use buffer
   // ───────────────────────────────────────────────
   logic [31:0] rs1_data, rs2_data;
@@ -235,10 +197,11 @@ module issue_stage (
   // ───────────────────────────────────────────────
   logic [31:0] op1, op2;
   always_comb begin
-    op1 = buf_uop_q.uses_rs1 ? fwd_rs1 : (buf_uop_q.opcode == OPCODE_AUIPC) ? buf_pc_q : 'd0;
-    op2 = (buf_uop_q.opcode inside {OPCODE_JAL, OPCODE_JALR}) ? 32'd4 :
+    op1 = buf_uop_q.uses_rs1 ? fwd_rs1 : (buf_uop_q.opcode == OPCODE_AUIPC || buf_uop_q.is_jump) ? buf_pc_q : 'd0;
+    op2 = buf_uop_q.is_jump ? 32'd4 :
           buf_uop_q.is_immediate ? buf_uop_q.imm : fwd_rs2;
   end
+
 
   // ───────────────────────────────────────────────
   // 4. Branch/jump decision & target – gated on issue_en
@@ -249,32 +212,24 @@ module issue_stage (
 
     // Only evaluate when we have a valid uop in buffer
     if (issue_en) begin
-      case (buf_uop_q.opcode)
-        OPCODE_BRANCH: begin
-          o_branch_target = buf_pc_q + buf_uop_q.imm;
-          case (buf_uop_q.alu_op)
-            ALU_ADD: o_branch_taken = (op1 == op2);
-            ALU_SUB: o_branch_taken = (op1 != op2);
-            ALU_SLT: o_branch_taken = (op1[31] != op2[31]) ? op1[31] : (op1[30:0] < op2[30:0]);
-            ALU_OR:  o_branch_taken = (op1[31] != op2[31]) ? ~op1[31] : (op1[30:0] >= op2[30:0]);
-            ALU_SLTU: o_branch_taken = (op1 < op2);
-            ALU_AND: o_branch_taken = (op1 >= op2);
-            default: o_branch_taken = 1'b0;
-          endcase
-        end
-        OPCODE_JAL: begin
-          o_branch_taken = 1'b1;
-          o_branch_target = buf_pc_q + buf_uop_q.imm;
-        end
-        OPCODE_JALR: begin
-          o_branch_taken = 1'b1;
-          o_branch_target = (fwd_rs1 + buf_uop_q.imm) & ~32'd1;
-        end
-        default: begin
-          o_branch_taken = 1'b0;
-          o_branch_target = 'd0;
-        end
-      endcase
+      if (buf_uop_q.is_branch) begin
+        o_branch_target = buf_pc_q + buf_uop_q.imm;
+        case (buf_uop_q.funct3)
+          3'b000: o_branch_taken = (op1 == op2);                        // BEQ
+          3'b001: o_branch_taken = (op1 != op2);                        // BNE
+          3'b100: o_branch_taken = ($signed(op1) < $signed(op2));       // BLT
+          3'b101: o_branch_taken = ($signed(op1) >= $signed(op2));      // BGE
+          3'b110: o_branch_taken = (op1 < op2);                         // BLTU
+          3'b111: o_branch_taken = (op1 >= op2);                        // BGEU
+          default: o_branch_taken = 1'b0;
+        endcase
+      end else if (buf_uop_q.opcode == OPCODE_JAL) begin
+        o_branch_taken = 1'b1;
+        o_branch_target = buf_pc_q + buf_uop_q.imm;
+      end else if (buf_uop_q.opcode == OPCODE_JALR) begin
+        o_branch_taken = 1'b1;
+        o_branch_target = (fwd_rs1 + buf_uop_q.imm) & ~32'd1;
+      end
     end
   end
 
@@ -297,21 +252,21 @@ module issue_stage (
     lsu_if.m_store_data = op2;
 
     if (dispatch_en) begin
-      case (buf_uop_q.opcode)
-        OPCODE_OP, OPCODE_OP_IMM, OPCODE_LUI, OPCODE_AUIPC,
-        OPCODE_BRANCH, OPCODE_JAL, OPCODE_JALR: begin
-          alu_if.m_valid = 1'b1;
-          alu_if.m_uop   = buf_uop_q;
-        end
-        OPCODE_LOAD, OPCODE_STORE: begin
-          lsu_if.m_valid = 1'b1;
-          lsu_if.m_uop   = buf_uop_q;
-        end
-        default: begin
-          alu_if.m_valid = 1'b0;
-          lsu_if.m_valid = 1'b0;
-        end
-      endcase
+      if (buf_uop_q.is_load || buf_uop_q.is_store) begin
+        lsu_if.m_valid = 1'b1;
+        alu_if.m_valid = 1'b0;
+        lsu_if.m_uop   = buf_uop_q;
+      end 
+      else if (buf_uop_q.is_branch) begin
+        // Branches resolved here, no need to dispatch
+        alu_if.m_valid = 1'b0;
+        lsu_if.m_valid = 1'b0;
+      end
+      else begin
+        // Normal ALU ops and Jumps (for write-back) go to ALU
+        alu_if.m_valid = 1'b1;
+        alu_if.m_uop   = buf_uop_q;
+      end
     end
   end
 
