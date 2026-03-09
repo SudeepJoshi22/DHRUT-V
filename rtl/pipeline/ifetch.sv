@@ -37,8 +37,8 @@ module if_stage (
       // Immediate redirection on flush pulse
       pc_q <= i_redirect_pc;
     end
-    else if (!i_stall && imem.m_valid && imem.s_ready) begin
-      // Advance to next sequential instruction
+    else if (imem.m_valid && imem.s_ready) begin
+      // Advance to next sequential instruction whenever a fetch handshake completes
       pc_q <= pc_q + 32'd4;
     end
   end
@@ -84,5 +84,29 @@ module if_stage (
   assign o_if_valid = instr_valid_q;
   assign o_if_pc    = instr_pc_q;
   assign o_if_instr = instr_q;
+
+`ifdef SIMULATION
+  // ───────────────────────────────────────────────────────────────────────────
+  // Assertions to catch duplicate PC issues
+  // ───────────────────────────────────────────────────────────────────────────
+  
+  // 1. No Duplicate Fetch: Ensure we don't fetch the same PC twice in a row
+  logic [31:0] last_fetched_pc_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) last_fetched_pc_q <= 32'hFFFFFFFF;
+    else if (imem.m_valid && imem.s_ready) last_fetched_pc_q <= imem.m_addr;
+  end
+
+  assert_no_duplicate_fetch: assert property (
+    @(posedge clk) disable iff (!rst_n || i_flush)
+    (imem.m_valid && imem.s_ready) |-> (imem.m_addr != last_fetched_pc_q)
+  ) else $error("FETCH ERROR: Duplicate memory request for PC=0x%h", imem.m_addr);
+
+  // 2. No Duplicate Dispatch: Ensure we don't send the same instruction to Decode twice
+  assert_no_duplicate_dispatch: assert property (
+    @(posedge clk) disable iff (!rst_n || i_flush)
+    (o_if_valid && !i_stall) |=> (o_if_valid ? o_if_pc != $past(o_if_pc) : 1'b1)
+  ) else $error("FETCH ERROR: Duplicate dispatch to Decode for PC=0x%h", o_if_pc);
+`endif
 
 endmodule

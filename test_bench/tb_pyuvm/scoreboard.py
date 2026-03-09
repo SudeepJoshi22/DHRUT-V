@@ -21,6 +21,7 @@ class Scoreboard(uvm_component):
     def load_verilog_hex(self, path):
         """
         Load a Verilog-style @address hex file into the byte-oriented memory model.
+        Handles both byte-oriented and word-oriented hex files.
         """
         if not path or not os.path.exists(path):
             return
@@ -35,22 +36,22 @@ class Scoreboard(uvm_component):
                     if line.startswith("@"):
                         addr = int(line[1:], 16)
                     else:
-                        bytestr = line.split()
-                        for b in bytestr:
-                            self.mem[addr] = int(b, 16)
-                            addr += 1
+                        entries = line.split()
+                        for e in entries:
+                            val = int(e, 16)
+                            # Determine if this entry is a byte, halfword, or word based on string length
+                            # objcopy -O verilog usually outputs bytes (2 chars) or words (8 chars)
+                            num_bytes = (len(e) + 1) // 2
+                            for i in range(num_bytes):
+                                byte = (val >> (8 * i)) & 0xFF
+                                self.mem[addr + i] = byte
+                            addr += num_bytes
         except Exception as e:
             self.logger.warning(f"Failed to load hex file {path} into scoreboard: {e}")
 
     def build_phase(self):
         super().build_phase()
         self.logger = logging.getLogger("my_cpu_tb." + self.get_name())
-
-        # Pre-load memory from HEX file to capture initial values (required for some signature lines)
-        hex_file = os.getenv("TEST_HEX")
-        if hex_file:
-            self.load_verilog_hex(hex_file)
-            self.logger.info(f"Scoreboard pre-loaded {len(self.mem)} bytes from {hex_file}")
 
         # tohost (PASS/FAIL)
         self.tohost_fifo = uvm_tlm_analysis_fifo("tohost_fifo", self)
@@ -74,57 +75,67 @@ class Scoreboard(uvm_component):
         self.memwr_export = self.memwr_fifo.analysis_export
         self.memwr_get_port = uvm_get_port("memwr_get_port", self)
 
+    def process_mem_write(self, txn):
+        addr = int(txn.addr)
+        data = int(txn.data)
+        size = int(txn.size)
+        wstrb = int(txn.wstrb)
+
+        # Cache sig range
+        begin_s = os.environ.get("SIG_BEGIN")
+        end_s = os.environ.get("SIG_END")
+        sig_begin = int(begin_s, 16) if begin_s else 0
+        sig_end = int(end_s, 16) if end_s else 0
+
+        for i in range(size):
+            if (wstrb >> i) & 1:
+                byte = (data >> (8 * i)) & 0xFF
+                self.mem[addr + i] = byte
+                if sig_begin <= (addr + i) < sig_end:
+                    self.logger.debug(f"Signature updated at 0x{(addr+i):08x} with 0x{byte:02x}")
+
     async def run_phase(self):
+        # Pre-load memory from HEX file to capture initial values (required for some signature lines)
+        # Doing it in run_phase ensures it happens after reset/initialization if needed, 
+        # but build_phase was also fine. Let's keep it here for clarity.
+        hex_file = os.getenv("TEST_HEX")
+        if hex_file:
+            self.load_verilog_hex(hex_file)
+            self.logger.info(f"Scoreboard pre-loaded {len(self.mem)} bytes from {hex_file}")
+
         async def collect_mem_writes():
-            # Should never be started unless capture is enabled, but keep it safe.
             if self.memwr_get_port is None:
                 return
-            
-            # Cache sig range for fast check in loop
-            begin_s = os.environ.get("SIG_BEGIN")
-            end_s = os.environ.get("SIG_END")
-            sig_begin = int(begin_s, 16) if begin_s else 0
-            sig_end = int(end_s, 16) if end_s else 0
-
             while True:
                 txn = await self.memwr_get_port.get()
-                addr = int(txn.addr)
-                data = int(txn.data)
-                size = int(txn.size)
-                wstrb = int(txn.wstrb)
-
-                self.logger.debug(f"Received MemWrite at 0x{addr:08x}, wstrb=0x{wstrb:x}")
-
-                for i in range(size):
-                    if (wstrb >> i) & 1:
-                        byte = (data >> (8 * i)) & 0xFF
-                        self.mem[addr + i] = byte
-                        if sig_begin <= (addr + i) < sig_end:
-                            # Use debug to keep simulation log cleaner
-                            self.logger.debug(f"Signature updated at 0x{(addr+i):08x} with 0x{byte:02x}")
+                self.process_mem_write(txn)
 
         async def watch_tohost():
             while True:
                 val = int(await self.tohost_get_port.get())
-
-                # Ignore non-terminating writes
                 if (val & 0x1) == 0:
                     continue
 
                 exit_code = (val >> 1)
                 if exit_code == 0:
                     self.logger.info(f"PASS: tohost=0x{val:08x}")
-                    if self.end_event and not self.end_event.is_set():
-                        self.end_event.set()
-                    return
                 else:
-                    msg = f"FAIL: tohost=0x{val:08x}, exit_code={exit_code}"
-                    self.logger.error(msg)
-                    if self.end_event and not self.end_event.is_set():
-                        self.end_event.set()
-                    assert False, msg
+                    self.logger.error(f"FAIL: tohost=0x{val:08x}, exit_code={exit_code}")
+                
+                # Drain ANY pending memory writes before finishing
+                if self.memwr_fifo is not None:
+                    while not self.memwr_fifo.is_empty():
+                        txn = self.memwr_fifo.get_nowait()
+                        self.process_mem_write(txn)
 
-        # Only start the collector if enabled
+                if self.end_event and not self.end_event.is_set():
+                    self.end_event.set()
+                
+                if exit_code != 0:
+                    assert False, f"Test failed with tohost=0x{val:08x}"
+                return
+
+        # Start collector
         if self.memwr_get_port is not None:
             cocotb.start_soon(collect_mem_writes())
 

@@ -1,16 +1,17 @@
 [*]
 [*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Thu Mar  5 18:19:00 2026
+[*] Mon Mar  9 19:08:35 2026
 [*]
-[dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/dump.vcd"
-[dumpfile_mtime] "Thu Mar  5 18:10:46 2026"
-[dumpfile_size] 14935282
+[dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/riscof/riscof_work/add-01.S/dut/dump.vcd"
+[dumpfile_mtime] "Mon Mar  9 18:20:56 2026"
+[dumpfile_size] 13257166
 [savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
-[timestart] 0
+[timestart] 3800000
 [size] 1920 1001
 [pos] -1 -1
-*-16.136272 270000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-16.191601 3960000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
+[treeopen] tb_top.ALU.
 [treeopen] tb_top.ALU.issue_if.
 [treeopen] tb_top.ISSUE.
 [treeopen] tb_top.ISSUE.lsu_if.
@@ -18,7 +19,7 @@
 [sst_width] 278
 [signals_width] 333
 [sst_expanded] 1
-[sst_vpaned_height] 331
+[sst_vpaned_height] 312
 @28
 tb_top.clk
 tb_top.rst_n
@@ -44,9 +45,10 @@ tb_top.IF.instr_valid_q
 @22
 tb_top.IF.instr_pc_q[31:0]
 tb_top.IF.instr_q[31:0]
+@23
 tb_top.IF.pc_q[31:0]
+@22
 tb_top.IF.i_redirect_pc[31:0]
-tb_top.IF.pc_next[31:0]
 @28
 tb_top.IF.o_if_valid
 @22
@@ -102,10 +104,47 @@ tb_top.ID.o_uop.lsu_sign_extend
 -Issue
 -
 @28
-tb_top.ISSUE.dec_valid_q
-@23
-tb_top.ISSUE.dec_pc_q[31:0]
+tb_top.ISSUE.buf_valid_q
+@c00022
+tb_top.ISSUE.buf_pc_q[31:0]
 @28
+(0)tb_top.ISSUE.buf_pc_q[31:0]
+(1)tb_top.ISSUE.buf_pc_q[31:0]
+(2)tb_top.ISSUE.buf_pc_q[31:0]
+(3)tb_top.ISSUE.buf_pc_q[31:0]
+(4)tb_top.ISSUE.buf_pc_q[31:0]
+(5)tb_top.ISSUE.buf_pc_q[31:0]
+(6)tb_top.ISSUE.buf_pc_q[31:0]
+(7)tb_top.ISSUE.buf_pc_q[31:0]
+(8)tb_top.ISSUE.buf_pc_q[31:0]
+(9)tb_top.ISSUE.buf_pc_q[31:0]
+(10)tb_top.ISSUE.buf_pc_q[31:0]
+(11)tb_top.ISSUE.buf_pc_q[31:0]
+(12)tb_top.ISSUE.buf_pc_q[31:0]
+(13)tb_top.ISSUE.buf_pc_q[31:0]
+(14)tb_top.ISSUE.buf_pc_q[31:0]
+(15)tb_top.ISSUE.buf_pc_q[31:0]
+(16)tb_top.ISSUE.buf_pc_q[31:0]
+(17)tb_top.ISSUE.buf_pc_q[31:0]
+(18)tb_top.ISSUE.buf_pc_q[31:0]
+(19)tb_top.ISSUE.buf_pc_q[31:0]
+(20)tb_top.ISSUE.buf_pc_q[31:0]
+(21)tb_top.ISSUE.buf_pc_q[31:0]
+(22)tb_top.ISSUE.buf_pc_q[31:0]
+(23)tb_top.ISSUE.buf_pc_q[31:0]
+(24)tb_top.ISSUE.buf_pc_q[31:0]
+(25)tb_top.ISSUE.buf_pc_q[31:0]
+(26)tb_top.ISSUE.buf_pc_q[31:0]
+(27)tb_top.ISSUE.buf_pc_q[31:0]
+(28)tb_top.ISSUE.buf_pc_q[31:0]
+(29)tb_top.ISSUE.buf_pc_q[31:0]
+(30)tb_top.ISSUE.buf_pc_q[31:0]
+(31)tb_top.ISSUE.buf_pc_q[31:0]
+@1401200
+-group_end
+@28
+tb_top.ISSUE.state_d[1:0]
+tb_top.ISSUE.state_q[1:0]
 tb_top.ISSUE.lsu_if.s_stall_from_lsu
 tb_top.ISSUE.o_branch_taken
 @22
@@ -113,8 +152,6 @@ tb_top.ISSUE.o_branch_target[31:0]
 tb_top.ISSUE.i_uop.alu_op[9:0]
 tb_top.ISSUE.op1[31:0]
 tb_top.ISSUE.op2[31:0]
-@28
-tb_top.ISSUE.issued
 @200
 -
 @28
@@ -165,8 +202,6 @@ tb_top.ISSUE.lsu_if.m_store_data[31:0]
 @28
 tb_top.ISSUE.lsu_if.m_uop.is_load
 tb_top.ISSUE.lsu_if.m_uop.is_store
-@22
-tb_top.ISSUE.dec_pc_q[31:0]
 @200
 -
 -ALU COMPUTE
@@ -174,6 +209,8 @@ tb_top.ISSUE.dec_pc_q[31:0]
 @28
 tb_top.ALU.o_valid
 @22
+tb_top.ALU.alu_inst.i_op1[31:0]
+tb_top.ALU.alu_inst.i_op2[31:0]
 tb_top.ALU.issue_if.m_uop.alu_op[9:0]
 tb_top.ALU.o_alu_result[31:0]
 @200

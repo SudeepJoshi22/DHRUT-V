@@ -62,9 +62,9 @@ module alu_stage (
   );
 
   // Outputs for Operand Forwarding
-  assign o_alu_fwd_rd               = uop_q.rd;
-  assign o_alu_fwd_result           = alu_result;
-  assign o_alu_fwd_writes_rd    = uop_q.writes_rd;
+  assign o_alu_fwd_rd               = valid_q       ?   uop_q.rd        :   'd0;
+  assign o_alu_fwd_result           = valid_q       ?   alu_result      :   'd0;
+  assign o_alu_fwd_writes_rd        = valid_q       ?   uop_q.writes_rd :   'd0;
 
   // Send result to Retire
   assign o_alu_result               = alu_result;

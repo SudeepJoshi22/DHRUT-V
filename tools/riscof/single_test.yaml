@@ -1,10 +1,10 @@
-/home/sudeep/GitHub/DHRUT-V/tools/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/beq-01.S:
+/home/sudeep/GitHub/DHRUT-V/tools/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/add-01.S:
   commit_id: b91f98f3a0e908bad4680c2e3901fbc24b63a563
   coverage_labels:
-  - beq
+  - add
   isa: RV32I
   macros:
   - TEST_CASE_1=True
   - XLEN=32
-  test_path: /home/sudeep/GitHub/DHRUT-V/tools/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/beq-01.S
-  work_dir: /home/sudeep/GitHub/DHRUT-V/tools/riscof/riscof_work/beq-01.S
+  test_path: /home/sudeep/GitHub/DHRUT-V/tools/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/add-01.S
+  work_dir: /home/sudeep/GitHub/DHRUT-V/tools/riscof/riscof_work/add-01.S
