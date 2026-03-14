@@ -59,7 +59,7 @@ module issue_stage (
   // FUTURE: || alu_stall || fpu_stall || vec_stall
 
   // Issue enable (active in READY & WAITING)
-  logic operands_ready = 1'b1;  // FUTURE: && !pending reads etc.
+  logic operands_ready = !i_stall;  // FUTURE: && !pending reads etc.
   logic issue_en;
 
   assign issue_en   =   buf_valid_q && operands_ready;

@@ -9,6 +9,7 @@ interface mem_if (
   logic [31:0] m_wdata;
   logic [3:0]  m_wstrb;
   logic [31:0] s_rdata;
+  logic        m_flush;
 
   // Master modport (CPU side)
   modport master (
@@ -16,6 +17,7 @@ interface mem_if (
     output m_addr,
     output m_wdata,
     output m_wstrb,
+    output m_flush,
     input  s_ready,
     input  s_rdata
   );
@@ -26,6 +28,7 @@ interface mem_if (
     input  m_addr,
     input  m_wdata,
     input  m_wstrb,
+    input  m_flush,
     output s_ready,
     output s_rdata
   );

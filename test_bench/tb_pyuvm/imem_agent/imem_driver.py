@@ -71,21 +71,26 @@ class IMemDriver(uvm_driver):
             
             self.imem_if.s_ready.value = 0
             self.imem_if.s_rdata.value = 0
-            
+            abort = False
             if self.imem_if.m_valid.value:
                 addr = self.imem_if.m_addr.value.to_unsigned()
                 aligned_addr = addr & ~3
                 instr = self.mem.get(aligned_addr, 0x00000013)  # default NOP if not found
 
-                # Rare latency: 90% chance of 0 stall, 10% chance of 1 or 2 stall cycles
-                if random.random() < 0.1:
+                if random.random() < 0.4:
                     stall_cycles = random.randint(1, 2)  # 1 or 2 cycles of stall
                     self.logger.debug(f"IMem introducing {stall_cycles} stall cycle(s)")
                 
                     self.imem_if.s_ready.value = 0
                     for _ in range(stall_cycles):
+                        if self.imem_if.m_flush.value:
+                            self.logger.debug(f"IMEM got flush from the Core, Aborting this transaction!")
+                            abort = True
+                            break
                         await RisingEdge(self.imem_if.clk)
 
                 # Drive response
-                self.imem_if.s_rdata.value = instr
-                self.imem_if.s_ready.value = 1
+                if not abort:
+                    abort = False
+                    self.imem_if.s_rdata.value = instr
+                    self.imem_if.s_ready.value = 1

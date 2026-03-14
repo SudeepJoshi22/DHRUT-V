@@ -109,7 +109,7 @@ class dhrutv(pluginTemplate):
             sig_begin = get_symbol("begin_signature", elf_abs)
             sig_end = get_symbol("end_signature", elf_abs)
             tohost_addr = get_symbol("tohost", elf_abs)
-            timeout = 10000
+            timeout = 100000
 
             # Remaining commands for the Makefile
             objcopy_cmd = f"{objcopy} -O verilog {shlex.quote(elf)} {shlex.quote(hexfile)}"

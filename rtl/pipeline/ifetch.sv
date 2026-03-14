@@ -54,6 +54,7 @@ module if_stage (
   assign imem.m_addr  = pc_q;
   assign imem.m_wdata = '0;
   assign imem.m_wstrb = 4'b0000;
+  assign imem.m_flush = i_flush;
 
   // =================================================================
   // Instruction Buffer
