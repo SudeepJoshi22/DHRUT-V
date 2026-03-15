@@ -92,6 +92,7 @@ module lsu (
             2'b10: wstrb = 4'b0100;
             2'b11: wstrb = 4'b1000;
           endcase
+          wdata_aligned = {24'b0, store_data_q[7:0]} << (mem_addr[1:0] * 8);
         end
 
         2'b01: begin  // halfword
@@ -100,6 +101,7 @@ module lsu (
             2'b10: wstrb = 4'b1100;
             default: wstrb = 4'b0000;
           endcase
+          wdata_aligned = {16'b0, store_data_q[15:0]} << (mem_addr[1:0] * 8);
         end
 
         2'b10: begin  // word
