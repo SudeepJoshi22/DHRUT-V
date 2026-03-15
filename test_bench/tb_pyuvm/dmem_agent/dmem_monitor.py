@@ -43,7 +43,7 @@ class DMemMonitor(uvm_monitor):
         if elf_path and os.path.exists(elf_path):
             try:
                 # Use nm to find tohost symbol
-                cmd = f"riscv64-unknown-elf-nm -n {elf_path} | awk '$3==\"tohost\" {{print $1}}'"
+                cmd = f"riscv-none-elf-nm -n {elf_path} | awk '$3==\"tohost\" {{print $1}}'"
                 addr_str = subprocess.check_output(cmd, shell=True).decode().strip()
                 if addr_str:
                     return int(addr_str, 16)

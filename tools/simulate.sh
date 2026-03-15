@@ -33,13 +33,13 @@ DIS=$BUILD_DIR/$TEST_NAME.dis
 mkdir -p $BUILD_DIR
 
 echo "▶ Building test: $TEST_NAME"
-riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32 \
+riscv-none-elf-gcc -march=rv32i -mabi=ilp32 \
     -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
     -T $TESTS_DIR/linker.ld \
     $S_FILE -o $ELF
 
-riscv64-unknown-elf-objcopy -O verilog $ELF $HEX
-riscv64-unknown-elf-objdump -D -M numeric,no-aliases $ELF > $DIS
+riscv-none-elf-objcopy -O verilog $ELF $HEX
+riscv-none-elf-objdump -D -M numeric,no-aliases $ELF > $DIS
 
 echo "✔ Build complete:"
 echo "  ELF: $ELF"

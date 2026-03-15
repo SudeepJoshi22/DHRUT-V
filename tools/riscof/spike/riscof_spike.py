@@ -39,7 +39,7 @@ class spike(pluginTemplate):
     def initialise(self, suite, work_dir, archtest_env):
        self.work_dir = work_dir
        self.suite_dir = suite
-       self.compile_cmd = 'riscv64-unknown-elf-gcc -march={0} \
+       self.compile_cmd = 'riscv-none-elf-gcc -march={0} \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
          -T '+self.pluginpath+'/env/link.ld\
          -I '+self.pluginpath+'/env/\

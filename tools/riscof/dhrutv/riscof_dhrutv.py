@@ -38,7 +38,7 @@ class dhrutv(pluginTemplate):
     def initialise(self, suite, work_dir, archtest_env):
        self.work_dir = work_dir
        self.suite_dir = suite
-       self.compile_cmd = 'riscv64-unknown-elf-gcc -march={0} \
+       self.compile_cmd = 'riscv-none-elf-gcc -march={0} \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
          -T '+self.pluginpath+'/env/link.ld\
          -I '+self.pluginpath+'/env/\
@@ -70,9 +70,9 @@ class dhrutv(pluginTemplate):
     
         pyuvm_makefile = os.path.abspath(os.path.join(self.pluginpath, "..", "..", "pyUVM", "Makefile"))
     
-        objcopy = "riscv64-unknown-elf-objcopy"
-        objdump = "riscv64-unknown-elf-objdump"
-        nm      = "riscv64-unknown-elf-nm"
+        objcopy = "riscv-none-elf-objcopy"
+        objdump = "riscv-none-elf-objdump"
+        nm      = "riscv-none-elf-nm"
 
         for testname in testList:
             testentry = testList[testname]

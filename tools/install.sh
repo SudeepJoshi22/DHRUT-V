@@ -1,146 +1,154 @@
 #!/usr/bin/env bash
-set -euo pipefail  # Strict mode: exit on error, undefined vars, pipe failures
+set -euo pipefail
 
-echo "=== RISC-V + Verilator + pyUVM Setup Script ==="
+# Colors for nicer output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# -------------------------------------------------------------------
+# CONFIGURATION – update these when new xPack releases appear
+# -------------------------------------------------------------------
+XPACK_GCC_VER="15.2.0-1"   # latest as of early 2026 – check https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases
+XPACK_GCC_TAR="xpack-riscv-none-elf-gcc-${XPACK_GCC_VER}-linux-x64.tar.gz"
+XPACK_GCC_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${XPACK_GCC_VER}/${XPACK_GCC_TAR}"
+
+XPACK_QEMU_VER="9.2.4-1"   # latest as of early 2026 – check https://github.com/xpack-dev-tools/qemu-riscv-xpack/releases
+XPACK_QEMU_TAR="xpack-qemu-riscv-${XPACK_QEMU_VER}-linux-x64.tar.gz"
+XPACK_QEMU_URL="https://github.com/xpack-dev-tools/qemu-riscv-xpack/releases/download/v${XPACK_QEMU_VER}/${XPACK_QEMU_TAR}"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+TOOLS_DIR="$REPO_ROOT/tools"
+INSTALL_PREFIX="$TOOLS_DIR/toolchain"
+VENV_DIR="$REPO_ROOT/venv"
+
+GCC_DIR="$INSTALL_PREFIX/xpack-riscv-none-elf-gcc-${XPACK_GCC_VER}"
+QEMU_DIR="$INSTALL_PREFIX/xpack-qemu-riscv-${XPACK_QEMU_VER}"
+
+mkdir -p "$TOOLS_DIR" "$INSTALL_PREFIX"
+
+echo -e "${GREEN}=== DHRUT-V Setup Script (Ubuntu/Debian only) ===${NC}"
 echo "This script installs:"
-echo "  - RISC-V GNU Toolchain (RV32IMAC / RV64IMAC support)"
-echo "  - Spike (RISC-V ISA Simulator)"
-echo "  - Verilator (Verilog/SystemVerilog Simulator)"
-echo "  - Python virtual environment with cocotb, pyuvm, find_libpython, PyYAML"
-echo "  - RISCOF (RISC-V Architectural Test Framework)"
-echo "Target: Ubuntu/Debian-based systems"
-echo "Install location: /opt/riscv (toolchain & spike), system-wide Verilator"
-echo "Python env: ~/riscv_pyenv"
+echo " • xPack RISC-V GCC (riscv-none-elf-gcc)"
+echo " • xPack QEMU RISC-V (qemu-system-riscv64 etc.)"
+echo " • Verilator (latest from git)"
+echo " • Python venv with cocotb, pyuvm, riscof"
 echo ""
+echo "Install location: $INSTALL_PREFIX (repo-local)"
+echo "Venv location:    $VENV_DIR"
 
-# Check for root/sudo
-if [[ $EUID -eq 0 ]]; then
-   echo "Do not run as root — sudo will be used when needed"
-   exit 1
-fi
-
-# Update system and install build dependencies
-echo "Installing system dependencies..."
-sudo apt update
+# -------------------------------------------------------------------
+# 1. System Dependencies
+# -------------------------------------------------------------------
+echo -e "${YELLOW}Installing required system packages...${NC}"
+sudo apt update -y
 sudo apt install -y \
-    autoconf automake autotools-dev curl python3 python3-pip python3-venv libmpc-dev \
-    libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo \
-    gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build \
-    git pkg-config libglib2.0-dev libpixman-1-dev libssl-dev
+    git wget curl python3 python3-pip python3-venv \
+    autoconf automake libtool make g++ flex bison libfl-dev \
+    zlib1g-dev libgoogle-perftools-dev pkg-config \
+    libglib2.0-dev libpixman-1-dev ninja-build
 
-# Create install directory
-INSTALL_PREFIX="/opt/riscv"
-sudo mkdir -p "$INSTALL_PREFIX"
-sudo chown "$USER":"$USER" "$INSTALL_PREFIX"
+# -------------------------------------------------------------------
+# 2. xPack RISC-V GCC (manual download)
+# -------------------------------------------------------------------
+if [ ! -d "$GCC_DIR" ]; then
+    echo -e "${YELLOW}Downloading xPack RISC-V GCC v${XPACK_GCC_VER}...${NC}"
+    wget --show-progress -O - "$XPACK_GCC_URL" | tar -xz -C "$INSTALL_PREFIX"
+    echo -e "${GREEN}✓ GCC installed${NC}"
+else
+    echo -e "${GREEN}GCC already present${NC}"
+fi
+GCC_BIN="$GCC_DIR/bin"
 
-# ===================================================================
-# 1. RISC-V GNU Toolchain (riscv-gnu-toolchain)
-# ===================================================================
-echo ""
-echo "Installing RISC-V GNU Toolchain to $INSTALL_PREFIX..."
+# -------------------------------------------------------------------
+# 3. xPack QEMU RISC-V (manual download)
+# -------------------------------------------------------------------
+if [ ! -d "$QEMU_DIR" ]; then
+    echo -e "${YELLOW}Downloading xPack QEMU RISC-V v${XPACK_QEMU_VER}...${NC}"
+    wget --show-progress -O - "$XPACK_QEMU_URL" | tar -xz -C "$INSTALL_PREFIX"
+    echo -e "${GREEN}✓ QEMU installed${NC}"
+else
+    echo -e "${GREEN}QEMU already present${NC}"
+fi
+QEMU_BIN="$QEMU_DIR/bin"
 
-if [ ! -d "riscv-gnu-toolchain" ]; then
-    git clone https://github.com/riscv/riscv-gnu-toolchain.git
+# -------------------------------------------------------------------
+# 4. Verilator from git (latest stable release)
+# -------------------------------------------------------------------
+VERILATOR_DIR="$TOOLS_DIR/verilator"
+if [ ! -d "$VERILATOR_DIR/bin" ]; then
+    echo -e "${YELLOW}Building latest Verilator from git (may take 3–5 min)...${NC}"
+    git clone https://github.com/verilator/verilator "$VERILATOR_DIR" || true
+    cd "$VERILATOR_DIR"
+    git fetch --tags
+    LATEST_TAG=$(git describe --tags --abbrev=0)
+    git checkout "$LATEST_TAG"
+    echo "Building Verilator $LATEST_TAG..."
+    autoconf
+    VERILATOR_INSTALL_DIR="$TOOLS_DIR/verilator-install"
+    ./configure --prefix="$VERILATOR_INSTALL_DIR"
+    make -j$(nproc)
+    make install
+    cd "$REPO_ROOT"
+else
+    echo -e "${GREEN}Verilator already installed → skipping build.${NC}"
+fi
+VERILATOR_BIN="$VERILATOR_INSTALL_DIR/bin"
+
+# -------------------------------------------------------------------
+# 5. Python venv + packages
+# -------------------------------------------------------------------
+if [ ! -d "$VENV_DIR" ]; then
+    echo -e "${YELLOW}Creating Python virtual environment...${NC}"
+    python3 -m venv "$VENV_DIR"
 fi
 
-cd riscv-gnu-toolchain
-git pull
-git submodule update --init --recursive
-
-./configure --prefix="$INSTALL_PREFIX" --enable-multilib
-make -j"$(nproc)"
-sudo make install
-cd ..
-
-# ===================================================================
-# 2. Spike (riscv-isa-sim)
-# ===================================================================
-echo ""
-echo "Installing Spike to $INSTALL_PREFIX..."
-
-if [ ! -d "riscv-isa-sim" ]; then
-    git clone https://github.com/riscv-software-src/riscv-isa-sim.git
-fi
-
-cd riscv-isa-sim
-git pull
-git submodule update --init --recursive
-
-mkdir -p build
-cd build
-../configure --prefix="$INSTALL_PREFIX" --enable-commitlog
-make -j"$(nproc)"
-sudo make install
-cd ../..
-
-# ===================================================================
-# 3. Verilator
-# ===================================================================
-echo ""
-echo "Installing Verilator (system-wide)..."
-
-if [ ! -d "verilator" ]; then
-    git clone https://github.com/verilator/verilator.git
-fi
-
-cd verilator
-git pull
-git checkout stable  # stable branch
-
-autoconf
-./configure
-make -j"$(nproc)"
-sudo make install
-cd ..
-
-# ===================================================================
-# 4. Python Virtual Environment + cocotb + pyuvm + extras + RISCOF
-# ===================================================================
-echo ""
-echo "Creating Python virtual environment at ~/riscv_pyenv..."
-
-python3 -m venv ~/riscv_pyenv
-# shellcheck disable=SC1090
-source ~/riscv_pyenv/bin/activate
-
-echo "Upgrading pip and installing packages..."
-pip install --upgrade pip
-
-# Existing packages
+source "$VENV_DIR/bin/activate"
+echo -e "${YELLOW}Installing/updating Python packages...${NC}"
+pip install --upgrade pip setuptools wheel
 pip install cocotb==2.0.1 pyuvm==4.0.1 find_libpython==0.5.0 PyYAML==6.0.3
+pip install git+https://github.com/riscv/riscof.git@d38859f   # or change to latest commit if needed
 
-# RISCOF (preferred install per docs: latest from upstream git)
-pip install git+https://github.com/riscv/riscof.git@d38859f
+# -------------------------------------------------------------------
+# 6. Inject toolchain paths into venv activation
+# -------------------------------------------------------------------
+ACTIVATE="$VENV_DIR/bin/activate"
+echo -e "${YELLOW}Updating venv activation script with toolchain paths...${NC}"
 
-echo ""
-echo "Verifying RISCOF installation..."
-riscof --help >/dev/null
+# Remove old block if exists
+sed -i '/# DHRUT-V TOOLCHAIN PATHS/,/echo "\[DHRUT-V\]/d' "$ACTIVATE" 2>/dev/null || true
+
+cat << EOF >> "$ACTIVATE"
+
+# DHRUT-V TOOLCHAIN PATHS (added by install.sh)
+export PATH="$GCC_BIN:$QEMU_BIN:$VERILATOR_BIN:\$PATH"
+export RISCV="$INSTALL_PREFIX"
+echo "[DHRUT-V] Environment activated: GCC + QEMU + Verilator ready"
+EOF
 
 deactivate
 
-# ===================================================================
-# Add to PATH (permanent)
-# ===================================================================
+# -------------------------------------------------------------------
+# Final message
+# -------------------------------------------------------------------
+echo -e "${GREEN}===========================================================${NC}"
+echo -e "${GREEN}DHRUT-V SETUP COMPLETE!${NC}"
 echo ""
-echo "Adding $INSTALL_PREFIX/bin to PATH..."
-echo "export PATH=\"$INSTALL_PREFIX/bin:\$PATH\"" >> ~/.bashrc
-echo "export RISCV=\"$INSTALL_PREFIX\"" >> ~/.bashrc
-
-# Add virtual env activation note
+echo "To activate the environment in any new terminal:"
+echo "  source venv/bin/activate"
 echo ""
-echo "To activate Python environment with cocotb/pyuvm/riscof:"
-echo "  source ~/riscv_pyenv/bin/activate"
-
-echo ""
-echo "=== Installation Complete! ==="
-echo "Toolchain: $INSTALL_PREFIX/bin/riscv64-unknown-elf-gcc (etc.)"
-echo "Spike:     $INSTALL_PREFIX/bin/spike"
-echo "Verilator: verilator (system-wide)"
-echo "Python env: ~/riscv_pyenv (with cocotb==2.0.1, pyuvm==4.0.1, riscof installed)"
-echo ""
-echo "Reload your shell or run: source ~/.bashrc"
-echo "Verify:"
-echo "  riscv64-unknown-elf-gcc --version"
-echo "  spike --version"
+echo "Once activated, you can use:"
+echo "  riscv-none-elf-gcc --version"
+echo "  qemu-system-riscv64 --version"
 echo "  verilator --version"
-echo "  source ~/riscv_pyenv/bin/activate && riscof --version && pip list"
+echo "  python -c 'import cocotb; print(cocotb.__version__)'"
+echo ""
+echo "Recommended next steps:"
+echo "  1. Add these lines to .gitignore:"
+echo "     tools/toolchain/"
+echo "     venv/"
+echo "  2. Run your first simulation or test"
+echo ""
+echo "Good luck with DHRUT-V development!"
+echo -e "${GREEN}===========================================================${NC}"
