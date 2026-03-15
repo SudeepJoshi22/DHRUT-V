@@ -249,7 +249,7 @@ module decode_stage (
           o_uop.is_jump      = 1'b1;
           o_uop.imm          = imm_i;
           o_uop.alu_op       = ALU_ADD;             // Link value (pc+4)
-          o_uop.uses_rs1     = 1'b1;
+          o_uop.uses_rs1     = 1'b0;
           o_uop.uses_rs2     = 1'b0;
           o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
         end
