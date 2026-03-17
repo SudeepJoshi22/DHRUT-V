@@ -38,7 +38,7 @@ class dhrutv(pluginTemplate):
     def initialise(self, suite, work_dir, archtest_env):
        self.work_dir = work_dir
        self.suite_dir = suite
-       self.compile_cmd = 'riscv-none-elf-gcc -march={0} \
+       self.compile_cmd = 'riscv-none-elf-gcc -march={0} -mno-relax \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
          -T '+self.pluginpath+'/env/link.ld\
          -I '+self.pluginpath+'/env/\
@@ -109,7 +109,7 @@ class dhrutv(pluginTemplate):
             sig_begin = get_symbol("begin_signature", elf_abs)
             sig_end = get_symbol("end_signature", elf_abs)
             tohost_addr = get_symbol("tohost", elf_abs)
-            timeout = 100000
+            timeout = 50000
 
             # Remaining commands for the Makefile
             objcopy_cmd = f"{objcopy} -O verilog {shlex.quote(elf)} {shlex.quote(hexfile)}"

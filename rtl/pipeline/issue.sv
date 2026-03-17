@@ -59,10 +59,11 @@ module issue_stage (
   // FUTURE: || alu_stall || fpu_stall || vec_stall
 
   // Issue enable (active in READY & WAITING)
-  logic operands_ready = !i_stall;  // FUTURE: && !pending reads etc.
+  logic operands_ready;
+  assign operands_ready     =   !i_stall && !lsu_if.s_stall_from_lsu;  // FUTURE: && !pending reads etc.
+  
   logic issue_en;
-
-  assign issue_en   =   buf_valid_q && operands_ready;
+  assign issue_en           =   buf_valid_q && operands_ready;
 
   // Ack from downstream (simple version: no stall = ready)
   // FUTURE: use per-unit s_ready signals
