@@ -1,7 +1,9 @@
-<p align="center">
-  <h1 align="center">DHRUT-V</h1>
-  <img src="logo.jpeg" alt="DHRUT-V Logo" width="400">
-</p>
+<div align="center">
+  <h1>DHRUT-V</h1>
+  <img src="logo.jpeg" alt="DHRUT-V Logo" width="200">
+</div>
+
+---
 
 A fully pipelined, in-order superscalar(not yet) **RISC-V** core written in **SystemVerilog**.
 
