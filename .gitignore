@@ -20,3 +20,15 @@ riscv-isa-sim/
 verilator/
 tools/verilator-install/
 tools/spike
+.breadcrumbs.yaml
+.claude/
+.empirica/
+.empirica_reflex_logs/
+BPU_INTEGRATION_SUMMARY.md
+FPU_INTEGRATION.md
+FPU_INTEGRATION_ANALYSIS.md
+docs/
+pnew/
+tests/asm/bpu_stress.S
+CLAUDE.md
+fpnew/

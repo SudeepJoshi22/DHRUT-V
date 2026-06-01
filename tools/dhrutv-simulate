@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Wrapper script to simulate DHRUT-V tests - skill-like interface
+# Usage: ./dhrutv-simulate <test_name> [seed]
+
+# Forward all arguments to the original simulate.sh
+./simulate.sh "$@"
