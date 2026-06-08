@@ -128,6 +128,7 @@ cat << EOF >> "$ACTIVATE"
 # DHRUT-V TOOLCHAIN PATHS (added by install.sh)
 export PATH="$GCC_BIN:$SPIKE_BIN:$VERILATOR_BIN:\$PATH"
 export RISCV="$INSTALL_PREFIX"
+export UVM_HOME="$TOOLS_DIR/uvm-verilator/src"
 echo "[DHRUT-V] Environment activated: GCC + Spike + Verilator ready"
 EOF
 

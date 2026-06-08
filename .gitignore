@@ -1,3 +1,5 @@
+error.txt
+obj_dir/
 **/*.swp
 **/sim_build
 **/__pycache__
