@@ -51,7 +51,8 @@ sudo apt install -y \
     git wget curl python3 python3-pip python3-venv \
     autoconf automake libtool make g++ flex bison libfl-dev \
     zlib1g-dev libgoogle-perftools-dev pkg-config \
-    libglib2.0-dev libpixman-1-dev ninja-build
+    libglib2.0-dev libpixman-1-dev ninja-build \
+    device-tree-compiler help2man
 
 # -------------------------------------------------------------------
 # 2. xPack RISC-V GCC
@@ -69,7 +70,7 @@ GCC_BIN="$GCC_DIR/bin"
 # 3. Spike RISC-V ISA simulator
 # -------------------------------------------------------------------
 if [ ! -f "$SPIKE_DIR/bin/spike" ]; then
-    echo -e "${YELLOW}Building Spike RISC-V ISA simulator (may take 2–4 min)...${NC}"
+    echo -e "${YELLOW}Building Spike RISC-V ISA simulator (may take 10-15 mins)...${NC}"
     git clone https://github.com/riscv-software-src/riscv-isa-sim.git "$SPIKE_SRC_DIR" || true
     cd "$SPIKE_SRC_DIR"
     ./configure --prefix="$SPIKE_DIR"
@@ -86,7 +87,7 @@ SPIKE_BIN="$SPIKE_DIR/bin"
 # 4. Verilator (now safe even when already installed)
 # -------------------------------------------------------------------
 if [ ! -d "$VERILATOR_INSTALL_DIR/bin" ]; then
-    echo -e "${YELLOW}Building latest Verilator from git (may take 3–5 min)...${NC}"
+    echo -e "${YELLOW}Building latest Verilator from git (may take an 30mins or more)...${NC}"
     git clone https://github.com/verilator/verilator "$VERILATOR_DIR" || true
     cd "$VERILATOR_DIR"
     git fetch --tags
@@ -113,6 +114,7 @@ if [ ! -d "$VENV_DIR" ]; then
 fi
 source "$VENV_DIR/bin/activate"
 echo -e "${YELLOW}Installing/updating Python packages...${NC}"
+export COCOTB_IGNORE_PYTHON_REQUIRES=1
 pip install --upgrade pip setuptools wheel
 pip install cocotb==2.0.1 pyuvm==4.0.1 find_libpython==0.5.0 PyYAML==6.0.3
 pip install git+https://github.com/riscv/riscof.git@d38859f
