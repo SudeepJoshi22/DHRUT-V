@@ -1,0 +1,296 @@
+// SystemRDL reverse-engineered from the hand-written rtl/pipeline/csr.sv
+// (module csr_regfile), commit c128569 on branch m7-csr-trap.
+//
+// This is a *validation pass*, not yet the golden source: see the repo
+// discussion / PR notes for a list of modeling ambiguities that need
+// sign-off before the hand-written RTL is retired in favor of
+// PeakRDL-generated output. In short:
+//
+//  - csr_regfile is NOT bus-attached. It's a single direct point-to-point
+//    interface hand-integrated into issue.sv (one atomic RISC-V CSR
+//    instruction resolved per cycle: address + write-data + write-enable
+//    in, old-value + invalid-address out), plus two extra hardware-side
+//    write ports (trap entry, mret) that have no bus equivalent at all.
+//    None of PeakRDL's bus cpuifs (APB/AXI-lite/AXI4/Avalon/Wishbone/OBI)
+//    apply — this spec targets `--cpuif passthrough`.
+//
+//  - RISC-V CSR numbers (e.g. 0x301, 0x343, 0xB82) are a flat 12-bit
+//    opaque index per the ISA spec, NOT byte-addressed memory offsets,
+//    and most of them are not 4-byte-aligned. Using them directly as
+//    RDL addresses was tried and empirically rejected: systemrdl-compiler
+//    hard-errors on overlap for every adjacent pair, since it requires
+//    each 32-bit register's 4-byte footprint to be non-overlapping.
+//    Per your decision, this spec instead uses plain sequential 4-byte
+//    offsets (0x00, 0x04, ...) — see the CSR#-to-offset table above the
+//    addrmap's instance list. The real CSR number is preserved only as
+//    documentation here; an explicit translation table would need to be
+//    added to issue.sv's integration glue (replacing today's direct
+//    `i_csr_addr = buf_uop_q.imm[11:0]` passthrough) if this generated
+//    block ever replaces the hand-written one.
+//
+//  - mcycle/mcycleh and minstret/minstreth: the hand-written RTL lets a
+//    same-cycle software write to one 32-bit half race the free-running
+//    (or instret-gated) 64-bit auto-increment. Because both are separate
+//    nonblocking assignments to overlapping bits of the same 64-bit
+//    register in one always_ff, the LAST one wins per bit-range: the
+//    written half gets exactly the write value, the other half still
+//    gets the auto-incremented value, un-recombined. This is modeled
+//    below with explicit hw increment + sw write on each 32-bit half
+//    independently (matching the RTL's literal behavior) rather than a
+//    single atomic 64-bit `counter` field — flagged for confirmation:
+//    is this actually the *intended* semantics, or a latent RTL bug we
+//    should fix (and then re-derive this spec from the fixed intent)?
+//
+//  - mepc: the software write path masks bits[1:0] to 0 (IALIGN=32
+//    WARL), but the hardware trap-entry write path does not — it relies
+//    on i_trap_pc already being word-aligned (always true today, no
+//    compressed-ISA support). Modeled here as bits[1:0] hardwired 0 and
+//    bits[31:2] read/write from both sw and hw, which enforces the mask
+//    on *both* paths. That is a literal behavior difference from today's
+//    RTL only in the hypothetical case of a misaligned hw trap PC —
+//    flagged for confirmation, not silently matched or silently "fixed".
+//
+//  - mip is modeled as a true constant-0 read-only field (matching
+//    today's RTL exactly: no CLINT/PLIC pending lines wired up yet).
+//    Not pre-wired for future hardware-set bits — flagged in case you'd
+//    rather the spec anticipate that now.
+//
+//  - mstatus.MPP[12:11] is modeled as a hardwired constant (2'b11,
+//    M-mode), matching the RTL, since only M-mode exists in this core.
+
+reg mstatus_reg {
+    name = "mstatus";
+    desc = "Machine status register (M-mode-only subset).";
+
+    field {
+        desc = "Machine Interrupt Enable. HW-updated on trap entry
+                (cleared) and mret (restored from MPIE); HW write
+                always takes priority over a same-cycle SW write,
+                matching the RTL's if/else-if priority chain.";
+        sw = rw; hw = rw; we;
+        reset = 1'b0;
+    } MIE[3:3];
+
+    field {
+        desc = "Machine Previous Interrupt Enable. HW-updated on trap
+                entry (<= old MIE) and mret (<= 1); HW priority over SW,
+                same as MIE.";
+        sw = rw; hw = rw; we;
+        reset = 1'b0;
+    } MPIE[7:7];
+
+    field {
+        desc = "Machine Previous Privilege. Hardwired to M (2'b11) —
+                no S/U-mode exists in this core. Read-only constant,
+                writes ignored.";
+        sw = r; hw = na;
+        reset = 2'b11;
+    } MPP[12:11];
+};
+
+reg misa_reg {
+    name = "misa";
+    desc = "ISA/extensions register. Fully read-only constant:
+            MXL=RV32, extension bit 'I' only. Writes ignored.";
+    field {
+        sw = r; hw = na;
+        reset = 32'h4000_0100;
+    } MISA[31:0];
+};
+
+reg mie_reg {
+    name = "mie";
+    desc = "Machine interrupt-enable register. Plain SW read/write —
+            unlike mstatus's MIE/MPIE, nothing in the current RTL
+            drives these from hardware (no CLINT/PLIC wired up yet).";
+
+    field { sw = rw; hw = r; reset = 1'b0; } MSIE[3:3];
+    field { sw = rw; hw = r; reset = 1'b0; } MTIE[7:7];
+    field { sw = rw; hw = r; reset = 1'b0; } MEIE[11:11];
+};
+
+reg mtvec_reg {
+    name = "mtvec";
+    desc = "Trap vector base. Plain SW read/write, full 32 bits
+            (including the mode field) — the RTL always treats it as
+            direct mode regardless of the mode bits' value.";
+    field { sw = rw; hw = r; reset = 32'h0; } MTVEC[31:0];
+};
+
+reg mscratch_reg {
+    name = "mscratch";
+    desc = "Machine scratch register. Plain SW read/write, no HW side effects.";
+    field { sw = rw; hw = r; reset = 32'h0; } MSCRATCH[31:0];
+};
+
+reg mepc_reg {
+    name = "mepc";
+    desc = "Machine exception PC. HW-written on trap entry (<= faulting
+            PC); HW priority over a same-cycle SW write. See file header
+            re: bits[1:0] masking asymmetry between the SW and HW write
+            paths in the original RTL.";
+
+    field {
+        sw = r; hw = na;
+        reset = 2'b00;
+    } RESERVED_LOW[1:0];
+
+    field {
+        sw = rw; hw = rw; we;
+        reset = 30'h0;
+    } MEPC_HI[31:2];
+};
+
+reg mcause_reg {
+    name = "mcause";
+    desc = "Machine trap cause. HW-written on trap entry; HW priority
+            over a same-cycle SW write.";
+    field { sw = rw; hw = rw; we; reset = 32'h0; } MCAUSE[31:0];
+};
+
+reg mtval_reg {
+    name = "mtval";
+    desc = "Machine trap value. HW-written on trap entry; HW priority
+            over a same-cycle SW write.";
+    field { sw = rw; hw = rw; we; reset = 32'h0; } MTVAL[31:0];
+};
+
+reg mip_reg {
+    name = "mip";
+    desc = "Machine interrupt-pending register. True constant 0 in the
+            current RTL — no CLINT/PLIC pending lines wired up yet.
+            Writes ignored (not in the RTL's write-case at all).";
+    field {
+        sw = r; hw = na;
+        reset = 32'h0;
+    } MIP[31:0];
+};
+
+// See file header: SW write to one half races the unconditional 64-bit
+// auto-increment; modeled as two independent 32-bit halves each with
+// their own hw-increment + sw-write, matching the literal per-bit-range
+// NBA-overlap behavior of the RTL, NOT a single atomic 64-bit counter.
+reg mcycle_reg {
+    name = "mcycle";
+    desc = "Lower 32 bits of the free-running cycle counter.
+            Auto-increments every cycle; SW may also write it (races
+            the auto-increment on the same cycle — see file header).";
+    field {
+        sw = rw; hw = rw; we;
+        reset = 32'h0;
+    } MCYCLE[31:0];
+};
+
+reg mcycleh_reg {
+    name = "mcycleh";
+    desc = "Upper 32 bits of the free-running cycle counter. Same
+            auto-increment/SW-write race caveat as mcycle.";
+    field {
+        sw = rw; hw = rw; we;
+        reset = 32'h0;
+    } MCYCLEH[31:0];
+};
+
+reg minstret_reg {
+    name = "minstret";
+    desc = "Lower 32 bits of the retired-instruction counter.
+            Increments when i_instret_inc pulses (approximated in the
+            RTL as 'a uop is issued this cycle', not a true retire
+            pulse — see rtl/pipeline/issue.sv). SW may also write it
+            (same race caveat as mcycle).";
+    field {
+        sw = rw; hw = rw; we;
+        reset = 32'h0;
+    } MINSTRET[31:0];
+};
+
+reg minstreth_reg {
+    name = "minstreth";
+    desc = "Upper 32 bits of the retired-instruction counter. Same
+            caveats as minstret.";
+    field {
+        sw = rw; hw = rw; we;
+        reset = 32'h0;
+    } MINSTRETH[31:0];
+};
+
+reg mvendorid_reg {
+    name = "mvendorid";
+    desc = "Vendor ID. Hardwired 0 (non-commercial implementation).";
+    field { sw = r; hw = na; reset = 32'h0; } MVENDORID[31:0];
+};
+reg marchid_reg {
+    name = "marchid";
+    desc = "Architecture ID. Hardwired 0.";
+    field { sw = r; hw = na; reset = 32'h0; } MARCHID[31:0];
+};
+reg mimpid_reg {
+    name = "mimpid";
+    desc = "Implementation ID. Hardwired 0.";
+    field { sw = r; hw = na; reset = 32'h0; } MIMPID[31:0];
+};
+reg mhartid_reg {
+    name = "mhartid";
+    desc = "Hart ID. Hardwired 0 (single-hart core).";
+    field { sw = r; hw = na; reset = 32'h0; } MHARTID[31:0];
+};
+
+addrmap csr_regfile {
+    name = "DHRUT-V M-mode CSR block";
+    desc = "RV32I + Zicsr, machine-mode-only CSR register file. Reverse-engineered
+            from rtl/pipeline/csr.sv. Not bus-attached: intended for
+            --cpuif passthrough, hand-integrated into issue.sv.";
+
+    default regwidth = 32;
+
+    // ------------------------------------------------------------
+    // Instance map: SystemRDL requires 4-byte-aligned, non-overlapping
+    // register footprints, so literal RISC-V CSR numbers (which are a
+    // flat opaque 12-bit index, not byte offsets — see file header)
+    // cannot be used as addresses directly here; confirmed empirically
+    // (systemrdl-compiler hard-errors with overlap on every adjacent
+    // pair when the raw CSR numbers are used as-is). Per your call:
+    // this addrmap uses plain sequential 4-byte offsets, and the real
+    // RISC-V CSR number -> RDL-offset mapping lives in the table below
+    // (and must be mirrored by an explicit translation table in
+    // issue.sv's integration glue, replacing today's direct
+    // `i_csr_addr = buf_uop_q.imm[11:0]` passthrough, if/when this
+    // generated block replaces the hand-written one).
+    //
+    //   RDL offset   RISC-V CSR#   Register
+    //   0x00         0x300         mstatus
+    //   0x04         0x301         misa
+    //   0x08         0x304         mie
+    //   0x0C         0x305         mtvec
+    //   0x10         0x340         mscratch
+    //   0x14         0x341         mepc
+    //   0x18         0x342         mcause
+    //   0x1C         0x343         mtval
+    //   0x20         0x344         mip
+    //   0x24         0xB00         mcycle
+    //   0x28         0xB02         minstret
+    //   0x2C         0xB80         mcycleh
+    //   0x30         0xB82         minstreth
+    //   0x34         0xF11         mvendorid
+    //   0x38         0xF12         marchid
+    //   0x3C         0xF13         mimpid
+    //   0x40         0xF14         mhartid
+    // ------------------------------------------------------------
+    mstatus_reg   mstatus   @ 0x00;
+    misa_reg      misa      @ 0x04;
+    mie_reg       mie       @ 0x08;
+    mtvec_reg     mtvec     @ 0x0C;
+    mscratch_reg  mscratch  @ 0x10;
+    mepc_reg      mepc      @ 0x14;
+    mcause_reg    mcause    @ 0x18;
+    mtval_reg     mtval     @ 0x1C;
+    mip_reg       mip       @ 0x20;
+    mcycle_reg    mcycle    @ 0x24;
+    minstret_reg  minstret  @ 0x28;
+    mcycleh_reg   mcycleh   @ 0x2C;
+    minstreth_reg minstreth @ 0x30;
+    mvendorid_reg mvendorid @ 0x34;
+    marchid_reg   marchid   @ 0x38;
+    mimpid_reg    mimpid    @ 0x3C;
+    mhartid_reg   mhartid   @ 0x40;
+};
