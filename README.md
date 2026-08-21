@@ -41,6 +41,7 @@ graph LR
     - Performs **Scoreboarding** and hazard detection(feature yet to be implemented).
     - Handles **Operand Forwarding** from ALU, LSU, and Retire stages.
     - Resolves **Branches and Jumps** early to reduce bubbles.
+    - Resolves **CSR reads/writes and traps** (`ecall`/`ebreak`/illegal-instruction/`mret`) the same cycle, via an embedded M-mode CSR/trap unit (`rtl/pipeline/csr.sv`) — see [CSR / Trap Support](#csr--trap-support-zicsr-m-mode) below.
     - Dispatches uops to functional units.
 4.  **Functional Units**:
     - **ALU**: Performs arithmetic, logic, and comparison operations.
@@ -79,7 +80,7 @@ source ~/.bashrc
 ### Activate Environment
 
 ```bash
-source ~/riscv_pyenv/bin/activate
+source venv/bin/activate
 ```
 
 ---
@@ -111,6 +112,37 @@ Always keep the RTL clean!
 
 ---
 
+## CSR / Trap Support (Zicsr, M-mode)
+
+DHRUT-V implements a minimal **M-mode-only** CSR and trap unit (RV32I + Zicsr — no S/U-mode, no PMP, no vectored/delegated interrupts): `CSRRW/S/C` (+ immediate forms), `ECALL`, `EBREAK`, `MRET`, and illegal-instruction detection, resolved combinationally in the Issue stage at the same point branches/jumps already are.
+
+**Implemented CSRs**: `mstatus` (MIE/MPIE/MPP), `misa`, `mie`, `mtvec` (direct mode only), `mscratch`, `mepc`, `mcause`, `mtval`, `mip` (hardwired 0 — no CLINT/PLIC yet), `mcycle(h)`, `minstret(h)`, and the read-only ID registers.
+
+**Verification status**: 5 directed, self-checking assembly tests (`tests/asm/csr_basic.S`, `trap_ecall.S`, `trap_illegal.S`, `trap_ebreak.S`, `trap_mret.S`) pass against Spike + the cocotb/pyUVM testbench. The riscof RV32I compliance regression has **not** been extended to cover Zicsr/privilege yet (`tools/riscof/dhrutv/dhrutv_isa.yaml` still declares plain `RV32I`) — that's the remaining gate before this is considered fully compliance-verified.
+
+### SystemRDL spec (`rtl/csr/`) — validation pass, not (yet) the source of truth
+
+As a cross-check, the hand-written CSR register file (`rtl/pipeline/csr.sv`) has been reverse-engineered into a [SystemRDL](https://www.accellera.org/downloads/standards/systemrdl) spec, and RTL + documentation were regenerated from it via [PeakRDL](https://peakrdl.readthedocs.io):
+
+```text
+rtl/csr/
+├── csr_regfile.rdl     # SystemRDL description of every register/field, with
+│                        # explicit notes on non-obvious access behavior (hw vs
+│                        # sw write priority, mcycle/minstret write-vs-increment
+│                        # races, etc.) reverse-engineered from the RTL
+├── generated/           # `peakrdl regblock csr_regfile.rdl -o generated --cpuif passthrough`
+└── html_ref/             # `peakrdl html csr_regfile.rdl -o html_ref` — open html_ref/index.html
+```
+
+**Important — how this fits into the build today:** RTL generation from the `.rdl` is a **separate, manual step**, not part of `simulate.sh`/`lint.sh`/any automated build. The CPU is still built entirely from the hand-written `rtl/pipeline/csr.sv`; nothing in `rtl/csr/generated/` is referenced by `tb_top.sv` or any other pipeline file. The `.rdl` and its generated output exist purely to validate the hand-written module by comparison, and two open questions need resolving before the generated block could realistically replace it:
+
+1. RISC-V CSR numbers (e.g. `0x300`, `0x341`) aren't 4-byte-aligned byte offsets, so the `.rdl` uses plain sequential offsets internally — a CSR-number → offset translation table would need to be added to `issue.sv`'s integration glue if the generated block ever replaced the hand-written one.
+2. PeakRDL's generated hardware-write priority for `hw=rw` fields defaults to *software-over-hardware* on a same-cycle collision, the opposite of the hand-written RTL's *trap-always-wins* priority. This is currently unobservable (Issue resolves one instruction per cycle, so a CSR write and a trap can never coincide) but would matter the moment superscalar issue exists.
+
+If/when this is promoted from "validation pass" to "generator of the real CSR block," update this section.
+
+---
+
 ## Project Structure
 
 ```text
@@ -118,7 +150,8 @@ DHRUT-V/
 ├── rtl/                    # SystemVerilog RTL
 │   ├── include/            # Packages and shared definitions
 │   ├── interfaces/         # SV Interfaces for pipeline connectivity
-│   ├── pipeline/           # Core pipeline stages (ifetch, decode, issue, etc.)
+│   ├── pipeline/           # Core pipeline stages (ifetch, decode, issue, csr, etc.)
+│   ├── csr/                # SystemRDL CSR spec + PeakRDL-generated RTL/docs (validation pass, see above)
 │   └── tb_top.sv           # Top-level module for simulation
 ├── test_bench/             # Verification Environment
 │   ├── tb_pyuvm/           # pyUVM Agents, Scoreboard, and Environments
@@ -143,7 +176,7 @@ DHRUT-V/
 - [x] Early Branch/Jump resolution.
 - [x] Basic pyUVM Verification Infrastructure.
 - [x] Full compliance with RV32I_m RISCOF tests.
-- [ ] **CSR Support (Zicsr)**: Machine-mode CSRs and official compliance.
+- [x] **CSR Support (Zicsr), M-mode**: implemented + directed-test-verified (see [CSR / Trap Support](#csr--trap-support-zicsr-m-mode)). Official riscof Zicsr/privilege compliance still pending.
 - [ ] **Benchmarking and Performance Enhancements**.
 - [ ] **FPGA Deployment**: Booting bare-metal code on a Xilinx/Lattice FPGA.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.
