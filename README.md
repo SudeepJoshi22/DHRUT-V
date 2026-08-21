@@ -42,7 +42,7 @@ graph LR
     - Performs **Scoreboarding** and hazard detection(feature yet to be implemented).
     - Handles **Operand Forwarding** from ALU, LSU, and Retire stages.
     - Resolves **Branches and Jumps** early to reduce bubbles.
-    - Dispatches to the **CSR Unit** (`rtl/pipeline/csr_unit.sv`) for CSR reads/writes and traps (`ecall`/`ebreak`/illegal-instruction/`mret`), resolved the same cycle — its own block, not pipelined like ALU/LSU. The CSR register file itself is generated from a SystemRDL spec — see `rtl/csr/`.
+    - Dispatches CSR ops and traps to the **CSR Unit**, resolved the same cycle.
     - Dispatches uops to functional units.
 4.  **Functional Units**:
     - **ALU**: Performs arithmetic, logic, and comparison operations.
@@ -146,7 +146,7 @@ DHRUT-V/
 - [x] Early Branch/Jump resolution.
 - [x] Basic pyUVM Verification Infrastructure.
 - [x] Full compliance with RV32I_m RISCOF tests.
-- [x] **CSR Support (Zicsr), M-mode**: implemented, RDL-generated, directed-test-verified. Official riscof Zicsr/privilege compliance still pending.
+- [x] **CSR Support (Zicsr), M-mode**: implemented, RDL-generated, directed-test-verified (riscof compliance pending).
 - [ ] **Benchmarking and Performance Enhancements**.
 - [ ] **FPGA Deployment**: Booting bare-metal code on a Xilinx/Lattice FPGA.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.
