@@ -8,6 +8,8 @@ module decode_stage (
   input  logic        i_if_valid,
   input  logic [31:0] i_if_pc,
   input  logic [31:0] i_if_instr,
+  input  logic        i_if_pred_taken,
+  input  logic [31:0] i_if_pred_target,
 
   // Stall & flush control inputs
   input  logic        i_stall,      // from later stages
@@ -28,17 +30,23 @@ module decode_stage (
   logic        id_valid_q;
   logic [31:0] id_pc_q;
   logic [31:0] id_instr_q;
+  logic        id_pred_taken_q;
+  logic [31:0] id_pred_target_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n || i_flush) begin
-      id_valid_q  <= 1'b0;
-      id_pc_q     <= '0;
-      id_instr_q  <= '0;
+      id_valid_q       <= 1'b0;
+      id_pc_q          <= '0;
+      id_instr_q       <= '0;
+      id_pred_taken_q  <= 1'b0;
+      id_pred_target_q <= '0;
     end
     else if (!i_stall) begin
-      id_valid_q  <= i_if_valid;
-      id_pc_q     <= i_if_pc;
-      id_instr_q  <= i_if_instr;
+      id_valid_q       <= i_if_valid;
+      id_pc_q          <= i_if_pc;
+      id_instr_q       <= i_if_instr;
+      id_pred_taken_q  <= i_if_pred_taken;
+      id_pred_target_q <= i_if_pred_target;
     end
     // else: stall → hold current values
   end
@@ -178,6 +186,8 @@ module decode_stage (
 
       o_uop.rs2          = rs2;
       o_uop.rd           = rd;
+      o_uop.pred_taken   = id_pred_taken_q;
+      o_uop.pred_target  = id_pred_target_q;
 
       case (opcode)
         OPCODE_OP_IMM: begin

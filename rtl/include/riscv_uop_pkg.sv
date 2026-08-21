@@ -48,6 +48,9 @@ package riscv_uop_pkg;
     logic        is_store;
     logic        lsu_sign_extend; // 1 = sign-extend load result (LB/LH), 0 = zero-extend (LBU/LHU)
     logic [1:0]  lsu_access_size; // 00 = byte, 01 = halfword, 10 = word (for loads/stores)
+    // Branch prediction (populated in IF, consumed by Issue for mispredict detection)
+    logic        pred_taken;      // 1 = predicted taken (BPU hit or JAL pre-decode)
+    logic [31:0] pred_target;     // predicted target PC (valid when pred_taken)
     // Future fields:
     // logic        is_load, is_store;
     // logic        is_branch, is_jump;

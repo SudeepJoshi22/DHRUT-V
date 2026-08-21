@@ -116,9 +116,8 @@ class dhrutv(pluginTemplate):
             objdump_cmd = f"{objdump} -D -M numeric,no-aliases {shlex.quote(elf)} > {shlex.quote(disfile)}"
 
             if self.target_run:
-                libpython = "/usr/lib/x86_64-linux-gnu/libpython3.12.so.1.0"
                 repo_root = os.path.abspath(os.path.join(self.pluginpath, "..", "..", ".."))
-                
+
                 # Log everything going into the exports
                 logger.info(f"Setting up simulation environment for {testname}:")
                 logger.info(f"  SIG_BEGIN:         {sig_begin}")
@@ -129,7 +128,6 @@ class dhrutv(pluginTemplate):
                 logger.info(f"  CYCLE_TIMEOUT:     {timeout}")
                 logger.info(f"  SIGNATURE_FILE:    {sig_file}")
                 logger.info(f"  COCOTB_LOG_LEVEL:  INFO")
-                logger.info(f"  LIBPYTHON_LOC:     {libpython}")
                 logger.info(f"  PYTHONPATH:        {repo_root}/test_bench:$PYTHONPATH")
 
                 simcmd = (
@@ -141,7 +139,6 @@ class dhrutv(pluginTemplate):
                     f"export CYCLE_TIMEOUT={timeout}; "
                     f"export SIGNATURE_FILE={shlex.quote(sig_file)}; "
                     f"export COCOTB_LOG_LEVEL=INFO; "
-                    f"export LIBPYTHON_LOC={libpython}; "
                     f"export PYTHONPATH={repo_root}/test_bench:$$PYTHONPATH; "
                     f"make -f {shlex.quote(pyuvm_makefile)} SIM=verilator LOG_LEVEL=DEBUG COCOTB_TEST_MODULES=run_test"
                 )

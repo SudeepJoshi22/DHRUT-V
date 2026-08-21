@@ -19,6 +19,21 @@ module tb_top;
   logic        if_id_valid;
   logic [31:0] if_id_pc;
   logic [31:0] if_id_instr;
+  logic        if_id_pred_taken;
+  logic [31:0] if_id_pred_target;
+
+  // IF <-> BPU (prediction port)
+  logic        bpu_pred_is_branch;
+  logic [31:0] bpu_pred_pc;
+  logic [31:0] bpu_pred_offset_pc;
+  logic        bpu_pred_taken;
+  logic [31:0] bpu_pred_target;
+
+  // Issue -> BPU (update/training port)
+  logic        bpu_update_valid;
+  logic [31:0] bpu_update_pc;
+  logic        bpu_update_taken;
+  logic [31:0] bpu_update_target;
 
   // ID -> Issue
   logic        id_issue_valid;
@@ -46,9 +61,14 @@ module tb_top;
   logic [4:0]  retire_wb_rd;
   logic [31:0] retire_wb_data;
 
-  // Branch from Issue -> IF
+  // Branch from Issue -> IF (actual resolved outcome, used to train BPU)
   logic        branch_taken;
   logic [31:0] branch_target;
+
+  // Misprediction redirect from Issue -> IF/ID/self (decoupled from
+  // the actual-outcome signals above)
+  logic        mispredict;
+  logic [31:0] redirect_pc;
 
   // Operand Forwarding from ALU -> ISSUE
   
@@ -79,12 +99,36 @@ module tb_top;
     .clk             (clk),
     .rst_n           (rst_n),
     .i_stall         (decode_to_fetch_stall),
-    .i_flush         (branch_taken),          // flush on branch taken
-    .i_redirect_pc   (branch_target),         // branch/jump target
+    .i_flush         (mispredict),            // flush only on actual misprediction
+    .i_redirect_pc   (redirect_pc),           // corrected redirect target
     .imem            (imem_if),
+    .o_bpu_pred_is_branch (bpu_pred_is_branch),
+    .o_bpu_pred_pc        (bpu_pred_pc),
+    .o_bpu_pred_offset_pc (bpu_pred_offset_pc),
+    .i_bpu_pred_taken     (bpu_pred_taken),
+    .i_bpu_pred_target    (bpu_pred_target),
     .o_if_valid      (if_id_valid),
     .o_if_pc         (if_id_pc),
-    .o_if_instr      (if_id_instr)
+    .o_if_instr      (if_id_instr),
+    .o_if_pred_taken  (if_id_pred_taken),
+    .o_if_pred_target (if_id_pred_target)
+  );
+
+  // ───────────────────────────────────────────────
+  // Branch Prediction Unit (BPU)
+  // ───────────────────────────────────────────────
+  bpu BPU (
+    .clk                 (clk),
+    .rst_n               (rst_n),
+    .i_is_branch_pred    (bpu_pred_is_branch),
+    .i_branch_pc_pred    (bpu_pred_pc),
+    .i_offset_pc_pred    (bpu_pred_offset_pc),
+    .o_prediction        (bpu_pred_taken),
+    .o_predicted_pc      (bpu_pred_target),
+    .i_branch_pc_update  (bpu_update_pc),
+    .i_taken_update      (bpu_update_taken),
+    .i_update_valid      (bpu_update_valid),
+    .i_update_target_pc  (bpu_update_target)
   );
 
   // ───────────────────────────────────────────────
@@ -96,8 +140,10 @@ module tb_top;
     .i_if_valid      (if_id_valid),
     .i_if_pc         (if_id_pc),
     .i_if_instr      (if_id_instr),
+    .i_if_pred_taken  (if_id_pred_taken),
+    .i_if_pred_target (if_id_pred_target),
     .i_stall         (issue_to_decode_stall),
-    .i_flush         (branch_taken),
+    .i_flush         (mispredict),
     .o_dec_valid     (id_issue_valid),
     .o_uop           (id_issue_uop),
     .o_dec_pc        (id_issue_pc),
@@ -114,7 +160,7 @@ module tb_top;
     .i_uop                  (id_issue_uop),
     .i_dec_pc               (id_issue_pc),
     .i_stall                (1'b0),
-    .i_flush                (branch_taken),
+    .i_flush                (mispredict),
     .i_wb_en                (retire_wb_en),
     .i_wb_rd                (retire_wb_rd),
     .i_wb_data              (retire_wb_data),
@@ -129,10 +175,18 @@ module tb_top;
     .i_lsu_fwd_data         (lsu_load_data),
     .o_branch_taken         (branch_taken),
     .o_branch_target        (branch_target),
-    .o_stall_to_decode      (issue_to_decode_stall),                    
+    .o_resolved_pc          (bpu_update_pc),
+    .o_update_valid         (bpu_update_valid),
+    .o_mispredict           (mispredict),
+    .o_redirect_pc          (redirect_pc),
+    .o_stall_to_decode      (issue_to_decode_stall),
     .alu_if                 (alu_if),
     .lsu_if                 (lsu_if)
   );
+
+  // BPU update/training port is driven from Issue's actual resolved outcome
+  assign bpu_update_taken  = branch_taken;
+  assign bpu_update_target = branch_target;
 
   // ───────────────────────────────────────────────
   // ALU Stage

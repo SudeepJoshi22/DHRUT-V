@@ -2,6 +2,7 @@
 
 # At top of run_test.py
 import logging
+import os
 
 logger = logging.getLogger("my_cpu_tb")
 logger.setLevel(logging.INFO)
@@ -12,7 +13,8 @@ for h in root_logger.handlers[:]:
     if isinstance(h, logging.FileHandler):
         root_logger.removeHandler(h)
 
-file_handler = logging.FileHandler("simulation.log", mode='w')
+simulation_log_path = os.environ.get("SIMULATION_LOG_FILE", "simulation.log")
+file_handler = logging.FileHandler(simulation_log_path, mode='w')
 file_handler.setLevel(logging.DEBUG)
 console_formatter = logging.Formatter(' %(levelname)-2s | %(name)s: %(message)s')
 file_handler.setFormatter(console_formatter)

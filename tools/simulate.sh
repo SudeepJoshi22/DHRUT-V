@@ -22,17 +22,23 @@ fi
 TEST_NAME=$1
 SEED=$2
 
+# Per-test output directory: every artifact for this test (elf/hex/dis,
+# spike log, cocotb simulation.log, cpu trace logs, waveform) lands here
+# instead of being scattered across tests/build/ and tools/pyUVM/.
+TEST_OUT_DIR=$BUILD_DIR/$TEST_NAME
+
 S_FILE=$ASM_DIR/$TEST_NAME.S
-ELF=$BUILD_DIR/$TEST_NAME.elf
-HEX=$BUILD_DIR/$TEST_NAME.hex
-DIS=$BUILD_DIR/$TEST_NAME.dis
+ELF=$TEST_OUT_DIR/$TEST_NAME.elf
+HEX=$TEST_OUT_DIR/$TEST_NAME.hex
+DIS=$TEST_OUT_DIR/$TEST_NAME.dis
 
 # ----------------------------------------
 # BUILD
 # ----------------------------------------
-mkdir -p $BUILD_DIR
+mkdir -p $TEST_OUT_DIR
 
 echo "▶ Building test: $TEST_NAME"
+echo "  Output dir: $TEST_OUT_DIR"
 riscv-none-elf-gcc -march=rv32i -mabi=ilp32 \
     -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
     -T $TESTS_DIR/linker.ld \
@@ -49,7 +55,7 @@ echo "  DIS: $DIS"
 # ----------------------------------------
 # VERIFY WITH SPIKE
 # ----------------------------------------
-SPIKE_LOG=$BUILD_DIR/$TEST_NAME.spike.log
+SPIKE_LOG=$TEST_OUT_DIR/$TEST_NAME.spike.log
 echo "▶ Verifying test logic with Spike (Detailed Log: $SPIKE_LOG)"
 
 # -l: Generate execution log
@@ -77,6 +83,13 @@ export TEST_ELF=$ELF
 export CYCLE_TIMEOUT=10000
 export COCOTB_LOG_LEVEL=INFO
 
+# Route cocotb/pyuvm run outputs (simulation.log, cpu_trace.log,
+# cpu_deep_trace.log) into the same per-test directory as the
+# compile-step artifacts above.
+export SIMULATION_LOG_FILE=$TEST_OUT_DIR/simulation.log
+export CPU_TRACE_FILE=$TEST_OUT_DIR/cpu_trace.log
+export CPU_DEEP_TRACE_FILE=$TEST_OUT_DIR/cpu_deep_trace.log
+
 # Handle Seed
 if [ -n "$SEED" ]; then
     echo "▶ Using fixed seed: $SEED"
@@ -92,3 +105,19 @@ echo "▶ Running simulation (Verilator)"
 cd $SIM_DIR
 make clean
 make SIM=verilator LOG_LEVEL=DEBUG COCOTB_TEST_MODULES=run_test
+
+# ----------------------------------------
+# COLLECT REMAINING ARTIFACTS
+# ----------------------------------------
+# The waveform dump (dump.vcd) is written by tb_top.sv with a hardcoded
+# relative filename, so it always lands in $SIM_DIR (make's cwd) rather
+# than respecting an env var. Move it (and any stray simulation.log that
+# fell back to the default path) into the per-test dir so nothing is left
+# scattered in $SIM_DIR after the run.
+for f in dump.vcd dump.fst simulation.log; do
+    if [ -f "$SIM_DIR/$f" ]; then
+        mv "$SIM_DIR/$f" "$TEST_OUT_DIR/$f"
+    fi
+done
+
+echo "✔ All artifacts for '$TEST_NAME' collected in: $TEST_OUT_DIR"
