@@ -20,7 +20,7 @@ fi
 
 echo "▶ Generating RTL from $RDL_FILE"
 rm -rf "$SCRIPT_DIR/generated"
-"$PEAKRDL" regblock "$RDL_FILE" -o "$SCRIPT_DIR/generated" --cpuif passthrough --module-name csr_regfile_gen
+"$PEAKRDL" regblock "$RDL_FILE" -o "$SCRIPT_DIR/generated" --cpuif passthrough --module-name csr_regfile_gen --default-reset arst_n
 echo "✔ RTL written to $SCRIPT_DIR/generated/"
 
 if [ "${1:-}" = "docs" ]; then

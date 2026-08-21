@@ -3,7 +3,7 @@
 
 module csr_regfile_gen (
         input wire clk,
-        input wire rst,
+        input wire arst_n,
 
         input wire s_cpuif_req,
         input wire s_cpuif_req_is_wr,
@@ -293,8 +293,8 @@ module csr_regfile_gen (
         field_combo.mstatus.MIE.next = next_c;
         field_combo.mstatus.MIE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mstatus.MIE.value <= 1'h0;
         end else begin
             if(field_combo.mstatus.MIE.load_next) begin
@@ -319,8 +319,8 @@ module csr_regfile_gen (
         field_combo.mstatus.MPIE.next = next_c;
         field_combo.mstatus.MPIE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mstatus.MPIE.value <= 1'h0;
         end else begin
             if(field_combo.mstatus.MPIE.load_next) begin
@@ -342,8 +342,8 @@ module csr_regfile_gen (
         field_combo.mie.MSIE.next = next_c;
         field_combo.mie.MSIE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mie.MSIE.value <= 1'h0;
         end else begin
             if(field_combo.mie.MSIE.load_next) begin
@@ -365,8 +365,8 @@ module csr_regfile_gen (
         field_combo.mie.MTIE.next = next_c;
         field_combo.mie.MTIE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mie.MTIE.value <= 1'h0;
         end else begin
             if(field_combo.mie.MTIE.load_next) begin
@@ -388,8 +388,8 @@ module csr_regfile_gen (
         field_combo.mie.MEIE.next = next_c;
         field_combo.mie.MEIE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mie.MEIE.value <= 1'h0;
         end else begin
             if(field_combo.mie.MEIE.load_next) begin
@@ -411,8 +411,8 @@ module csr_regfile_gen (
         field_combo.mtvec.MTVEC.next = next_c;
         field_combo.mtvec.MTVEC.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mtvec.MTVEC.value <= 32'h0;
         end else begin
             if(field_combo.mtvec.MTVEC.load_next) begin
@@ -434,8 +434,8 @@ module csr_regfile_gen (
         field_combo.mscratch.MSCRATCH.next = next_c;
         field_combo.mscratch.MSCRATCH.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mscratch.MSCRATCH.value <= 32'h0;
         end else begin
             if(field_combo.mscratch.MSCRATCH.load_next) begin
@@ -460,8 +460,8 @@ module csr_regfile_gen (
         field_combo.mepc.MEPC_HI.next = next_c;
         field_combo.mepc.MEPC_HI.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mepc.MEPC_HI.value <= 30'h0;
         end else begin
             if(field_combo.mepc.MEPC_HI.load_next) begin
@@ -486,8 +486,8 @@ module csr_regfile_gen (
         field_combo.mcause.MCAUSE.next = next_c;
         field_combo.mcause.MCAUSE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mcause.MCAUSE.value <= 32'h0;
         end else begin
             if(field_combo.mcause.MCAUSE.load_next) begin
@@ -512,8 +512,8 @@ module csr_regfile_gen (
         field_combo.mtval.MTVAL.next = next_c;
         field_combo.mtval.MTVAL.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mtval.MTVAL.value <= 32'h0;
         end else begin
             if(field_combo.mtval.MTVAL.load_next) begin
@@ -538,8 +538,8 @@ module csr_regfile_gen (
         field_combo.mcycle.MCYCLE.next = next_c;
         field_combo.mcycle.MCYCLE.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mcycle.MCYCLE.value <= 32'h0;
         end else begin
             if(field_combo.mcycle.MCYCLE.load_next) begin
@@ -564,8 +564,8 @@ module csr_regfile_gen (
         field_combo.minstret.MINSTRET.next = next_c;
         field_combo.minstret.MINSTRET.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.minstret.MINSTRET.value <= 32'h0;
         end else begin
             if(field_combo.minstret.MINSTRET.load_next) begin
@@ -590,8 +590,8 @@ module csr_regfile_gen (
         field_combo.mcycleh.MCYCLEH.next = next_c;
         field_combo.mcycleh.MCYCLEH.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.mcycleh.MCYCLEH.value <= 32'h0;
         end else begin
             if(field_combo.mcycleh.MCYCLEH.load_next) begin
@@ -616,8 +616,8 @@ module csr_regfile_gen (
         field_combo.minstreth.MINSTRETH.next = next_c;
         field_combo.minstreth.MINSTRETH.load_next = load_next_c;
     end
-    always_ff @(posedge clk) begin
-        if(rst) begin
+    always_ff @(posedge clk or negedge arst_n) begin
+        if(~arst_n) begin
             field_storage.minstreth.MINSTRETH.value <= 32'h0;
         end else begin
             if(field_combo.minstreth.MINSTRETH.load_next) begin

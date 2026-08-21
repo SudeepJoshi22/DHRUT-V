@@ -15,6 +15,8 @@ RTL_DIR="$ROOT_DIR/rtl"
 # Source files - same pattern as your cocotb Makefile
 RTL_SOURCES=(
     "$RTL_DIR/include"/*.sv
+    "$RTL_DIR/csr/generated/csr_regfile_gen_pkg.sv"
+    "$RTL_DIR/csr/generated/csr_regfile_gen.sv"
     "$RTL_DIR/interfaces"/*.sv
     "$RTL_DIR/pipeline"/*.sv
     "$RTL_DIR/tb_top.sv"
@@ -44,6 +46,12 @@ VERILATOR_ARGS=(
     +1800-2023ext+sv          # modern SystemVerilog
     --assert                  # enable assertion checks
     --quiet-exit              # cleaner exit code behavior
+    # PeakRDL-regblock generates one always_comb/always_ff pair per field,
+    # each writing only its own disjoint member of the shared field_combo/
+    # field_storage packed struct - legal SV, but Verilator's MULTIDRIVEN
+    # check flags it anyway at whole-variable granularity. Known false
+    # positive for this generated-code pattern (rtl/csr/generated/).
+    -Wno-MULTIDRIVEN
 )
 
 # Common warnings we often want to keep even in relaxed mode:
