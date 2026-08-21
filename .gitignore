@@ -30,6 +30,7 @@ BPU_INTEGRATION_SUMMARY.md
 FPU_INTEGRATION.md
 FPU_INTEGRATION_ANALYSIS.md
 docs/
+rtl/csr/html_ref/
 pnew/
 tests/asm/bpu_stress.S
 CLAUDE.md
