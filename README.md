@@ -23,13 +23,14 @@ graph LR
     ID --> IS[Issue/ARF]
     IS --> EX[Execute/ALU]
     IS --> LSU[LSU]
+    IS <-->|same-cycle| CSR[CSR Unit]
     EX --> RE[Retire]
     LSU --> RE
     RE -.->|Writeback| IS
     RE -.->|Forward| IS
     EX -.->|Forward| IS
     LSU -.->|Forward| IS
-    IS -.->|Branch/Jump| IF
+    IS -.->|Branch/Jump/Trap| IF
 ```
 
 ### Pipeline Breakdown
@@ -41,7 +42,7 @@ graph LR
     - Performs **Scoreboarding** and hazard detection(feature yet to be implemented).
     - Handles **Operand Forwarding** from ALU, LSU, and Retire stages.
     - Resolves **Branches and Jumps** early to reduce bubbles.
-    - Resolves **CSR reads/writes and traps** (`ecall`/`ebreak`/illegal-instruction/`mret`) the same cycle. The CSR block itself is generated from a SystemRDL spec — see `rtl/csr/`.
+    - Dispatches to the **CSR Unit** (`rtl/pipeline/csr_unit.sv`) for CSR reads/writes and traps (`ecall`/`ebreak`/illegal-instruction/`mret`), resolved the same cycle — its own block, not pipelined like ALU/LSU. The CSR register file itself is generated from a SystemRDL spec — see `rtl/csr/`.
     - Dispatches uops to functional units.
 4.  **Functional Units**:
     - **ALU**: Performs arithmetic, logic, and comparison operations.
