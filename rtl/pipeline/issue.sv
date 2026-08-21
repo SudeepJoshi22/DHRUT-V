@@ -346,6 +346,7 @@ module issue_stage (
       if (overall_illegal) begin
         trap_taken      = 1'b1;
         trap_cause_code = 32'd2;   // Illegal instruction
+        trap_val        = buf_uop_q.instr_bits;  // matches Spike's convention
       end else if (is_ecall) begin
         trap_taken      = 1'b1;
         trap_cause_code = 32'd11;  // Environment call from M-mode

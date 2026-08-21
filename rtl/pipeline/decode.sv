@@ -188,6 +188,7 @@ module decode_stage (
       o_uop.rd           = rd;
       o_uop.pred_taken   = id_pred_taken_q;
       o_uop.pred_target  = id_pred_target_q;
+      o_uop.instr_bits   = id_instr_q;
 
       case (opcode)
         OPCODE_OP_IMM: begin

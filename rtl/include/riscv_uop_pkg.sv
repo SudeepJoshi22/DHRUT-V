@@ -59,6 +59,7 @@ package riscv_uop_pkg;
     // is_illegal is also set (with opcode outside OPCODE_SYSTEM) for any
     // unrecognized/reserved instruction encoding -> illegal-instruction trap.
     logic        is_illegal;
+    logic [31:0] instr_bits;      // raw fetched instruction, for mtval on illegal-instruction traps
     // Future fields:
     // fpu_op_t     fpu_op;       // for F/D extension
   } uop_t;

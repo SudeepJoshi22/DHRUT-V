@@ -474,6 +474,79 @@ stages:
         description: "Retire forward writes_rd qualifier"
 
   # ─────────────────────────────────────────────────────────────────────────
+  # CSR - CSR read/write resolution and trap/mret redirect (inside ISSUE)
+  # ─────────────────────────────────────────────────────────────────────────
+  CSR:
+    display_name: "CSR"
+    description: "CSR read/write and trap/mret resolution (rtl/pipeline/issue.sv + csr.sv)"
+    signals:
+      - name: "trap"
+        signal_path: "ISSUE.trap_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "Trap entry firing this cycle (illegal instr / ecall / ebreak)"
+
+      - name: "mret"
+        signal_path: "ISSUE.mret_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "MRET firing this cycle"
+
+      - name: "cause"
+        signal_path: "ISSUE.trap_cause_code"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Trap cause about to be written to mcause"
+
+      - name: "csr_we"
+        signal_path: "ISSUE.csr_we"
+        format: "{:1d}"
+        type: "bool"
+        description: "CSR register file write enable this cycle"
+
+      - name: "illegal"
+        signal_path: "ISSUE.overall_illegal"
+        format: "{:1d}"
+        type: "bool"
+        description: "Illegal instruction/CSR-address condition this cycle"
+
+      - name: "mstatus_mie"
+        signal_path: "ISSUE.CSR.mstatus_mie_q"
+        format: "{:1d}"
+        type: "bool"
+        description: "mstatus.MIE (live CSR state)"
+
+      - name: "mstatus_mpie"
+        signal_path: "ISSUE.CSR.mstatus_mpie_q"
+        format: "{:1d}"
+        type: "bool"
+        description: "mstatus.MPIE (live CSR state)"
+
+      - name: "mepc"
+        signal_path: "ISSUE.CSR.mepc_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "mepc (live CSR state)"
+
+      - name: "mcause"
+        signal_path: "ISSUE.CSR.mcause_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "mcause (live CSR state)"
+
+      - name: "mtval"
+        signal_path: "ISSUE.CSR.mtval_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "mtval (live CSR state)"
+
+      - name: "mtvec"
+        signal_path: "ISSUE.CSR.mtvec_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "mtvec (live CSR state)"
+
+  # ─────────────────────────────────────────────────────────────────────────
   # RETIRE Stage - Writeback to Register File and Commit
   # ─────────────────────────────────────────────────────────────────────────
   RETIRE:
@@ -504,117 +577,125 @@ stages:
 # ───────────────────────────────────────────────────────────────────────────
 # Optional: Define which stages to display (subset of available stages)
 # ───────────────────────────────────────────────────────────────────────────
-display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE", "BPU", "REDIRECT", "FORWARD"]
+display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE", "BPU", "REDIRECT", "FORWARD", "CSR"]
 
 # ───────────────────────────────────────────────────────────────────────────
 # UOP Bit Extraction Configuration
 #
-# uop_t (rtl/include/riscv_uop_pkg.sv) is now 112 bits wide (grew from the
-# original 79 bits when `pred_taken`/`pred_target` were appended to the
-# struct for the branch-predictor wire-up). Packed-struct field order below
-# mirrors the SV declaration order (first field declared = MSB):
+# uop_t (rtl/include/riscv_uop_pkg.sv) is now 145 bits wide (grew from 112
+# when `is_illegal`(1) and `instr_bits`(32) were appended for M7 CSR/trap
+# support — is_illegal flags an illegal-instruction trap at Issue, and
+# instr_bits carries the raw fetched instruction through for mtval on that
+# trap). Packed-struct field order below mirrors the SV declaration order
+# (first field declared = MSB):
 #   valid(1) opcode(7) alu_op(10) rs1(5) rs2(5) rd(5) funct3(3) imm(32)
 #   uses_rs1(1) uses_rs2(1) writes_rd(1) is_immediate(1) is_branch(1)
 #   is_jump(1) is_load(1) is_store(1) lsu_sign_extend(1) lsu_access_size(2)
-#   pred_taken(1) pred_target(32)  => bit 111 downto 0
+#   pred_taken(1) pred_target(32) is_illegal(1) instr_bits(32) => bit 144 downto 0
 # ───────────────────────────────────────────────────────────────────────────
 uop_extraction:
   signal_path: "id_issue_uop"
   fields:
     - name: "uop_valid"
-      bits: [111, 111]
+      bits: [144, 144]
     - name: "uop_opcode"
-      bits: [110, 104]
+      bits: [143, 137]
     - name: "uop_alu_op"
-      bits: [103, 94]
+      bits: [136, 127]
     - name: "uop_rs1"
-      bits: [93, 89]
+      bits: [126, 122]
     - name: "uop_rs2"
-      bits: [88, 84]
+      bits: [121, 117]
     - name: "uop_rd"
-      bits: [83, 79]
+      bits: [116, 112]
     - name: "uop_funct3"
-      bits: [78, 76]
+      bits: [111, 109]
     - name: "uop_imm"
-      bits: [75, 44]
+      bits: [108, 77]
     - name: "uop_uses_rs1"
-      bits: [43, 43]
+      bits: [76, 76]
     - name: "uop_uses_rs2"
-      bits: [42, 42]
+      bits: [75, 75]
     - name: "uop_writes_rd"
-      bits: [41, 41]
+      bits: [74, 74]
     - name: "uop_is_immediate"
-      bits: [40, 40]
+      bits: [73, 73]
     - name: "uop_is_branch"
-      bits: [39, 39]
+      bits: [72, 72]
     - name: "uop_is_jump"
-      bits: [38, 38]
+      bits: [71, 71]
     - name: "uop_is_load"
-      bits: [37, 37]
+      bits: [70, 70]
     - name: "uop_is_store"
-      bits: [36, 36]
+      bits: [69, 69]
     - name: "uop_pred_taken"
-      bits: [32, 32]
+      bits: [65, 65]
     - name: "uop_pred_target"
+      bits: [64, 33]
+    - name: "uop_is_illegal"
+      bits: [32, 32]
+    - name: "uop_instr_bits"
       bits: [31, 0]
 
 uop_issue_extraction:
   signal_path: "ISSUE.buf_uop_q"
   fields:
     - name: "uop_iss_opcode"
-      bits: [110, 104]
+      bits: [143, 137]
     - name: "uop_iss_is_branch"
-      bits: [39, 39]
+      bits: [72, 72]
     - name: "uop_iss_is_jump"
-      bits: [38, 38]
+      bits: [71, 71]
+    - name: "uop_iss_is_illegal"
+      bits: [32, 32]
 
 uop_alu_extraction:
   signal_path: "ALU.uop_q"
   fields:
     - name: "uop_alu_opcode"
-      bits: [110, 104]
+      bits: [143, 137]
     - name: "uop_alu_op"
-      bits: [103, 94]
+      bits: [136, 127]
     - name: "uop_alu_rs1"
-      bits: [93, 89]
+      bits: [126, 122]
     - name: "uop_alu_rs2"
-      bits: [88, 84]
+      bits: [121, 117]
     - name: "uop_alu_rd"
-      bits: [83, 79]
+      bits: [116, 112]
     - name: "uop_alu_funct3"
-      bits: [78, 76]
+      bits: [111, 109]
     - name: "uop_alu_imm"
-      bits: [75, 44]
+      bits: [108, 77]
     - name: "uop_alu_writes_rd"
-      bits: [41, 41]
+      bits: [74, 74]
     - name: "uop_alu_is_immediate"
-      bits: [40, 40]
+      bits: [73, 73]
     - name: "uop_alu_is_branch"
-      bits: [39, 39]
+      bits: [72, 72]
     - name: "uop_alu_is_jump"
-      bits: [38, 38]
+      bits: [71, 71]
 
 uop_lsu_extraction:
   signal_path: "LSU.uop_q"
   fields:
     - name: "uop_lsu_opcode"
-      bits: [110, 104]
+      bits: [143, 137]
     - name: "uop_lsu_rs1"
-      bits: [93, 89]
+      bits: [126, 122]
     - name: "uop_lsu_rs2"
-      bits: [88, 84]
+      bits: [121, 117]
     - name: "uop_lsu_rd"
-      bits: [83, 79]
+      bits: [116, 112]
     - name: "uop_lsu_funct3"
-      bits: [78, 76]
+      bits: [111, 109]
     - name: "uop_lsu_imm"
-      bits: [75, 44]
+      bits: [108, 77]
     - name: "uop_lsu_writes_rd"
-      bits: [41, 41]
+      bits: [74, 74]
     - name: "uop_lsu_is_load"
-      bits: [37, 37]
+      bits: [70, 70]
     - name: "uop_lsu_is_store"
-      bits: [36, 36]
+      bits: [69, 69]
 
 # ───────────────────────────────────────────────────────────────────────────
 # Display Configuration
