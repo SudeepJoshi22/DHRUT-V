@@ -222,15 +222,17 @@ module issue_stage (
   // actually not-taken).
   logic        actual_taken;
   logic [31:0] actual_target;
+  logic        branch_mispredict_r;
+  logic [31:0] branch_redirect_pc_r;
 
   assign o_resolved_pc  = buf_pc_q;
   assign o_update_valid = issue_en && buf_uop_q.is_branch;
 
   always_comb begin
-    o_branch_taken  = 1'b0;
-    o_branch_target = 32'b0;
-    o_mispredict    = 1'b0;
-    o_redirect_pc   = 32'b0;
+    o_branch_taken       = 1'b0;
+    o_branch_target      = 32'b0;
+    branch_mispredict_r  = 1'b0;
+    branch_redirect_pc_r = 32'b0;
     actual_taken    = 1'b0;
     actual_target   = 32'b0;
 
@@ -253,12 +255,12 @@ module issue_stage (
 
         if (actual_taken != buf_uop_q.pred_taken) begin
           // Direction misprediction: redirect to the correct outcome
-          o_mispredict  = 1'b1;
-          o_redirect_pc = actual_taken ? actual_target : (buf_pc_q + 32'd4);
+          branch_mispredict_r  = 1'b1;
+          branch_redirect_pc_r = actual_taken ? actual_target : (buf_pc_q + 32'd4);
         end else if (actual_taken && (actual_target != buf_uop_q.pred_target)) begin
           // Predicted taken to the wrong target (stale/aliased BTB entry)
-          o_mispredict  = 1'b1;
-          o_redirect_pc = actual_target;
+          branch_mispredict_r  = 1'b1;
+          branch_redirect_pc_r = actual_target;
         end
       end else if (buf_uop_q.opcode == OPCODE_JAL) begin
         actual_taken    = 1'b1;
@@ -269,8 +271,8 @@ module issue_stage (
         // JAL is predicted taken at fetch time (pre-decode); only
         // mispredict if the predicted target itself was wrong.
         if (!buf_uop_q.pred_taken || (actual_target != buf_uop_q.pred_target)) begin
-          o_mispredict  = 1'b1;
-          o_redirect_pc = actual_target;
+          branch_mispredict_r  = 1'b1;
+          branch_redirect_pc_r = actual_target;
         end
       end else if (buf_uop_q.opcode == OPCODE_JALR) begin
         actual_taken    = 1'b1;
@@ -279,11 +281,112 @@ module issue_stage (
         o_branch_target = actual_target;
 
         // No indirect (JALR/BTB) prediction yet: always redirect.
-        o_mispredict  = 1'b1;
-        o_redirect_pc = actual_target;
+        branch_mispredict_r  = 1'b1;
+        branch_redirect_pc_r = actual_target;
       end
     end
   end
+
+  // ───────────────────────────────────────────────
+  // 4b. CSR + trap/mret resolution (SYSTEM opcode) — resolved combinationally
+  //     at the same point branches/jumps are, above.
+  // ───────────────────────────────────────────────
+  logic        is_system, is_csr_form, is_priv_form;
+  logic [11:0] sys_imm12;
+  logic        is_ecall, is_ebreak, is_mret;
+  logic        overall_illegal;
+
+  assign is_system   = (buf_uop_q.opcode == OPCODE_SYSTEM);
+  assign is_csr_form = is_system && (buf_uop_q.funct3 != 3'b000);
+  assign is_priv_form = is_system && (buf_uop_q.funct3 == 3'b000);
+  assign sys_imm12   = buf_uop_q.imm[11:0];
+  assign is_ecall    = is_priv_form && !buf_uop_q.is_illegal && (sys_imm12 == 12'h000);
+  assign is_ebreak   = is_priv_form && !buf_uop_q.is_illegal && (sys_imm12 == 12'h001);
+  assign is_mret     = is_priv_form && !buf_uop_q.is_illegal && (sys_imm12 == 12'h302);
+
+  // CSR read (combinational) / write value mux
+  logic [31:0] csr_rdata_now;
+  logic        csr_addr_invalid;
+  logic [31:0] csr_write_src;
+  logic [1:0]  csr_op_kind;      // funct3[1:0]: 01=RW, 10=RS, 11=RC
+  logic [31:0] csr_new_val;
+  logic        csr_we;
+  logic        csr_dispatch_valid;
+
+  assign csr_write_src = buf_uop_q.uses_rs1 ? fwd_rs1 : {27'b0, buf_uop_q.rs1};
+  assign csr_op_kind   = buf_uop_q.funct3[1:0];
+
+  always_comb begin
+    unique case (csr_op_kind)
+      2'b01:   csr_new_val = csr_write_src;                     // CSRRW(I)
+      2'b10:   csr_new_val = csr_rdata_now | csr_write_src;     // CSRRS(I)
+      2'b11:   csr_new_val = csr_rdata_now & ~csr_write_src;    // CSRRC(I)
+      default: csr_new_val = csr_rdata_now;
+    endcase
+  end
+
+  assign overall_illegal    = buf_uop_q.is_illegal || (is_csr_form && csr_addr_invalid);
+  // CSRRW(I) always writes; CSRRS/C(I) only write when the source is non-zero
+  // (register rs1 != x0, or a non-zero uimm — both share the rs1 encoding field).
+  assign csr_we             = issue_en && is_csr_form && !csr_addr_invalid &&
+                               ((csr_op_kind == 2'b01) || (buf_uop_q.rs1 != 5'd0));
+  assign csr_dispatch_valid = is_csr_form && !csr_addr_invalid;
+
+  // Trap detection: illegal instruction / ecall / ebreak (mret is a redirect, not a trap)
+  logic        trap_taken;
+  logic [31:0] trap_cause_code;
+  logic [31:0] trap_val;
+
+  always_comb begin
+    trap_taken      = 1'b0;
+    trap_cause_code = 32'b0;
+    trap_val        = 32'b0;
+
+    if (issue_en) begin
+      if (overall_illegal) begin
+        trap_taken      = 1'b1;
+        trap_cause_code = 32'd2;   // Illegal instruction
+      end else if (is_ecall) begin
+        trap_taken      = 1'b1;
+        trap_cause_code = 32'd11;  // Environment call from M-mode
+      end else if (is_ebreak) begin
+        trap_taken      = 1'b1;
+        trap_cause_code = 32'd3;   // Breakpoint
+        trap_val        = buf_pc_q;
+      end
+    end
+  end
+
+  logic mret_taken;
+  assign mret_taken = issue_en && is_mret;
+
+  logic [31:0] csr_trap_target;
+  logic [31:0] csr_mepc_out;
+
+  csr_regfile CSR (
+    .clk           (clk),
+    .rst_n         (rst_n),
+    .i_csr_addr    (buf_uop_q.imm[11:0]),
+    .i_csr_wdata   (csr_new_val),
+    .i_csr_we      (csr_we),
+    .o_csr_rdata   (csr_rdata_now),
+    .o_csr_invalid (csr_addr_invalid),
+    .i_trap_valid  (trap_taken),
+    .i_trap_cause  (trap_cause_code),
+    .i_trap_pc     (buf_pc_q),
+    .i_trap_val    (trap_val),
+    .o_trap_target (csr_trap_target),
+    .i_mret_valid  (mret_taken),
+    .o_mepc        (csr_mepc_out),
+    .i_instret_inc (issue_en)
+  );
+
+  // Trap entry takes priority (mutually exclusive with mret/branch in practice —
+  // a single buffered uop is never more than one of these).
+  assign o_mispredict  = branch_mispredict_r || trap_taken || mret_taken;
+  assign o_redirect_pc = trap_taken ? csr_trap_target :
+                          mret_taken ? csr_mepc_out :
+                          branch_mispredict_r ? branch_redirect_pc_r : 32'b0;
 
   // ───────────────────────────────────────────────
   // 5. Dispatch to ALU or LSU – gated on dispatch_en
@@ -313,6 +416,18 @@ module issue_stage (
         // Branches resolved here, no need to dispatch
         alu_if.m_valid = 1'b0;
         lsu_if.m_valid = 1'b0;
+      end
+      else if (buf_uop_q.opcode == OPCODE_SYSTEM) begin
+        // CSR read result (old value) passed through the ALU as op1+0, so it
+        // reaches Retire/write-back via the existing ALU path. ECALL/EBREAK/
+        // MRET/illegal-instruction never write rd — resolved purely via the
+        // trap/mret redirect above, nothing to dispatch.
+        if (csr_dispatch_valid) begin
+          alu_if.m_valid = 1'b1;
+          alu_if.m_uop   = buf_uop_q;
+          alu_if.m_op1   = csr_rdata_now;
+          alu_if.m_op2   = 32'b0;
+        end
       end
       else begin
         // Normal ALU ops and Jumps (for write-back) go to ALU

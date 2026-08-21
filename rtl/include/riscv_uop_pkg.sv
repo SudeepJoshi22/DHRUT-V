@@ -3,6 +3,7 @@ package riscv_uop_pkg;
 
   typedef enum logic [6:0] {
     OPCODE_LOAD     = 7'b000_0011,
+    OPCODE_MISC_MEM = 7'b000_1111,  // FENCE (treated as a no-op, single-hart in-order core)
     OPCODE_OP_IMM   = 7'b001_0011,
     OPCODE_AUIPC    = 7'b001_0111,
     OPCODE_STORE    = 7'b010_0011,
@@ -11,7 +12,8 @@ package riscv_uop_pkg;
     OPCODE_BRANCH   = 7'b110_0011,
     OPCODE_JALR     = 7'b110_0111,
     OPCODE_JAL      = 7'b110_1111,
-    // Future: OPCODE_FMADD, OPCODE_SYSTEM, etc.
+    OPCODE_SYSTEM   = 7'b111_0011,  // CSRRW/S/C(+I), ECALL, EBREAK, MRET
+    // Future: OPCODE_FMADD, etc.
     OPCODE_INVALID  = 7'b111_1111
   } riscv_opcode_t;
 
@@ -51,11 +53,14 @@ package riscv_uop_pkg;
     // Branch prediction (populated in IF, consumed by Issue for mispredict detection)
     logic        pred_taken;      // 1 = predicted taken (BPU hit or JAL pre-decode)
     logic [31:0] pred_target;     // predicted target PC (valid when pred_taken)
+    // SYSTEM (Zicsr + trap) fields, valid when opcode == OPCODE_SYSTEM.
+    // For funct3 != 0 (CSRRW/S/C, +I forms): imm[11:0] holds the CSR address.
+    // For funct3 == 0 (ECALL/EBREAK/MRET):     imm[11:0] holds funct12.
+    // is_illegal is also set (with opcode outside OPCODE_SYSTEM) for any
+    // unrecognized/reserved instruction encoding -> illegal-instruction trap.
+    logic        is_illegal;
     // Future fields:
-    // logic        is_load, is_store;
-    // logic        is_branch, is_jump;
     // fpu_op_t     fpu_op;       // for F/D extension
-    // csr_op_t     csr_op;       // for Zicsr
   } uop_t;
 
 endpackage

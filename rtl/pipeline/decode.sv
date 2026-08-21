@@ -292,10 +292,57 @@ module decode_stage (
           o_uop.lsu_sign_extend = lsu_sign_extend;
           o_uop.lsu_access_size = lsu_access_size;
         end
+        OPCODE_MISC_MEM: begin
+          // FENCE: single-hart in-order core already provides program order,
+          // so this is a pure no-op (no side effects, doesn't write rd).
+          o_uop.is_immediate = 1'b0;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
+          o_uop.uses_rs1     = 1'b0;
+          o_uop.uses_rs2     = 1'b0;
+          o_uop.writes_rd    = 1'b0;
+        end
+
+        OPCODE_SYSTEM: begin
+          o_uop.is_immediate = 1'b0;
+          o_uop.is_branch    = 1'b0;
+          o_uop.is_jump      = 1'b0;
+          o_uop.alu_op       = ALU_ADD;                    // CSR read value passed through the ALU as-is
+          o_uop.imm          = {20'b0, id_instr_q[31:20]};  // CSR addr (funct3!=0) or funct12 (funct3==0)
+
+          if (funct3 == 3'b000) begin
+            // Privileged/environment group: ECALL / EBREAK / MRET, selected by funct12 in Issue.
+            o_uop.uses_rs1  = 1'b0;
+            o_uop.uses_rs2  = 1'b0;
+            o_uop.writes_rd = 1'b0;
+            unique case (id_instr_q[31:20])
+              12'h000, 12'h001, 12'h302: o_uop.is_illegal = 1'b0;  // ECALL, EBREAK, MRET
+              default:                   o_uop.is_illegal = 1'b1;  // reserved (WFI, SFENCE.VMA, ...)
+            endcase
+          end else if (funct3 == 3'b100) begin
+            // Reserved funct3 — not a defined CSR or privileged instruction.
+            o_uop.uses_rs1  = 1'b0;
+            o_uop.uses_rs2  = 1'b0;
+            o_uop.writes_rd = 1'b0;
+            o_uop.is_illegal = 1'b1;
+          end else begin
+            // CSRRW/S/C (register form, funct3[2]=0) or CSRRWI/SI/CI (immediate
+            // form, funct3[2]=1 — the "rs1" field instead carries a 5-bit zimm,
+            // which decode already extracts unconditionally above).
+            o_uop.uses_rs1  = ~funct3[2];
+            o_uop.uses_rs2  = 1'b0;
+            o_uop.writes_rd = (rd != 5'd0);
+          end
+        end
+
         default: begin
-          // Unknown/unsupported → mark invalid
-          o_dec_valid        = 1'b0;
-          o_uop.valid        = 1'b0;
+          // Unrecognized/reserved opcode (or unimplemented extension) →
+          // still a valid, in-order uop that traps as an illegal instruction
+          // at Issue, rather than silently vanishing from the pipeline.
+          o_uop.is_illegal = 1'b1;
+          o_uop.uses_rs1   = 1'b0;
+          o_uop.uses_rs2   = 1'b0;
+          o_uop.writes_rd  = 1'b0;
         end
       endcase
     end
