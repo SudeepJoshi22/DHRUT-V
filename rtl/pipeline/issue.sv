@@ -26,9 +26,15 @@ module issue_stage (
   input logic i_lsu_fwd_data_valid,
   input logic [4:0] i_lsu_fwd_rd,
   input logic [31:0] i_lsu_fwd_data,
-  // To Fetch – direct branch/jump signals (no interface)
+  // To Fetch – actual resolved branch/jump outcome (used to train the BPU)
   output logic o_branch_taken,
   output logic [31:0] o_branch_target,
+  output logic [31:0] o_resolved_pc,
+  output logic o_update_valid,
+  // To Fetch/Decode – decoupled misprediction redirect (only asserted when
+  // the actual outcome differs from the carried prediction)
+  output logic o_mispredict,
+  output logic [31:0] o_redirect_pc,
   // Stall back to Decode/IF
   output logic o_stall_to_decode,
   // Issued to ALU
@@ -205,31 +211,76 @@ module issue_stage (
 
 
   // ───────────────────────────────────────────────
-  // 4. Branch/jump decision & target – gated on issue_en
+  // 4. Branch/jump resolution – gated on issue_en
   // ───────────────────────────────────────────────
+  // o_branch_taken/o_branch_target report the *actual* resolved outcome
+  // (used unconditionally to train the BPU, regardless of misprediction).
+  // o_mispredict/o_redirect_pc are decoupled from that: they only fire
+  // when the actual outcome disagrees with the prediction carried in
+  // buf_uop_q.pred_taken/pred_target, and redirect to the correct PC in
+  // either direction (taken-target when actually taken, buf_pc_q+4 when
+  // actually not-taken).
+  logic        actual_taken;
+  logic [31:0] actual_target;
+
+  assign o_resolved_pc  = buf_pc_q;
+  assign o_update_valid = issue_en && buf_uop_q.is_branch;
+
   always_comb begin
-    o_branch_taken = 1'b0;
+    o_branch_taken  = 1'b0;
     o_branch_target = 32'b0;
+    o_mispredict    = 1'b0;
+    o_redirect_pc   = 32'b0;
+    actual_taken    = 1'b0;
+    actual_target   = 32'b0;
 
     // Only evaluate when we have a valid uop in buffer
     if (issue_en) begin
       if (buf_uop_q.is_branch) begin
-        o_branch_target = buf_pc_q + buf_uop_q.imm;
+        actual_target = buf_pc_q + buf_uop_q.imm;
         case (buf_uop_q.funct3)
-          3'b000: o_branch_taken = (op1 == op2);                        // BEQ
-          3'b001: o_branch_taken = (op1 != op2);                        // BNE
-          3'b100: o_branch_taken = ($signed(op1) < $signed(op2));       // BLT
-          3'b101: o_branch_taken = ($signed(op1) >= $signed(op2));      // BGE
-          3'b110: o_branch_taken = (op1 < op2);                         // BLTU
-          3'b111: o_branch_taken = (op1 >= op2);                        // BGEU
-          default: o_branch_taken = 1'b0;
+          3'b000: actual_taken = (op1 == op2);                        // BEQ
+          3'b001: actual_taken = (op1 != op2);                        // BNE
+          3'b100: actual_taken = ($signed(op1) < $signed(op2));       // BLT
+          3'b101: actual_taken = ($signed(op1) >= $signed(op2));      // BGE
+          3'b110: actual_taken = (op1 < op2);                         // BLTU
+          3'b111: actual_taken = (op1 >= op2);                        // BGEU
+          default: actual_taken = 1'b0;
         endcase
+
+        o_branch_taken  = actual_taken;
+        o_branch_target = actual_target;
+
+        if (actual_taken != buf_uop_q.pred_taken) begin
+          // Direction misprediction: redirect to the correct outcome
+          o_mispredict  = 1'b1;
+          o_redirect_pc = actual_taken ? actual_target : (buf_pc_q + 32'd4);
+        end else if (actual_taken && (actual_target != buf_uop_q.pred_target)) begin
+          // Predicted taken to the wrong target (stale/aliased BTB entry)
+          o_mispredict  = 1'b1;
+          o_redirect_pc = actual_target;
+        end
       end else if (buf_uop_q.opcode == OPCODE_JAL) begin
-        o_branch_taken = 1'b1;
-        o_branch_target = buf_pc_q + buf_uop_q.imm;
+        actual_taken    = 1'b1;
+        actual_target   = buf_pc_q + buf_uop_q.imm;
+        o_branch_taken  = actual_taken;
+        o_branch_target = actual_target;
+
+        // JAL is predicted taken at fetch time (pre-decode); only
+        // mispredict if the predicted target itself was wrong.
+        if (!buf_uop_q.pred_taken || (actual_target != buf_uop_q.pred_target)) begin
+          o_mispredict  = 1'b1;
+          o_redirect_pc = actual_target;
+        end
       end else if (buf_uop_q.opcode == OPCODE_JALR) begin
-        o_branch_taken = 1'b1;
-        o_branch_target = (fwd_rs1 + buf_uop_q.imm) & ~32'd1;
+        actual_taken    = 1'b1;
+        actual_target   = (fwd_rs1 + buf_uop_q.imm) & ~32'd1;
+        o_branch_taken  = actual_taken;
+        o_branch_target = actual_target;
+
+        // No indirect (JALR/BTB) prediction yet: always redirect.
+        o_mispredict  = 1'b1;
+        o_redirect_pc = actual_target;
       end
     end
   end

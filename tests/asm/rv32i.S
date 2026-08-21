@@ -39,7 +39,7 @@ _start:
     # ───────────────────────────────────────────────
     # 3. Load Instructions
     # ───────────────────────────────────────────────
-    li     x22, 0x1000           # base address for loads (assume memory at 0x1000)
+    la     x22, scratch_data     # base address for loads/stores (real .data, not ROM)
     lb     x23, 0(x22)           # LB
     lh     x24, 2(x22)           # LH
     lw     x25, 4(x22)           # LW
@@ -84,20 +84,49 @@ bgeu_target:
 jal_target:
     nop
 
-    jalr   x29, x1, 8            # JALR (jump to x1 + 8)
+    # NOTE: JALR target intentionally kept in-section (jalr_target label)
+    # instead of an arbitrary x1+8 address, so control flow stays inside
+    # mapped .text instead of faulting to a near-zero address.
+    la     x29, jalr_target      # load address of a valid in-section target
+    jalr   x30, x29, 0           # JALR (jump to x29 + 0)
+jalr_target:
+    nop
 
     # ───────────────────────────────────────────────
-    # 7. System Instructions (ECALL, EBREAK)
+    # 7. System / Fence Instructions
     # ───────────────────────────────────────────────
-    ecall                        # Environment call (syscall)
-    ebreak                       # Breakpoint
-
-    # ───────────────────────────────────────────────
-    # 8. Fence (memory barrier)
-    # ───────────────────────────────────────────────
+    # NOTE: ECALL/EBREAK are intentionally omitted here. Spike is run
+    # bare-metal with no trap handler installed (mtvec == 0, which is
+    # unmapped), so any trap causes an infinite
+    # trap_instruction_access_fault loop at epc 0x0 and Spike never
+    # terminates. None of the other asm tests execute ECALL/EBREAK for
+    # the same reason.
     fence iorw, iorw             # Full fence
 
     # ───────────────────────────────────────────────
-    # Infinite loop to keep CPU alive
+    # Signal completion to Spike/host via tohost
     # ───────────────────────────────────────────────
+    la     t0, tohost
+    li     t1, 1
+    sw     t1, 0(t0)
+    sw     x0, 4(t0)      # upstream also writes zero to tohost+4 [page:1]
+
 1:  j 1b
+
+.section .data
+.align 4
+scratch_data:
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+
+.section .tohost,"aw",@progbits
+.align 6
+.global tohost
+tohost:   .dword 0
+.size tohost, 8
+
+.align 6
+.global fromhost
+fromhost: .dword 0
+.size fromhost, 8

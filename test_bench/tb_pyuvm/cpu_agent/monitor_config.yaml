@@ -315,6 +315,165 @@ stages:
         description: "Stall signal to pipeline from LSU"
 
   # ─────────────────────────────────────────────────────────────────────────
+  # BPU Stage - Branch Prediction Unit ports (prediction + update/training)
+  # ─────────────────────────────────────────────────────────────────────────
+  BPU:
+    display_name: "BPU"
+    description: "Branch Prediction Unit - prediction and update/training ports"
+    signals:
+      - name: "pred_is_br"
+        signal_path: "bpu_pred_is_branch"
+        format: "{:1d}"
+        type: "bool"
+        description: "IF requesting a prediction for a branch"
+
+      - name: "pred_pc"
+        signal_path: "bpu_pred_pc"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC being predicted"
+
+      - name: "pred_off_pc"
+        signal_path: "bpu_pred_offset_pc"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Offset PC used for prediction lookup"
+
+      - name: "pred_taken"
+        signal_path: "bpu_pred_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "BPU predicted taken"
+
+      - name: "pred_target"
+        signal_path: "bpu_pred_target"
+        format: "0x{:08x}"
+        type: "int"
+        description: "BPU predicted target address"
+
+      - name: "upd_valid"
+        signal_path: "bpu_update_valid"
+        format: "{:1d}"
+        type: "bool"
+        description: "BPU update/training pulse from Issue"
+
+      - name: "upd_pc"
+        signal_path: "bpu_update_pc"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC of resolved branch used to update BPU"
+
+      - name: "upd_taken"
+        signal_path: "bpu_update_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "Actual resolved taken outcome"
+
+      - name: "upd_target"
+        signal_path: "bpu_update_target"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Actual resolved target address"
+
+      - name: "if_pred_taken"
+        signal_path: "if_id_pred_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "Prediction carried into decode alongside the instruction"
+
+      - name: "if_pred_target"
+        signal_path: "if_id_pred_target"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Predicted target carried into decode"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # REDIRECT - Misprediction resolution / redirect (top-level, Issue -> IF)
+  # ─────────────────────────────────────────────────────────────────────────
+  REDIRECT:
+    display_name: "REDIRECT"
+    description: "Branch resolution outcome and misprediction redirect"
+    signals:
+      - name: "br_taken"
+        signal_path: "branch_taken"
+        format: "{:1d}"
+        type: "bool"
+        description: "Actual resolved branch/jump taken outcome (Issue)"
+
+      - name: "br_target"
+        signal_path: "branch_target"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Actual resolved branch/jump target (Issue)"
+
+      - name: "mispredict"
+        signal_path: "mispredict"
+        format: "{:1d}"
+        type: "bool"
+        description: "Misprediction detected -> flush IF/ID/Issue"
+
+      - name: "redirect_pc"
+        signal_path: "redirect_pc"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Corrected redirect PC on misprediction"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # FORWARD - Operand forwarding buses into ISSUE
+  # ─────────────────────────────────────────────────────────────────────────
+  FORWARD:
+    display_name: "FWD"
+    description: "Operand forwarding buses from ALU/LSU/Retire back into Issue"
+    signals:
+      - name: "alu_rd"
+        signal_path: "fwd_alu_issue_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "ALU forward destination register"
+
+      - name: "alu_data"
+        signal_path: "fwd_alu_issue_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU forward data"
+
+      - name: "alu_wr"
+        signal_path: "fwd_alu_issue_writes_rd"
+        format: "{:1d}"
+        type: "bool"
+        description: "ALU forward writes_rd qualifier"
+
+      - name: "lsu_rd"
+        signal_path: "fwd_lsu_issue_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "LSU forward destination register"
+
+      - name: "lsu_data"
+        signal_path: "fwd_lsu_issue_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "LSU forward data"
+
+      - name: "ret_rd"
+        signal_path: "fwd_retire_issue_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "Retire forward destination register"
+
+      - name: "ret_data"
+        signal_path: "fwd_retire_issue_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Retire forward data"
+
+      - name: "ret_wr"
+        signal_path: "fwd_retire_issue_writes_rd"
+        format: "{:1d}"
+        type: "bool"
+        description: "Retire forward writes_rd qualifier"
+
+  # ─────────────────────────────────────────────────────────────────────────
   # RETIRE Stage - Writeback to Register File and Commit
   # ─────────────────────────────────────────────────────────────────────────
   RETIRE:
@@ -345,70 +504,117 @@ stages:
 # ───────────────────────────────────────────────────────────────────────────
 # Optional: Define which stages to display (subset of available stages)
 # ───────────────────────────────────────────────────────────────────────────
-display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE"]
+display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE", "BPU", "REDIRECT", "FORWARD"]
 
 # ───────────────────────────────────────────────────────────────────────────
-# UOP Bit Extraction Configuration (For 79-bit uop_t)
+# UOP Bit Extraction Configuration
+#
+# uop_t (rtl/include/riscv_uop_pkg.sv) is now 112 bits wide (grew from the
+# original 79 bits when `pred_taken`/`pred_target` were appended to the
+# struct for the branch-predictor wire-up). Packed-struct field order below
+# mirrors the SV declaration order (first field declared = MSB):
+#   valid(1) opcode(7) alu_op(10) rs1(5) rs2(5) rd(5) funct3(3) imm(32)
+#   uses_rs1(1) uses_rs2(1) writes_rd(1) is_immediate(1) is_branch(1)
+#   is_jump(1) is_load(1) is_store(1) lsu_sign_extend(1) lsu_access_size(2)
+#   pred_taken(1) pred_target(32)  => bit 111 downto 0
 # ───────────────────────────────────────────────────────────────────────────
 uop_extraction:
   signal_path: "id_issue_uop"
   fields:
     - name: "uop_valid"
-      bits: [78, 78]
+      bits: [111, 111]
     - name: "uop_opcode"
-      bits: [77, 71]
+      bits: [110, 104]
     - name: "uop_alu_op"
-      bits: [70, 61]
+      bits: [103, 94]
     - name: "uop_rs1"
-      bits: [60, 56]
+      bits: [93, 89]
     - name: "uop_rs2"
-      bits: [55, 51]
+      bits: [88, 84]
     - name: "uop_rd"
-      bits: [50, 46]
+      bits: [83, 79]
     - name: "uop_funct3"
-      bits: [45, 43]
+      bits: [78, 76]
     - name: "uop_imm"
-      bits: [42, 11]
+      bits: [75, 44]
     - name: "uop_uses_rs1"
-      bits: [10, 10]
+      bits: [43, 43]
     - name: "uop_uses_rs2"
-      bits: [9, 9]
+      bits: [42, 42]
     - name: "uop_writes_rd"
-      bits: [8, 8]
+      bits: [41, 41]
     - name: "uop_is_immediate"
-      bits: [7, 7]
+      bits: [40, 40]
     - name: "uop_is_branch"
-      bits: [6, 6]
+      bits: [39, 39]
     - name: "uop_is_jump"
-      bits: [5, 5]
+      bits: [38, 38]
     - name: "uop_is_load"
-      bits: [4, 4]
+      bits: [37, 37]
     - name: "uop_is_store"
-      bits: [3, 3]
+      bits: [36, 36]
+    - name: "uop_pred_taken"
+      bits: [32, 32]
+    - name: "uop_pred_target"
+      bits: [31, 0]
 
 uop_issue_extraction:
   signal_path: "ISSUE.buf_uop_q"
   fields:
     - name: "uop_iss_opcode"
-      bits: [77, 71]
+      bits: [110, 104]
     - name: "uop_iss_is_branch"
-      bits: [6, 6]
+      bits: [39, 39]
     - name: "uop_iss_is_jump"
-      bits: [5, 5]
+      bits: [38, 38]
 
 uop_alu_extraction:
   signal_path: "ALU.uop_q"
   fields:
     - name: "uop_alu_opcode"
-      bits: [77, 71]
+      bits: [110, 104]
+    - name: "uop_alu_op"
+      bits: [103, 94]
+    - name: "uop_alu_rs1"
+      bits: [93, 89]
+    - name: "uop_alu_rs2"
+      bits: [88, 84]
+    - name: "uop_alu_rd"
+      bits: [83, 79]
+    - name: "uop_alu_funct3"
+      bits: [78, 76]
+    - name: "uop_alu_imm"
+      bits: [75, 44]
+    - name: "uop_alu_writes_rd"
+      bits: [41, 41]
+    - name: "uop_alu_is_immediate"
+      bits: [40, 40]
+    - name: "uop_alu_is_branch"
+      bits: [39, 39]
+    - name: "uop_alu_is_jump"
+      bits: [38, 38]
 
 uop_lsu_extraction:
   signal_path: "LSU.uop_q"
   fields:
+    - name: "uop_lsu_opcode"
+      bits: [110, 104]
+    - name: "uop_lsu_rs1"
+      bits: [93, 89]
+    - name: "uop_lsu_rs2"
+      bits: [88, 84]
+    - name: "uop_lsu_rd"
+      bits: [83, 79]
+    - name: "uop_lsu_funct3"
+      bits: [78, 76]
+    - name: "uop_lsu_imm"
+      bits: [75, 44]
+    - name: "uop_lsu_writes_rd"
+      bits: [41, 41]
     - name: "uop_lsu_is_load"
-      bits: [4, 4]
+      bits: [37, 37]
     - name: "uop_lsu_is_store"
-      bits: [3, 3]
+      bits: [36, 36]
 
 # ───────────────────────────────────────────────────────────────────────────
 # Display Configuration
