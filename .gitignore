@@ -6,6 +6,8 @@ obj_dir/
 **/*.xml
 **/*.dis
 **/*.elf
+**/*.fs
+**/*.json
 **/build
 venv
 venv.sh
@@ -36,3 +38,5 @@ tests/asm/bpu_stress.S
 CLAUDE.md
 fpnew/
 .claude-worktrees
+tools/oss-cad-suite
+tools/oss-cad-suite-linux-x64-20260821.tgz

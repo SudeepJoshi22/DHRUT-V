@@ -1,0 +1,10 @@
+// Pin constraints for the Sipeed Tang Nano 20K
+// Maps our Verilog port names to physical FPGA pins on the board.
+
+// Onboard 27MHz crystal oscillator
+IO_LOC "clk" 4;
+IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// Onboard LED0 (the first of the 6 onboard LEDs)
+IO_LOC "led0" 15;
+IO_PORT "led0" IO_TYPE=LVCMOS33 DRIVE=8;
