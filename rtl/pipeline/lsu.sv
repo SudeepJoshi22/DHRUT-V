@@ -8,9 +8,17 @@ module lsu (
   // To data memory
   mem_if.master       dmem_if,
 
-  // Load Data Forward to ISSUE
-  //output logic [4:0]  o_lsu_fwd_rd,           
-  //output logic [31:0] o_lsu_fwd_result,       
+  // Load Data Forward to ISSUE - valid only for completed LOADS. Stores
+  // also complete via o_valid/o_lsu_uop below (for Retire, which already
+  // gates on uop_q.writes_rd itself), but a store's uop_q.rd is not a
+  // real destination register - decode.sv extracts rd from instr[11:7]
+  // unconditionally, which for S-type instructions is actually imm[4:0].
+  // Forwarding that unqualified onto rs1/rs2 matches can corrupt operands
+  // whenever a store's own immediate happens to numerically collide with
+  // a later instruction's source register.
+  output logic        o_lsu_fwd_valid,
+  output logic [4:0]  o_lsu_fwd_rd,
+  output logic [31:0] o_lsu_fwd_result,
 
   // Back to pipeline (for write-back or next stage)
   output logic        o_valid,          // load/store completed this cycle
@@ -166,5 +174,12 @@ module lsu (
   end
 
   assign o_lsu_uop = uop_q;
+
+  // ───────────────────────────────────────────────
+  // Dedicated load-data forward to Issue (loads only - see port comment)
+  // ───────────────────────────────────────────────
+  assign o_lsu_fwd_valid  = o_valid && uop_q.is_load;
+  assign o_lsu_fwd_rd     = uop_q.rd;
+  assign o_lsu_fwd_result = o_load_data;
 
 endmodule

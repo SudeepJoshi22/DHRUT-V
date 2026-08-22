@@ -78,6 +78,7 @@ module tb_top;
 
   // Opeerand Forwarding from LSU -> ISSUE
   
+  logic        fwd_lsu_issue_valid;
   logic [4:0]  fwd_lsu_issue_rd;
   logic [31:0] fwd_lsu_issue_data;
   
@@ -170,9 +171,9 @@ module tb_top;
     .i_retire_fwd_writes_rd (fwd_retire_issue_writes_rd),
     .i_retire_fwd_rd        (fwd_retire_issue_rd),
     .i_retire_fwd_data      (fwd_retire_issue_data),
-    .i_lsu_fwd_data_valid   (lsu_valid),
-    .i_lsu_fwd_rd           (lsu_uop_forward.rd),
-    .i_lsu_fwd_data         (lsu_load_data),
+    .i_lsu_fwd_data_valid   (fwd_lsu_issue_valid),
+    .i_lsu_fwd_rd           (fwd_lsu_issue_rd),
+    .i_lsu_fwd_data         (fwd_lsu_issue_data),
     .o_branch_taken         (branch_taken),
     .o_branch_target        (branch_target),
     .o_resolved_pc          (bpu_update_pc),
@@ -213,8 +214,9 @@ module tb_top;
       .rst_n                (rst_n),
       .issue_if             (lsu_if),
       .dmem_if              (dmem_if.master),
-      //.o_lsu_fwd_rd         (fwd_lsu_issue_rd),   
-      //.o_lsu_fwd_result     (fwd_lsu_issue_data),
+      .o_lsu_fwd_valid      (fwd_lsu_issue_valid),
+      .o_lsu_fwd_rd         (fwd_lsu_issue_rd),
+      .o_lsu_fwd_result     (fwd_lsu_issue_data),
       .o_valid              (lsu_valid),
       .o_load_data          (lsu_load_data),
       .o_lsu_uop            (lsu_uop_forward)
