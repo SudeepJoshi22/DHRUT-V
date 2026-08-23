@@ -111,6 +111,39 @@ Always keep the RTL clean!
 ./tools/lint.sh
 ```
 
+### Running C Programs / Benchmarks
+
+`tools/simulate_c.sh` is the C-program counterpart to `simulate.sh`: it links
+`tests/crt0.S` (minimal bare-metal startup: stack init, `.bss` zeroing, `call
+main`, then the usual `tohost` exit) against `tests/linker_c.ld` and one or
+more C sources, verifies against Spike, then runs the same Verilator/cocotb
+flow.
+
+```bash
+./tools/simulate_c.sh <test_name> <c_source1> [c_source2 ...] [-- extra_cflags...]
+```
+
+Dhrystone and CoreMark are ported under `tests/bench/` (see each directory's
+`NOTICE.md` for provenance and the DHRUT-V-specific porting changes). Since
+the core has no UART yet, both benchmarks report through a handful of
+`dhrutv_final_*` globals instead of printed text; `tools/bench_report.py`
+recovers those values from the DMEM write trace after a run and prints
+CPI/IPC and the benchmark score:
+
+```bash
+./tools/simulate_c.sh dhrystone tests/bench/dhrystone/dhrystone.c tests/bench/dhrystone/dhrystone_main.c tests/bench/dhrystone/port.c \
+    -- -Itests/bench/dhrystone -DITERATIONS=1 -DDHRUTV_RTLSIM=1
+./tools/bench_report.py dhrystone --kind dhrystone
+
+./tools/simulate_c.sh coremark tests/bench/coremark/*.c \
+    -- -Itests/bench/coremark -DITERATIONS=1 -DCLOCKS_PER_SEC=1 -DFLAGS_STR='"-O2"'
+./tools/bench_report.py coremark --kind coremark
+```
+
+Note: Verilator+cocotb simulation runs far slower than real hardware
+(roughly tens of RTL cycles per wall-clock second), so a full CoreMark run
+can take a long time; keep `ITERATIONS` small for iterative development.
+
 ---
 
 ## Project Structure
