@@ -16,6 +16,7 @@ VERILOG_SOURCES = \
   $(REPO_ROOT)/rtl/csr/generated/csr_regfile_gen.sv \
   $(REPO_ROOT)/rtl/interfaces/*.sv \
   $(REPO_ROOT)/rtl/pipeline/*.sv \
+  $(REPO_ROOT)/rtl/cpu_core.sv \
   $(REPO_ROOT)/rtl/tb_top.sv
 
 # pyUVM python path (absolute)

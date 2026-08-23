@@ -23,13 +23,14 @@ graph LR
     ID --> IS[Issue/ARF]
     IS --> EX[Execute/ALU]
     IS --> LSU[LSU]
+    IS <-->|same-cycle| CSR[CSR Unit]
     EX --> RE[Retire]
     LSU --> RE
     RE -.->|Writeback| IS
     RE -.->|Forward| IS
     EX -.->|Forward| IS
     LSU -.->|Forward| IS
-    IS -.->|Branch/Jump| IF
+    IS -.->|Branch/Jump/Trap| IF
 ```
 
 ### Pipeline Breakdown
@@ -41,7 +42,7 @@ graph LR
     - Performs **Scoreboarding** and hazard detection(feature yet to be implemented).
     - Handles **Operand Forwarding** from ALU, LSU, and Retire stages.
     - Resolves **Branches and Jumps** early to reduce bubbles.
-    - Resolves **CSR reads/writes and traps** (`ecall`/`ebreak`/illegal-instruction/`mret`) the same cycle. The CSR block itself is generated from a SystemRDL spec — see `rtl/csr/`.
+    - Dispatches CSR ops and traps to the **CSR Unit**, resolved the same cycle.
     - Dispatches uops to functional units.
 4.  **Functional Units**:
     - **ALU**: Performs arithmetic, logic, and comparison operations.
@@ -110,6 +111,39 @@ Always keep the RTL clean!
 ./tools/lint.sh
 ```
 
+### Running C Programs / Benchmarks
+
+`tools/simulate_c.sh` is the C-program counterpart to `simulate.sh`: it links
+`tests/crt0.S` (minimal bare-metal startup: stack init, `.bss` zeroing, `call
+main`, then the usual `tohost` exit) against `tests/linker_c.ld` and one or
+more C sources, verifies against Spike, then runs the same Verilator/cocotb
+flow.
+
+```bash
+./tools/simulate_c.sh <test_name> <c_source1> [c_source2 ...] [-- extra_cflags...]
+```
+
+Dhrystone and CoreMark are ported under `tests/bench/` (see each directory's
+`NOTICE.md` for provenance and the DHRUT-V-specific porting changes). Since
+the core has no UART yet, both benchmarks report through a handful of
+`dhrutv_final_*` globals instead of printed text; `tools/bench_report.py`
+recovers those values from the DMEM write trace after a run and prints
+CPI/IPC and the benchmark score:
+
+```bash
+./tools/simulate_c.sh dhrystone tests/bench/dhrystone/dhrystone.c tests/bench/dhrystone/dhrystone_main.c tests/bench/dhrystone/port.c \
+    -- -Itests/bench/dhrystone -DITERATIONS=1 -DDHRUTV_RTLSIM=1
+./tools/bench_report.py dhrystone --kind dhrystone
+
+./tools/simulate_c.sh coremark tests/bench/coremark/*.c \
+    -- -Itests/bench/coremark -DITERATIONS=1 -DCLOCKS_PER_SEC=1 -DFLAGS_STR='"-O2"'
+./tools/bench_report.py coremark --kind coremark
+```
+
+Note: Verilator+cocotb simulation runs far slower than real hardware
+(roughly tens of RTL cycles per wall-clock second), so a full CoreMark run
+can take a long time; keep `ITERATIONS` small for iterative development.
+
 ---
 
 ## Project Structure
@@ -145,7 +179,7 @@ DHRUT-V/
 - [x] Early Branch/Jump resolution.
 - [x] Basic pyUVM Verification Infrastructure.
 - [x] Full compliance with RV32I_m RISCOF tests.
-- [x] **CSR Support (Zicsr), M-mode**: implemented, RDL-generated, directed-test-verified. Official riscof Zicsr/privilege compliance still pending.
+- [x] **CSR Support (Zicsr), M-mode**: implemented, RDL-generated, directed-test-verified (riscof compliance pending).
 - [ ] **Benchmarking and Performance Enhancements**.
 - [ ] **FPGA Deployment**: Booting bare-metal code on a Xilinx/Lattice FPGA.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.

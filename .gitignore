@@ -24,6 +24,7 @@ riscv-isa-sim/
 verilator/
 tools/verilator-install/
 tools/spike
+tools/riscof/riscv-arch-test/
 .breadcrumbs.yaml
 .claude/
 .empirica/

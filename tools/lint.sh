@@ -19,6 +19,7 @@ RTL_SOURCES=(
     "$RTL_DIR/csr/generated/csr_regfile_gen.sv"
     "$RTL_DIR/interfaces"/*.sv
     "$RTL_DIR/pipeline"/*.sv
+    "$RTL_DIR/cpu_core.sv"
     "$RTL_DIR/tb_top.sv"
 )
 

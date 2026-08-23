@@ -42,7 +42,9 @@ jalr_target_odd:
 
 level1:
     li x9, 9
-    jal ra, level2
+    mv x15, ra                  # save caller's return address across the nested call
+    jal ra, level2               # clobbers ra with level1's own return point
+    mv ra, x15                  # restore caller's return address before our own return
     li x10, 10
     li x8, 8                    # Mark reaching back to main
     jr ra
