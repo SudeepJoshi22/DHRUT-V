@@ -74,8 +74,13 @@ class IMemDriver(uvm_driver):
             abort = False
             if self.imem_if.m_valid.value:
                 addr = self.imem_if.m_addr.value.to_unsigned()
-                aligned_addr = addr & ~3
-                instr = self.mem.get(aligned_addr, 0x00000013)  # default NOP if not found
+                # 64-bit fetch: the core requests an 8-byte aligned block and
+                # expects both of its instructions back - the word at the
+                # aligned address in [31:0], the next word in [63:32].
+                block_addr = addr & ~7
+                w0 = self.mem.get(block_addr, 0x00000013)      # default NOP if not found
+                w1 = self.mem.get(block_addr + 4, 0x00000013)
+                instr = (w1 << 32) | w0
 
                 # MEM_STALL_MODE=zero disables injected fetch latency, to
                 # measure the core's intrinsic IPC without synthetic memory

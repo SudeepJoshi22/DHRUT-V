@@ -1,15 +1,23 @@
-interface mem_if (
+// Generic request/response memory interface.
+//
+// DATA_W parameterises the data path so instruction fetch can be widened
+// independently of the data side: imem is instantiated at 64 (two
+// instructions per access, see rtl/pipeline/ifetch.sv) while dmem keeps
+// the 32-bit default. Address remains 32-bit in both cases.
+interface mem_if #(
+    parameter int DATA_W = 32
+  ) (
     input logic clk,
     input logic rst_n
     );
 
-  logic        m_valid;
-  logic        s_ready;
-  logic [31:0] m_addr;
-  logic [31:0] m_wdata;
-  logic [3:0]  m_wstrb;
-  logic [31:0] s_rdata;
-  logic        m_flush;
+  logic              m_valid;
+  logic              s_ready;
+  logic [31:0]       m_addr;
+  logic [DATA_W-1:0] m_wdata;
+  logic [DATA_W/8-1:0] m_wstrb;
+  logic [DATA_W-1:0] s_rdata;
+  logic              m_flush;
 
   // Master modport (CPU side)
   modport master (

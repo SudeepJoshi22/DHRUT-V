@@ -35,12 +35,25 @@ module fetch_queue #(
   // Synchronous flush: drops every queued entry (mispredict redirect)
   input  logic        i_flush,
 
-  // Producer side (fetch engine)
-  input  logic        i_push,
-  input  logic [31:0] i_pc,
-  input  logic [31:0] i_instr,
-  input  logic        i_pred_taken,
-  input  logic [31:0] i_pred_target,
+  // Producer side (fetch engine). Two push ports so a single 64-bit fetch
+  // can enqueue both instructions of an 8-byte block in one cycle. Slot 0
+  // is the older instruction; pushing slot 1 without slot 0 is illegal
+  // (program order would be violated) and is checked by assertion.
+  input  logic        i_push0,
+  input  logic [31:0] i_pc0,
+  input  logic [31:0] i_instr0,
+  input  logic        i_pred_taken0,
+  input  logic [31:0] i_pred_target0,
+
+  input  logic        i_push1,
+  input  logic [31:0] i_pc1,
+  input  logic [31:0] i_instr1,
+  input  logic        i_pred_taken1,
+  input  logic [31:0] i_pred_target1,
+
+  // Asserted when fewer than 2 free slots remain. Fetch only issues a
+  // request when it can retire a full 2-instruction group, so there is
+  // no partial-push path to reason about.
   output logic        o_full,
 
   // Consumer side (decode)
@@ -66,20 +79,28 @@ module fetch_queue #(
   // One extra MSB on each pointer distinguishes full from empty.
   logic [PTR_W:0] wr_ptr_q, rd_ptr_q;
 
-  logic [PTR_W-1:0] wr_idx, rd_idx;
-  logic             push_fire, pop_fire;
+  logic [PTR_W-1:0] wr_idx0, wr_idx1, rd_idx;
+  logic             push0_fire, push1_fire, pop_fire;
+  logic [PTR_W:0]   occupancy;
+  logic [1:0]       push_count;
 
-  assign wr_idx = wr_ptr_q[PTR_W-1:0];
-  assign rd_idx = rd_ptr_q[PTR_W-1:0];
+  assign wr_idx0 = wr_ptr_q[PTR_W-1:0];
+  assign wr_idx1 = wr_ptr_q[PTR_W-1:0] + 1'b1;
+  assign rd_idx  = rd_ptr_q[PTR_W-1:0];
 
-  assign o_empty = (wr_ptr_q == rd_ptr_q);
-  assign o_full  = (wr_ptr_q[PTR_W] != rd_ptr_q[PTR_W]) &&
-                   (wr_ptr_q[PTR_W-1:0] == rd_ptr_q[PTR_W-1:0]);
+  assign o_empty   = (wr_ptr_q == rd_ptr_q);
+  assign occupancy = wr_ptr_q - rd_ptr_q;
 
-  assign pop_fire  = i_pop  && !o_empty;
-  // A push is accepted when there is a free slot, or when a pop frees
-  // one in this same cycle (full + push + pop keeps occupancy at DEPTH).
-  assign push_fire = i_push && (!o_full || pop_fire);
+  // "Full" means fewer than 2 free slots, since fetch pushes in pairs.
+  assign o_full = (occupancy >= (PTR_W + 1)'(DEPTH - 1));
+
+  assign pop_fire = i_pop && !o_empty;
+
+  // Both pushes are accepted or neither is: fetch is gated on o_full
+  // (2 free slots) so a group never needs to be split across cycles.
+  assign push0_fire = i_push0;
+  assign push1_fire = i_push1;
+  assign push_count = {1'b0, push0_fire} + {1'b0, push1_fire};
 
   // =================================================================
   // Storage
@@ -90,11 +111,23 @@ module fetch_queue #(
         entries_q[i] <= '0;
       end
     end
-    else if (push_fire) begin
-      entries_q[wr_idx] <= '{pc:          i_pc,
-                             instr:       i_instr,
-                             pred_taken:  i_pred_taken,
-                             pred_target: i_pred_target};
+    else begin
+      if (push0_fire) begin
+        entries_q[wr_idx0] <= '{pc:          i_pc0,
+                                instr:       i_instr0,
+                                pred_taken:  i_pred_taken0,
+                                pred_target: i_pred_target0};
+      end
+      if (push1_fire) begin
+        // Slot 1 always lands one past slot 0 when both push together;
+        // when only slot 1 pushes it would alias slot 0's index, which
+        // the program-order assertion below forbids.
+        entries_q[push0_fire ? wr_idx1 : wr_idx0] <=
+                             '{pc:          i_pc1,
+                               instr:       i_instr1,
+                               pred_taken:  i_pred_taken1,
+                               pred_target: i_pred_target1};
+      end
     end
     // Flush does not need to clear the payload: the pointers below are
     // reset, so nothing can read a stale entry (o_empty is asserted).
@@ -109,8 +142,8 @@ module fetch_queue #(
       rd_ptr_q <= '0;
     end
     else begin
-      if (push_fire) wr_ptr_q <= wr_ptr_q + 1'b1;
-      if (pop_fire)  rd_ptr_q <= rd_ptr_q + 1'b1;
+      if (push_count != 2'd0) wr_ptr_q <= wr_ptr_q + (PTR_W + 1)'(push_count);
+      if (pop_fire)           rd_ptr_q <= rd_ptr_q + 1'b1;
     end
   end
 
@@ -136,12 +169,27 @@ module fetch_queue #(
   // Queue integrity assertions
   // ───────────────────────────────────────────────────────────────────────────
 
-  // 1. No dropped push: the producer must never present a push that the
-  //    queue cannot accept (would silently lose an instruction).
+  // 1. No dropped push: the producer must never present a push the queue
+  //    cannot hold (would silently lose an instruction). Fetch gates on
+  //    o_full, which reserves room for a full 2-instruction group.
   assert_no_overflow: assert property (
     @(posedge clk) disable iff (!rst_n || i_flush)
-    i_push |-> (!o_full || pop_fire)
-  ) else $error("FETCH QUEUE ERROR: push while full (pc=0x%h) - instruction dropped", i_pc);
+    (push_count != 2'd0) |-> ((occupancy + push_count) <= DEPTH[PTR_W:0])
+  ) else $error("FETCH QUEUE ERROR: push of %0d with occupancy %0d exceeds DEPTH %0d - instruction dropped",
+                push_count, occupancy, DEPTH);
+
+  // 1b. Program order: slot 1 is the younger instruction, so it may never
+  //     be pushed without slot 0 (that would reorder the group).
+  assert_push_order: assert property (
+    @(posedge clk) disable iff (!rst_n || i_flush)
+    i_push1 |-> i_push0
+  ) else $error("FETCH QUEUE ERROR: slot1 pushed without slot0 (pc1=0x%h) - program order violated", i_pc1);
+
+  // 1c. When both push, they must be consecutive PCs (slot1 = slot0 + 4).
+  assert_push_contiguous: assert property (
+    @(posedge clk) disable iff (!rst_n || i_flush)
+    (i_push0 && i_push1) |-> (i_pc1 == (i_pc0 + 32'd4))
+  ) else $error("FETCH QUEUE ERROR: non-contiguous group pc0=0x%h pc1=0x%h", i_pc0, i_pc1);
 
   // 2. No pop of a non-existent entry.
   assert_no_underflow: assert property (
@@ -150,9 +198,6 @@ module fetch_queue #(
   ) else $error("FETCH QUEUE ERROR: pop while empty");
 
   // 3. Occupancy never exceeds DEPTH (pointer distance stays in range).
-  logic [PTR_W:0] occupancy;
-  assign occupancy = wr_ptr_q - rd_ptr_q;
-
   assert_occupancy_in_range: assert property (
     @(posedge clk) disable iff (!rst_n)
     (occupancy <= DEPTH[PTR_W:0])
