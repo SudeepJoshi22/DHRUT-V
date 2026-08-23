@@ -77,10 +77,16 @@ class IMemDriver(uvm_driver):
                 aligned_addr = addr & ~3
                 instr = self.mem.get(aligned_addr, 0x00000013)  # default NOP if not found
 
-                if random.random() < 0.4:
+                # MEM_STALL_MODE=zero disables injected fetch latency, to
+                # measure the core's intrinsic IPC without synthetic memory
+                # stalls dominating. Default (random) keeps the randomized
+                # timing that shakes out handshake/flush bugs.
+                stall_enabled = os.getenv("MEM_STALL_MODE", "random") != "zero"
+
+                if stall_enabled and random.random() < 0.4:
                     stall_cycles = random.randint(1, 2)  # 1 or 2 cycles of stall
                     self.logger.debug(f"IMem introducing {stall_cycles} stall cycle(s)")
-                
+
                     self.imem_if.s_ready.value = 0
                     for _ in range(stall_cycles):
                         if self.imem_if.m_flush.value:
