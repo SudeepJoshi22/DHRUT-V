@@ -82,6 +82,7 @@ module fetch_queue #(
   logic [PTR_W-1:0] wr_idx0, wr_idx1, rd_idx;
   logic             push0_fire, push1_fire, pop_fire;
   logic [PTR_W:0]   occupancy;
+  logic [PTR_W:0]   free_slots;
   logic [1:0]       push_count;
 
   assign wr_idx0 = wr_ptr_q[PTR_W-1:0];
@@ -91,8 +92,14 @@ module fetch_queue #(
   assign o_empty   = (wr_ptr_q == rd_ptr_q);
   assign occupancy = wr_ptr_q - rd_ptr_q;
 
-  // "Full" means fewer than 2 free slots, since fetch pushes in pairs.
-  assign o_full = (occupancy >= (PTR_W + 1)'(DEPTH - 1));
+  // "Full" means this queue cannot accept a full 2-instruction group THIS
+  // cycle. It accounts for a simultaneous pop freeing one slot, so the
+  // producer does not need (and must not use) its own `|| pop` override:
+  // at occupancy DEPTH a pop frees only one slot, which is still not
+  // enough for a pair, and pushing anyway would silently drop an
+  // instruction.
+  assign free_slots = (PTR_W + 1)'(DEPTH) - occupancy + {{PTR_W{1'b0}}, pop_fire};
+  assign o_full     = (free_slots < (PTR_W + 1)'(2));
 
   assign pop_fire = i_pop && !o_empty;
 

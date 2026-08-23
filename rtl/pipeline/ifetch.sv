@@ -107,9 +107,16 @@ module if_stage (
   logic query_s0, query_s1;
 
   assign query_s0 = s0_is_branch;
-  assign query_s1 = !s0_is_branch && s1_is_branch;
+  // Only query for slot 1 if control actually reaches it. A JAL in slot 0
+  // redirects away, so slot 1 is not on the fetched path and querying it
+  // would train a BTB entry for an instruction we never execute - that
+  // pollution shows up later as bogus predicted-taken with a stale target.
+  // Gating on s0_is_jal (not s0_taken) keeps this combinationally safe:
+  // query_s1 already requires !s0_is_branch, so it never depends on the
+  // BPU's own response.
+  assign query_s1 = !s0_is_branch && !s0_is_jal && s1_is_branch;
 
-  assign o_bpu_pred_is_branch = s0_is_branch || s1_is_branch;
+  assign o_bpu_pred_is_branch = query_s0 || query_s1;
   assign o_bpu_pred_pc        = query_s0 ? pc0 : pc1;
   assign o_bpu_pred_offset_pc = query_s0 ? s0_btarget : s1_btarget;
 
@@ -191,12 +198,15 @@ module if_stage (
   // =================================================================
   // Memory Interface
   // =================================================================
-  // Request whenever we aren't flushing and the queue can hold a full
-  // 2-instruction group (fq_full reserves 2 slots), or is freeing one
-  // this cycle. Deliberately not gated on i_stall: a downstream stall
-  // fills the queue rather than stopping fetch, and an imem stall drains
-  // the queue rather than starving decode.
-  assign imem.m_valid = !i_flush && (!fq_full || fq_pop);
+  // Request whenever we aren't flushing and the queue can accept a full
+  // 2-instruction group. fq_full already accounts for a simultaneous pop,
+  // so there is deliberately no `|| fq_pop` override here: at full
+  // occupancy a pop frees only ONE slot, which is not enough for a pair,
+  // and pushing anyway silently drops an instruction.
+  // Deliberately not gated on i_stall: a downstream stall fills the queue
+  // rather than stopping fetch, and an imem stall drains the queue rather
+  // than starving decode.
+  assign imem.m_valid = !i_flush && !fq_full;
   assign imem.m_addr  = aligned_addr;
   assign imem.m_wdata = '0;
   assign imem.m_wstrb = '0;
@@ -313,7 +323,7 @@ module if_stage (
   //    silently drop the fetched instruction).
   assert_fetch_has_room: assert property (
     @(posedge clk) disable iff (!rst_n || i_flush)
-    fetch_fire |-> (!fq_full || fq_pop)
+    fetch_fire |-> !fq_full
   ) else $error("FETCH ERROR: fetch completed with no queue slot (PC=0x%h)", imem.m_addr);
 `endif
 
