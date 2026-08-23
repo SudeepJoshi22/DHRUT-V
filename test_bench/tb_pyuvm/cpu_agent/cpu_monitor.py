@@ -6,6 +6,8 @@ from pyuvm import uvm_sequence_item, uvm_monitor, uvm_analysis_port
 import cocotb
 from cocotb.triggers import RisingEdge
 
+from . import hier
+
 # Default (fixed, non test-name-qualified) deep-trace file name, written to
 # the sim run directory (cwd when cocotb/Verilator runs, e.g. tools/pyUVM).
 # Overridable via CPU_DEEP_TRACE_FILE for relocation/disabling.
@@ -208,23 +210,21 @@ class CpuMonitor(uvm_monitor):
     
     def _get_signal_value(self, signal_path):
         """
-        Recursively get signal value from DUT using dot notation
-        e.g., "alu_if.m_valid" -> self.dut.alu_if.m_valid.value
+        Get a signal value from the DUT using dot notation, resolved via
+        hier.resolve() so paths work whether the pipeline signals sit
+        directly under tb_top or inside the cpu_core instance.
+        e.g., "alu_if.m_valid" -> tb_top.CORE.alu_if.m_valid.value
         """
-        parts = signal_path.split('.')
-        obj = self.dut
-        
-        try:
-            for part in parts:
-                obj = getattr(obj, part)
-            
-            # Get the value if it's a signal
-            if hasattr(obj, 'value'):
-                return obj.value
-            return obj
-        except AttributeError as e:
+        obj = hier.resolve(self.dut, signal_path)
+
+        if obj is None:
             self.logger.debug(f"Signal not found: {signal_path}")
             return None
+
+        # Get the value if it's a signal
+        if hasattr(obj, 'value'):
+            return obj.value
+        return obj
     
     async def run_phase(self):
         # Lazily get DUT only when run_phase starts
