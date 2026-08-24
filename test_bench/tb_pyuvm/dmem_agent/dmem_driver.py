@@ -12,8 +12,25 @@ class DMemDriver(uvm_driver):
     Simple DMEM slave:
     - Preloaded memory from TEST_HEX (same format as IMEM).
     - Handles word-aligned loads/stores.
-    - Random response stalls (1–5 cycles).
+    - Response stalls controlled by MEM_STALL_MODE (see _stall_cycles).
     """
+
+    def _stall_cycles(self):
+        """
+        Injected response latency, in cycles.
+
+        MEM_STALL_MODE=random (default): 1-5 cycles, as before. Randomized
+        timing is deliberate - it shakes out handshake/backpressure bugs
+        that a fixed-latency model would hide.
+
+        MEM_STALL_MODE=zero: no injected stalls. Used to measure the core's
+        *intrinsic* IPC without synthetic memory latency dominating the
+        result, e.g. when deciding where microarchitectural effort should
+        go. Not a substitute for the random mode in functional regressions.
+        """
+        if os.getenv("MEM_STALL_MODE", "random") == "zero":
+            return 0
+        return random.randint(1, 5)
 
     def load_verilog_hex(self, path):
         """
@@ -96,8 +113,8 @@ class DMemDriver(uvm_driver):
             aligned_addr = addr & ~3
             is_write = (int(self.dmem_if.m_wstrb.value) != 0)
 
-            # Random stall (1-5 cycles)
-            stall_cycles = random.randint(1, 5)
+            # Injected response latency (see _stall_cycles)
+            stall_cycles = self._stall_cycles()
             self.dmem_if.s_ready.value = 0
             for _ in range(stall_cycles):
                 await RisingEdge(self.dmem_if.clk)
