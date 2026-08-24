@@ -100,8 +100,29 @@ class IMemDriver(uvm_driver):
                             break
                         await RisingEdge(self.imem_if.clk)
 
-                # Drive response
+                # Drive response.
+                #
+                # Only answer if the core still wants THIS address. Stalling
+                # above advances time, during which a mispredict flush can
+                # redirect the core: m_flush is a single-cycle pulse, so the
+                # loop's pre-await check can miss it entirely. Responding
+                # anyway hands back data fetched for the old address while
+                # the core has already moved pc_q to a new block, and the
+                # core then pairs the NEW pc with the OLD instruction --
+                # silent instruction corruption, and exactly the failure
+                # that broke Dhrystone once 64-bit fetch made speculative
+                # wrong-path fetches (and therefore flushes) common.
                 if not abort:
-                    abort = False
-                    self.imem_if.s_rdata.value = instr
-                    self.imem_if.s_ready.value = 1
+                    still_requesting = bool(self.imem_if.m_valid.value)
+                    cur_addr = (self.imem_if.m_addr.value.to_unsigned()
+                                if still_requesting else None)
+                    if (still_requesting
+                            and cur_addr == addr
+                            and not self.imem_if.m_flush.value):
+                        self.imem_if.s_rdata.value = instr
+                        self.imem_if.s_ready.value = 1
+                    else:
+                        self.logger.debug(
+                            f"IMEM dropping stale response for 0x{addr:08x} "
+                            f"(core now at {'0x%08x' % cur_addr if cur_addr is not None else 'idle'})"
+                        )
