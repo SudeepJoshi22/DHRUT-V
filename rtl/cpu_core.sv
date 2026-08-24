@@ -8,12 +8,14 @@ module cpu_core (
   mem_if.master dmem_if
 );
 
-  // IF -> ID pipeline registers
-  logic        if_id_valid;
-  logic [31:0] if_id_pc;
-  logic [31:0] if_id_instr;
-  logic        if_id_pred_taken;
-  logic [31:0] if_id_pred_target;
+  // IF -> ID fetch group: the fetch queue presents its two oldest entries
+  // every cycle, index 0 being the older instruction. ifg_valid[1] implies
+  // ifg_valid[0].
+  logic [1:0]       ifg_valid;
+  logic [1:0][31:0] ifg_pc;
+  logic [1:0][31:0] ifg_instr;
+  logic [1:0]       ifg_pred_taken;
+  logic [1:0][31:0] ifg_pred_target;
 
   // IF <-> BPU (prediction port)
   logic        bpu_pred_is_branch;
@@ -28,10 +30,16 @@ module cpu_core (
   logic        bpu_update_taken;
   logic [31:0] bpu_update_target;
 
-  // ID -> Issue
-  logic        id_issue_valid;
-  uop_t        id_issue_uop;
-  logic [31:0] id_issue_pc;
+  // ID -> Issue decode group: two decoded uops per cycle, index 0 older.
+  logic [1:0]       idg_valid;
+  uop_t [1:0]       idg_uop;
+  logic [1:0][31:0] idg_pc;
+
+  // How many decode slots Issue consumed this cycle (0..2), and how many
+  // fetch-queue entries Decode consumed. These counts ARE the handshakes:
+  // there is no separate stall wire in either direction any more.
+  logic [1:0]  issue_accept_cnt;
+  logic [1:0]  decode_pop_cnt;
 
   // Issue -> ALU (via interface)
   alu_issue_if alu_if(clk, rst_n);
@@ -84,7 +92,34 @@ module cpu_core (
   // Downstream Stalls
   logic        lsu_to_issue_stall;
   logic        issue_to_decode_stall;
-  logic        decode_to_fetch_stall;
+
+  // ───────────────────────────────────────────────
+  // Slot-0 scalar taps
+  // ───────────────────────────────────────────────
+  // The pipeline itself runs on the wide buses above. These narrow views
+  // of slot 0 exist purely so the testbench's per-stage display
+  // (test_bench/tb_pyuvm/cpu_agent/monitor_config.yaml) keeps resolving
+  // the signal names it always has. They are NOT sufficient for tracing:
+  // with a 2-wide decode more than one instruction can leave the queue in
+  // a cycle, so cpu_tracer.py reads the wide buses plus issue_accept_cnt
+  // instead.
+  logic        if_id_valid;
+  logic [31:0] if_id_pc;
+  logic [31:0] if_id_instr;
+  logic        if_id_pred_taken;
+  logic [31:0] if_id_pred_target;
+  logic        id_issue_valid;
+  uop_t        id_issue_uop;
+  logic [31:0] id_issue_pc;
+
+  assign if_id_valid       = ifg_valid[0];
+  assign if_id_pc          = ifg_pc[0];
+  assign if_id_instr       = ifg_instr[0];
+  assign if_id_pred_taken  = ifg_pred_taken[0];
+  assign if_id_pred_target = ifg_pred_target[0];
+  assign id_issue_valid    = idg_valid[0];
+  assign id_issue_uop      = idg_uop[0];
+  assign id_issue_pc       = idg_pc[0];
 
   // ───────────────────────────────────────────────
   // IF Stage
@@ -92,7 +127,7 @@ module cpu_core (
   if_stage IF (
     .clk             (clk),
     .rst_n           (rst_n),
-    .i_stall         (decode_to_fetch_stall),
+    .i_pop_cnt       (decode_pop_cnt),
     .i_flush         (mispredict),            // flush only on actual misprediction
     .i_redirect_pc   (redirect_pc),           // corrected redirect target
     .imem            (imem_if),
@@ -101,11 +136,11 @@ module cpu_core (
     .o_bpu_pred_offset_pc (bpu_pred_offset_pc),
     .i_bpu_pred_taken     (bpu_pred_taken),
     .i_bpu_pred_target    (bpu_pred_target),
-    .o_if_valid      (if_id_valid),
-    .o_if_pc         (if_id_pc),
-    .o_if_instr      (if_id_instr),
-    .o_if_pred_taken  (if_id_pred_taken),
-    .o_if_pred_target (if_id_pred_target)
+    .o_if_valid      (ifg_valid),
+    .o_if_pc         (ifg_pc),
+    .o_if_instr      (ifg_instr),
+    .o_if_pred_taken  (ifg_pred_taken),
+    .o_if_pred_target (ifg_pred_target)
   );
 
   // ───────────────────────────────────────────────
@@ -131,17 +166,17 @@ module cpu_core (
   decode_stage ID (
     .clk             (clk),
     .rst_n           (rst_n),
-    .i_if_valid      (if_id_valid),
-    .i_if_pc         (if_id_pc),
-    .i_if_instr      (if_id_instr),
-    .i_if_pred_taken  (if_id_pred_taken),
-    .i_if_pred_target (if_id_pred_target),
-    .i_stall         (issue_to_decode_stall),
+    .i_if_valid      (ifg_valid),
+    .i_if_pc         (ifg_pc),
+    .i_if_instr      (ifg_instr),
+    .i_if_pred_taken  (ifg_pred_taken),
+    .i_if_pred_target (ifg_pred_target),
+    .i_accept_cnt    (issue_accept_cnt),
     .i_flush         (mispredict),
-    .o_dec_valid     (id_issue_valid),
-    .o_uop           (id_issue_uop),
-    .o_dec_pc        (id_issue_pc),
-    .o_stall_to_if   (decode_to_fetch_stall)
+    .o_dec_valid     (idg_valid),
+    .o_uop           (idg_uop),
+    .o_dec_pc        (idg_pc),
+    .o_pop_cnt       (decode_pop_cnt)
   );
 
   // ───────────────────────────────────────────────
@@ -150,9 +185,9 @@ module cpu_core (
   issue_stage ISSUE (
     .clk                    (clk),
     .rst_n                  (rst_n),
-    .i_dec_valid            (id_issue_valid),
-    .i_uop                  (id_issue_uop),
-    .i_dec_pc               (id_issue_pc),
+    .i_dec_valid            (idg_valid),
+    .i_uop                  (idg_uop),
+    .i_dec_pc               (idg_pc),
     .i_stall                (1'b0),
     .i_flush                (mispredict),
     .i_wb_en                (retire_wb_en),
@@ -174,6 +209,7 @@ module cpu_core (
     .o_mispredict           (mispredict),
     .o_redirect_pc          (redirect_pc),
     .o_stall_to_decode      (issue_to_decode_stall),
+    .o_accept_cnt           (issue_accept_cnt),
     .alu_if                 (alu_if),
     .lsu_if                 (lsu_if)
   );

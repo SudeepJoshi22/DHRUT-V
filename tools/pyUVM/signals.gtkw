@@ -54,7 +54,6 @@ tb_top.CORE.IF.pc_q[31:0]
 tb_top.CORE.IF.aligned_addr[31:0]
 @28
 tb_top.CORE.IF.fetch_fire
-tb_top.CORE.IF.i_stall
 @200
 -
 -- slot 0 / slot 1 (pc_q[2] picks usable) --
@@ -122,7 +121,6 @@ tb_top.CORE.IF.FQ.push1_fire
 @22
 tb_top.CORE.IF.FQ.push_count[1:0]
 @28
-tb_top.CORE.IF.FQ.pop_fire
 @22
 tb_top.CORE.IF.FQ.occupancy[3:0]
 tb_top.CORE.IF.FQ.free_slots[3:0]
@@ -134,16 +132,21 @@ tb_top.CORE.IF.FQ.wr_ptr_q[3:0]
 tb_top.CORE.IF.FQ.rd_ptr_q[3:0]
 @200
 -
--- queue head -> decode --
-@28
-tb_top.CORE.IF.o_if_valid
+-- queue head pair -> decode --
 @22
-tb_top.CORE.IF.o_if_pc[31:0]
-tb_top.CORE.IF.o_if_instr[31:0]
+tb_top.CORE.IF.i_pop_cnt[1:0]
+tb_top.CORE.IF.FQ.pop_count[1:0]
 @28
-tb_top.CORE.IF.o_if_pred_taken
+tb_top.CORE.IF.FQ.o_valid[0]
 @22
-tb_top.CORE.IF.o_if_pred_target[31:0]
+tb_top.CORE.ifg_pc[0][31:0]
+tb_top.CORE.ifg_instr[0][31:0]
+@28
+tb_top.CORE.IF.FQ.o_valid[1]
+@22
+tb_top.CORE.ifg_pc[1][31:0]
+tb_top.CORE.ifg_instr[1][31:0]
+tb_top.CORE.ifg_pred_taken[1:0]
 @200
 -
 -== BPU ==
@@ -166,34 +169,56 @@ tb_top.CORE.bpu_update_taken
 tb_top.CORE.bpu_update_target[31:0]
 @200
 -
--== DECODE ==
+-== DECODE (2-wide) ==
 @28
-tb_top.CORE.ID.i_stall
 tb_top.CORE.ID.i_flush
-tb_top.CORE.ID.id_valid_q
 @22
-tb_top.CORE.ID.id_pc_q[31:0]
-tb_top.CORE.ID.id_instr_q[31:0]
+tb_top.CORE.ID.i_accept_cnt[1:0]
+tb_top.CORE.ID.o_pop_cnt[1:0]
+tb_top.CORE.ID.id_v_q[1:0]
+@200
+-
+-- decode lane 0 (older) --
 @28
-tb_top.CORE.ID.o_dec_valid
+tb_top.CORE.ID.o_dec_valid[0]
 @22
-tb_top.CORE.ID.o_dec_pc[31:0]
+tb_top.CORE.ID.o_dec_pc[0][31:0]
+tb_top.CORE.ID.id_q[0].instr[31:0]
+tb_top.CORE.ID.g_lane[0].DEC.opcode[6:0]
+tb_top.CORE.ID.g_lane[0].DEC.rs1[4:0]
+tb_top.CORE.ID.g_lane[0].DEC.rs2[4:0]
+tb_top.CORE.ID.g_lane[0].DEC.rd[4:0]
+tb_top.CORE.ID.g_lane[0].DEC.alu_operation[9:0]
 @28
-tb_top.CORE.ID.o_uop.valid
+tb_top.CORE.ID.g_lane[0].DEC.o_uop.writes_rd
+tb_top.CORE.ID.g_lane[0].DEC.o_uop.is_branch
+tb_top.CORE.ID.g_lane[0].DEC.o_uop.is_jump
+tb_top.CORE.ID.g_lane[0].DEC.o_uop.is_load
+tb_top.CORE.ID.g_lane[0].DEC.o_uop.is_store
+@200
+-
+-- decode lane 1 (younger) --
+@28
+tb_top.CORE.ID.o_dec_valid[1]
 @22
-tb_top.CORE.ID.o_uop.opcode[6:0]
-tb_top.CORE.ID.o_uop.rs1[4:0]
-tb_top.CORE.ID.o_uop.rs2[4:0]
-tb_top.CORE.ID.o_uop.rd[4:0]
-tb_top.CORE.ID.o_uop.imm[31:0]
-tb_top.CORE.ID.o_uop.alu_op[9:0]
+tb_top.CORE.ID.o_dec_pc[1][31:0]
+tb_top.CORE.ID.id_q[1].instr[31:0]
+tb_top.CORE.ID.g_lane[1].DEC.opcode[6:0]
+tb_top.CORE.ID.g_lane[1].DEC.rs1[4:0]
+tb_top.CORE.ID.g_lane[1].DEC.rs2[4:0]
+tb_top.CORE.ID.g_lane[1].DEC.rd[4:0]
+tb_top.CORE.ID.g_lane[1].DEC.alu_operation[9:0]
 @28
-tb_top.CORE.ID.o_uop.writes_rd
-tb_top.CORE.ID.o_uop.is_branch
-tb_top.CORE.ID.o_uop.is_jump
-tb_top.CORE.ID.o_uop.is_load
-tb_top.CORE.ID.o_uop.is_store
-tb_top.CORE.ID.o_stall_to_if
+tb_top.CORE.ID.g_lane[1].DEC.o_uop.writes_rd
+tb_top.CORE.ID.g_lane[1].DEC.o_uop.is_branch
+tb_top.CORE.ID.g_lane[1].DEC.o_uop.is_jump
+tb_top.CORE.ID.g_lane[1].DEC.o_uop.is_load
+tb_top.CORE.ID.g_lane[1].DEC.o_uop.is_store
+@200
+-
+-- decode -> issue handshake --
+@22
+tb_top.CORE.issue_accept_cnt[1:0]
 @200
 -
 -== ISSUE ==

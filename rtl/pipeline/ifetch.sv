@@ -11,7 +11,10 @@ import riscv_uop_pkg::*;
 module if_stage (
   input  logic        clk,
   input  logic        rst_n,
-  input  logic        i_stall,
+  // How many queue entries Decode consumed this cycle (0..2). This replaces
+  // the old i_stall input: a downstream stall is simply i_pop_cnt == 0, and
+  // fetch itself is gated on queue space rather than on decode's state.
+  input  logic [1:0]  i_pop_cnt,
   input  logic        i_flush,
   input  logic [31:0] i_redirect_pc,
 
@@ -24,11 +27,13 @@ module if_stage (
   input  logic        i_bpu_pred_taken,
   input  logic [31:0] i_bpu_pred_target,
 
-  output logic        o_if_valid,
-  output logic [31:0] o_if_pc,
-  output logic [31:0] o_if_instr,
-  output logic        o_if_pred_taken,
-  output logic [31:0] o_if_pred_target
+  // Queue head pair handed to Decode. Index 0 is the older instruction;
+  // o_if_valid[1] implies o_if_valid[0].
+  output logic [1:0]       o_if_valid,
+  output logic [1:0][31:0] o_if_pc,
+  output logic [1:0][31:0] o_if_instr,
+  output logic [1:0]       o_if_pred_taken,
+  output logic [1:0][31:0] o_if_pred_target
 );
 
   parameter logic [31:0] RESET_PC = 32'h8000_0000;
@@ -44,7 +49,6 @@ module if_stage (
   // Fetch queue (IF -> ID decoupling buffer), see rtl/pipeline/fetch_queue.sv
   logic        fq_full;
   logic        fq_empty;
-  logic        fq_pop;
 
   // =================================================================
   // 64-bit fetch: one access returns an 8-byte aligned block holding two
@@ -200,12 +204,12 @@ module if_stage (
   // =================================================================
   // Request whenever we aren't flushing and the queue can accept a full
   // 2-instruction group. fq_full already accounts for a simultaneous pop,
-  // so there is deliberately no `|| fq_pop` override here: at full
-  // occupancy a pop frees only ONE slot, which is not enough for a pair,
-  // and pushing anyway silently drops an instruction.
-  // Deliberately not gated on i_stall: a downstream stall fills the queue
-  // rather than stopping fetch, and an imem stall drains the queue rather
-  // than starving decode.
+  // so there is deliberately no `|| pop` override here: at full occupancy
+  // a 1-entry pop frees only ONE slot, which is not enough for a pair, and
+  // pushing anyway silently drops an instruction.
+  // Deliberately not gated on any downstream stall: a stalled consumer
+  // fills the queue rather than stopping fetch, and an imem stall drains
+  // the queue rather than starving decode.
   assign imem.m_valid = !i_flush && !fq_full;
   assign imem.m_addr  = aligned_addr;
   assign imem.m_wdata = '0;
@@ -215,8 +219,6 @@ module if_stage (
   // =================================================================
   // Fetch Queue (decouples fetch from decode)
   // =================================================================
-  assign fq_pop = !fq_empty && !i_stall;
-
   fetch_queue #(
     .DEPTH          (FQ_DEPTH)
   ) FQ (
@@ -234,19 +236,17 @@ module if_stage (
     .i_pred_taken1  (ptB),
     .i_pred_target1 (predtB),
     .o_full         (fq_full),
-    .i_pop          (fq_pop),
+    .i_pop_cnt      (i_pop_cnt),
     .o_empty        (fq_empty),
+    .o_valid        (o_if_valid),
     .o_pc           (o_if_pc),
     .o_instr        (o_if_instr),
     .o_pred_taken   (o_if_pred_taken),
     .o_pred_target  (o_if_pred_target)
   );
 
-  // =================================================================
-  // Output Assignments
-  // =================================================================
-  // o_if_pc/o_if_instr/o_if_pred_* are driven directly by the queue head.
-  assign o_if_valid = !fq_empty;
+  // o_if_valid/o_if_pc/o_if_instr/o_if_pred_* are driven directly by the
+  // queue's two read ports; there is nothing left to assign here.
 
 `ifdef SIMULATION
   // ───────────────────────────────────────────────────────────────────────────
@@ -300,24 +300,44 @@ module if_stage (
   //    compared against $past(o_if_pc) one cycle later; tracking the last
   //    *dispatched* PC instead keeps the check alive across stall cycles
   //    and across queue-empty gaps.
+  //
+  //    With a 2-wide pop the tracked value is the YOUNGEST entry taken
+  //    this cycle, and the check is against the OLDEST entry taken next
+  //    time - i.e. the two PCs that are adjacent in dispatch order. The
+  //    pair popped together is guaranteed distinct by the queue's
+  //    push-contiguity assertion, so there is nothing to check within a
+  //    group.
   logic [31:0] last_dispatch_pc_q;
   logic        last_dispatch_self_q;
+  logic [31:0] youngest_pop_pc;
+  logic        youngest_pop_self;
+
+  always_comb begin
+    if (i_pop_cnt == 2'd2) begin
+      youngest_pop_pc   = o_if_pc[1];
+      youngest_pop_self = o_if_pred_taken[1] && (o_if_pred_target[1] == o_if_pc[1]);
+    end
+    else begin
+      youngest_pop_pc   = o_if_pc[0];
+      youngest_pop_self = o_if_pred_taken[0] && (o_if_pred_target[0] == o_if_pc[0]);
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n || i_flush) begin
       last_dispatch_pc_q   <= 32'hFFFFFFFF;
       last_dispatch_self_q <= 1'b0;
     end
-    else if (o_if_valid && !i_stall) begin
-      last_dispatch_pc_q   <= o_if_pc;
-      last_dispatch_self_q <= o_if_pred_taken && (o_if_pred_target == o_if_pc);
+    else if (i_pop_cnt != 2'd0) begin
+      last_dispatch_pc_q   <= youngest_pop_pc;
+      last_dispatch_self_q <= youngest_pop_self;
     end
   end
 
   assert_no_duplicate_dispatch: assert property (
     @(posedge clk) disable iff (!rst_n || i_flush)
-    (o_if_valid && !i_stall) |-> ((o_if_pc != last_dispatch_pc_q) || last_dispatch_self_q)
-  ) else $error("FETCH ERROR: Duplicate dispatch to Decode for PC=0x%h", o_if_pc);
+    (i_pop_cnt != 2'd0) |-> ((o_if_pc[0] != last_dispatch_pc_q) || last_dispatch_self_q)
+  ) else $error("FETCH ERROR: Duplicate dispatch to Decode for PC=0x%h", o_if_pc[0]);
 
   // 3. Fetch never runs when the queue cannot take the result (would
   //    silently drop the fetched instruction).
@@ -325,6 +345,16 @@ module if_stage (
     @(posedge clk) disable iff (!rst_n || i_flush)
     fetch_fire |-> !fq_full
   ) else $error("FETCH ERROR: fetch completed with no queue slot (PC=0x%h)", imem.m_addr);
+
+  // 4. The queue's two ways of reporting "nothing to hand over" must agree:
+  //    o_empty (pointer equality) and the head port's own valid. A
+  //    disagreement would mean Decode either sees a phantom entry or misses
+  //    a real one.
+  assert_empty_matches_head_valid: assert property (
+    @(posedge clk) disable iff (!rst_n)
+    (o_if_valid[0] == !fq_empty)
+  ) else $error("FETCH ERROR: queue o_empty=%0b disagrees with head valid=%0b",
+                fq_empty, o_if_valid[0]);
 `endif
 
 endmodule

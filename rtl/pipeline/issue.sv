@@ -3,10 +3,12 @@ import riscv_uop_pkg::*;
 module issue_stage (
   input logic clk,
   input logic rst_n,
-  // From Decode stage – direct signals
-  input logic i_dec_valid,
-  input uop_t i_uop,
-  input logic [31:0] i_dec_pc,
+  // From Decode stage – a 2-wide bundle, slot 0 the older instruction.
+  // Issue is still 1-wide (Phase 3 widens it), so only slot 0 is consumed;
+  // slot 1 stays in decode's buffer and shifts down next cycle.
+  input logic [1:0] i_dec_valid,
+  input uop_t [1:0] i_uop,
+  input logic [1:0][31:0] i_dec_pc,
   // Stall & flush from downstream
   input logic i_stall,
   input logic i_flush,
@@ -37,6 +39,10 @@ module issue_stage (
   output logic [31:0] o_redirect_pc,
   // Stall back to Decode/IF
   output logic o_stall_to_decode,
+  // How many of decode's slots were consumed this cycle (0..2). This is
+  // the real handshake with decode - o_stall_to_decode is now only a
+  // status/debug view of why it might be 0.
+  output logic [1:0] o_accept_cnt,
   // Issued to ALU
   alu_issue_if.issuer alu_if,
   // Issued to LSU (with back-pressure)
@@ -53,6 +59,19 @@ module issue_stage (
   } issue_state_t;
 
   issue_state_t state_q, state_d;
+
+  // ───────────────────────────────────────────────
+  // Slot-0 view of decode's bundle. Everything below is written against
+  // these, so widening Issue in Phase 3 means adding a second set rather
+  // than rewriting the existing logic.
+  // ───────────────────────────────────────────────
+  logic        dec_valid0;
+  uop_t        dec_uop0;
+  logic [31:0] dec_pc0;
+
+  assign dec_valid0 = i_dec_valid[0];
+  assign dec_uop0   = i_uop[0];
+  assign dec_pc0    = i_dec_pc[0];
 
   // Buffer registers (replacing old dec_valid_q, uop_q, dec_pc_q)
   logic      buf_valid_q;
@@ -84,7 +103,7 @@ module issue_stage (
       S_IDLE: begin
         if (i_flush) begin
           // no change needed
-        end else if (i_dec_valid && !downstream_stall && !i_flush) begin
+        end else if (dec_valid0 && !downstream_stall && !i_flush) begin
           state_d = S_READY;
         end
       end
@@ -96,7 +115,7 @@ module issue_stage (
           state_d = S_WAITING;
         // In S_READY and S_WAITING cases:
         end else if (!downstream_stall && issue_en && unit_ack) begin
-          if (i_dec_valid && !downstream_stall && !i_flush) begin
+          if (dec_valid0 && !downstream_stall && !i_flush) begin
             state_d = S_READY;  // Re-latched → stay READY (continue issuing)
           end else begin
             state_d = S_IDLE;   // Cleared without new → IDLE
@@ -109,7 +128,7 @@ module issue_stage (
           state_d = S_IDLE;
         // In S_READY and S_WAITING cases:
         end else if (!downstream_stall && issue_en && unit_ack) begin
-          if (i_dec_valid && !downstream_stall && !i_flush) begin
+          if (dec_valid0 && !downstream_stall && !i_flush) begin
             state_d = S_READY;  // Re-latched → stay READY (continue issuing)
           end else begin
             state_d = S_IDLE;   // Cleared without new → IDLE
@@ -122,6 +141,27 @@ module issue_stage (
     endcase
   end
 
+  // ───────────────────────────────────────────────
+  // Decode handshake: the single condition under which Issue takes a uop
+  // off decode this cycle. It is used both to load the buffer and to
+  // report o_accept_cnt, so the two can never drift apart - if they did,
+  // decode would drop an instruction it thought was consumed (or replay
+  // one it thought was not).
+  //
+  // The buffer is loaded either from IDLE (nothing held) or on a
+  // successful dispatch (the held uop leaves the same cycle), which is a
+  // zero-bubble hand-off.
+  // ───────────────────────────────────────────────
+  // The buffered uop leaves for ALU/LSU this cycle.
+  logic dispatch_en;
+  assign dispatch_en = issue_en && !downstream_stall && unit_ack;
+
+  logic latch_new;
+  assign latch_new = dec_valid0 && !downstream_stall && !i_flush
+                     && ((state_q == S_IDLE) || dispatch_en);
+
+  assign o_accept_cnt = latch_new ? 2'd1 : 2'd0;
+
   // State & buffer register
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n || i_flush) begin
@@ -131,26 +171,15 @@ module issue_stage (
       buf_pc_q    <= '0;
     end else begin
       state_q <= state_d;
-  
-      // Latch new uop (from IDLE)
-      if (state_q == S_IDLE && i_dec_valid && !downstream_stall && !i_flush) begin
+
+      if (latch_new) begin
         buf_valid_q <= 1'b1;
-        buf_uop_q   <= i_uop;
-        buf_pc_q    <= i_dec_pc;
+        buf_uop_q   <= dec_uop0;
+        buf_pc_q    <= dec_pc0;
       end
-  
-      // Dispatch success: clear old, but re-latch new if available (zero bubble)
       else if (dispatch_en) begin
-        if (i_dec_valid && !downstream_stall && !i_flush) begin
-          // Opportunistic: consume old, accept new same cycle
-          buf_valid_q <= 1'b1;
-          buf_uop_q   <= i_uop;
-          buf_pc_q    <= i_dec_pc;
-        end else begin
-          // Normal clear (bubble if no new)
-          buf_valid_q <= 1'b0;
-          // Optional: buf_uop_q <= '0; buf_pc_q <= '0;
-        end
+        // Dispatched with nothing new behind it -> bubble.
+        buf_valid_q <= 1'b0;
       end
       // else: hold during stall (WAITING)
     end
@@ -320,11 +349,9 @@ module issue_stage (
   assign o_redirect_pc = csr_redirect_valid ? csr_redirect_pc : branch_redirect_pc_r;
 
   // ───────────────────────────────────────────────
-  // 5. Dispatch to ALU or LSU – gated on dispatch_en
+  // 5. Dispatch to ALU or LSU – gated on dispatch_en (declared above,
+  //    next to latch_new, which depends on it)
   // ───────────────────────────────────────────────
-  logic dispatch_en;
-  assign dispatch_en    = issue_en && !downstream_stall && unit_ack;
-
   always_comb begin
     alu_if.m_valid = 1'b0;
     lsu_if.m_valid = 1'b0;

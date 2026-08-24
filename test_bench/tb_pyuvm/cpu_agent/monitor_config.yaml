@@ -31,12 +31,13 @@ stages:
         type: "int"
         description: "Raw instruction bits"
       
-      # Stall signal from decode stage
-      - name: "stall_IF"
-        signal_path: "decode_to_fetch_stall"
+      # How many queue entries decode consumed this cycle (0..2).
+      # 0 is the new "stalled": there is no stall wire any more.
+      - name: "pop_cnt"
+        signal_path: "decode_pop_cnt"
         format: "{:1d}"
-        type: "bool"
-        description: "Stall signal to IF stage"
+        type: "int"
+        description: "Fetch-queue entries taken by decode this cycle"
 
   # ─────────────────────────────────────────────────────────────────────────
   # DECODE Stage - Instruction Decoding and UOP Generation
