@@ -181,9 +181,13 @@ module fetch_queue #(
   //    o_full, which reserves room for a full 2-instruction group.
   assert_no_overflow: assert property (
     @(posedge clk) disable iff (!rst_n || i_flush)
-    (push_count != 2'd0) |-> ((occupancy + push_count) <= DEPTH[PTR_W:0])
-  ) else $error("FETCH QUEUE ERROR: push of %0d with occupancy %0d exceeds DEPTH %0d - instruction dropped",
-                push_count, occupancy, DEPTH);
+    // Occupancy AFTER this cycle: a simultaneous pop frees a slot, so
+    // pushing 2 at occupancy DEPTH-1 is legal (DEPTH-1 - 1 + 2 == DEPTH).
+    // pop_fire implies !o_empty, so the subtraction cannot underflow.
+    (push_count != 2'd0) |->
+        ((occupancy - (PTR_W + 1)'(pop_fire) + (PTR_W + 1)'(push_count)) <= DEPTH[PTR_W:0])
+  ) else $error("FETCH QUEUE ERROR: push of %0d with occupancy %0d (pop=%0b) exceeds DEPTH %0d - instruction dropped",
+                push_count, occupancy, pop_fire, DEPTH);
 
   // 1b. Program order: slot 1 is the younger instruction, so it may never
   //     be pushed without slot 0 (that would reorder the group).
