@@ -1,258 +1,325 @@
 [*]
-[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
-[*] Mon Mar  9 19:08:35 2026
+[*] GTKWave save file for DHRUT-V
+[*] Follows one instruction stage by stage: IMEM -> Fetch (64-bit, 2 slots)
+[*] -> Fetch Queue -> Decode -> Issue -> ALU/LSU -> Retire.
 [*]
-[dumpfile] "/home/sudeep/GitHub/DHRUT-V/tools/riscof/riscof_work/add-01.S/dut/dump.vcd"
-[dumpfile_mtime] "Mon Mar  9 18:20:56 2026"
-[dumpfile_size] 13257166
-[savefile] "/home/sudeep/GitHub/DHRUT-V/tools/pyUVM/signals.gtkw"
-[timestart] 3800000
+[*] Hierarchy note: the pipeline now lives inside the cpu_core instance,
+[*] so every path is tb_top.CORE.* (was tb_top.* before cpu_core.sv was
+[*] extracted from tb_top.sv).
+[*]
+[dumpfile] "dump.vcd"
+[savefile] "signals.gtkw"
+[timestart] 0
 [size] 1920 1001
 [pos] -1 -1
-*-16.191601 3960000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-16.191601 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_top.
-[treeopen] tb_top.ALU.
-[treeopen] tb_top.ALU.issue_if.
-[treeopen] tb_top.ISSUE.
-[treeopen] tb_top.ISSUE.lsu_if.
-[treeopen] tb_top.LSU.issue_if.
+[treeopen] tb_top.CORE.
+[treeopen] tb_top.CORE.IF.
+[treeopen] tb_top.CORE.IF.FQ.
+[treeopen] tb_top.CORE.ID.
+[treeopen] tb_top.CORE.ISSUE.
+[treeopen] tb_top.CORE.ALU.
+[treeopen] tb_top.CORE.LSU.
 [sst_width] 278
-[signals_width] 333
+[signals_width] 400
 [sst_expanded] 1
 [sst_vpaned_height] 312
 @28
 tb_top.clk
 tb_top.rst_n
 @200
--IMEM Interface
+-
+-== IMEM (64-bit: 2 instrs/access) ==
 @28
-tb_top.imem_if.m_valid
+tb_top.CORE.imem_if.m_valid
 @22
-tb_top.imem_if.m_addr[31:0]
-tb_top.imem_if.m_wstrb[3:0]
-tb_top.imem_if.m_wdata[31:0]
+tb_top.CORE.imem_if.m_addr[31:0]
 @28
-tb_top.imem_if.s_ready
+tb_top.CORE.imem_if.s_ready
 @22
-tb_top.imem_if.s_rdata[31:0]
+tb_top.CORE.imem_if.s_rdata[63:0]
+@28
+tb_top.CORE.imem_if.m_flush
 @200
 -
--Fetch
+-== FETCH: PC + block ==
 @28
-tb_top.IF.i_stall
-tb_top.IF.i_flush
-tb_top.IF.instr_valid_q
+tb_top.CORE.IF.i_flush
 @22
-tb_top.IF.instr_pc_q[31:0]
-tb_top.IF.instr_q[31:0]
+tb_top.CORE.IF.i_redirect_pc[31:0]
 @23
-tb_top.IF.pc_q[31:0]
+tb_top.CORE.IF.pc_q[31:0]
 @22
-tb_top.IF.i_redirect_pc[31:0]
+tb_top.CORE.IF.aligned_addr[31:0]
 @28
-tb_top.IF.o_if_valid
-@22
-tb_top.IF.o_if_pc[31:0]
-tb_top.IF.o_if_instr[31:0]
+tb_top.CORE.IF.fetch_fire
+tb_top.CORE.IF.i_stall
 @200
 -
--Decode
+-- slot 0 / slot 1 (pc_q[2] picks usable) --
 @28
-tb_top.ID.i_stall
-tb_top.ID.id_valid_q
+tb_top.CORE.IF.slot0_usable
 @22
-tb_top.ID.id_instr_q[31:0]
-tb_top.ID.id_pc_q[31:0]
+tb_top.CORE.IF.pc0[31:0]
+tb_top.CORE.IF.instr0[31:0]
 @28
-tb_top.ID.o_dec_valid
+tb_top.CORE.IF.slot1_usable
 @22
-tb_top.ID.o_dec_pc[31:0]
+tb_top.CORE.IF.pc1[31:0]
+tb_top.CORE.IF.instr1[31:0]
 @200
 -
+-- pre-decode + BPU query (first branch only) --
 @28
-tb_top.ID.o_uop.valid
-@22
-tb_top.ID.o_uop.opcode[6:0]
-@c00028
-tb_top.ID.funct3[2:0]
-@28
-(0)tb_top.ID.funct3[2:0]
-(1)tb_top.ID.funct3[2:0]
-(2)tb_top.ID.funct3[2:0]
-@1401200
--group_end
-@22
-tb_top.ID.funct7[6:0]
-@28
-tb_top.ID.o_uop.is_immediate
-tb_top.ID.o_uop.uses_rs1
-tb_top.ID.o_uop.uses_rs2
-tb_top.ID.o_uop.writes_rd
-@22
-tb_top.ID.o_uop.rs1[4:0]
-tb_top.ID.o_uop.rs2[4:0]
-tb_top.ID.o_uop.rd[4:0]
-tb_top.ID.o_uop.imm[31:0]
-tb_top.ID.o_uop.alu_op[9:0]
-@28
-tb_top.ID.o_uop.is_load
-tb_top.ID.o_uop.is_store
-tb_top.ID.o_uop.lsu_access_size[1:0]
-tb_top.ID.o_uop.lsu_sign_extend
+tb_top.CORE.IF.s0_is_branch
+tb_top.CORE.IF.s0_is_jal
+tb_top.CORE.IF.s1_is_branch
+tb_top.CORE.IF.s1_is_jal
+tb_top.CORE.IF.query_s0
+tb_top.CORE.IF.query_s1
 @200
 -
--Issue
--
+-- group truncation / next PC --
 @28
-tb_top.ISSUE.buf_valid_q
-@c00022
-tb_top.ISSUE.buf_pc_q[31:0]
-@28
-(0)tb_top.ISSUE.buf_pc_q[31:0]
-(1)tb_top.ISSUE.buf_pc_q[31:0]
-(2)tb_top.ISSUE.buf_pc_q[31:0]
-(3)tb_top.ISSUE.buf_pc_q[31:0]
-(4)tb_top.ISSUE.buf_pc_q[31:0]
-(5)tb_top.ISSUE.buf_pc_q[31:0]
-(6)tb_top.ISSUE.buf_pc_q[31:0]
-(7)tb_top.ISSUE.buf_pc_q[31:0]
-(8)tb_top.ISSUE.buf_pc_q[31:0]
-(9)tb_top.ISSUE.buf_pc_q[31:0]
-(10)tb_top.ISSUE.buf_pc_q[31:0]
-(11)tb_top.ISSUE.buf_pc_q[31:0]
-(12)tb_top.ISSUE.buf_pc_q[31:0]
-(13)tb_top.ISSUE.buf_pc_q[31:0]
-(14)tb_top.ISSUE.buf_pc_q[31:0]
-(15)tb_top.ISSUE.buf_pc_q[31:0]
-(16)tb_top.ISSUE.buf_pc_q[31:0]
-(17)tb_top.ISSUE.buf_pc_q[31:0]
-(18)tb_top.ISSUE.buf_pc_q[31:0]
-(19)tb_top.ISSUE.buf_pc_q[31:0]
-(20)tb_top.ISSUE.buf_pc_q[31:0]
-(21)tb_top.ISSUE.buf_pc_q[31:0]
-(22)tb_top.ISSUE.buf_pc_q[31:0]
-(23)tb_top.ISSUE.buf_pc_q[31:0]
-(24)tb_top.ISSUE.buf_pc_q[31:0]
-(25)tb_top.ISSUE.buf_pc_q[31:0]
-(26)tb_top.ISSUE.buf_pc_q[31:0]
-(27)tb_top.ISSUE.buf_pc_q[31:0]
-(28)tb_top.ISSUE.buf_pc_q[31:0]
-(29)tb_top.ISSUE.buf_pc_q[31:0]
-(30)tb_top.ISSUE.buf_pc_q[31:0]
-(31)tb_top.ISSUE.buf_pc_q[31:0]
-@1401200
--group_end
-@28
-tb_top.ISSUE.state_d[1:0]
-tb_top.ISSUE.state_q[1:0]
-tb_top.ISSUE.lsu_if.s_stall_from_lsu
-tb_top.ISSUE.o_branch_taken
+tb_top.CORE.IF.s0_taken
 @22
-tb_top.ISSUE.o_branch_target[31:0]
-tb_top.ISSUE.i_uop.alu_op[9:0]
-tb_top.ISSUE.op1[31:0]
-tb_top.ISSUE.op2[31:0]
+tb_top.CORE.IF.s0_target[31:0]
+@28
+tb_top.CORE.IF.s1_taken
+@22
+tb_top.CORE.IF.s1_target[31:0]
+@23
+tb_top.CORE.IF.next_pc[31:0]
 @200
 -
+-- push ports into the queue (A older than B) --
 @28
-tb_top.ISSUE.rf.i_re
+tb_top.CORE.IF.pushA
 @22
-tb_top.ISSUE.rs1_data[31:0]
-tb_top.ISSUE.rs2_data[31:0]
+tb_top.CORE.IF.pcA[31:0]
+tb_top.CORE.IF.instrA[31:0]
 @28
-tb_top.ISSUE.lsu_if.m_uop.lsu_sign_extend
-tb_top.ISSUE.lsu_if.m_uop.lsu_access_size[1:0]
+tb_top.CORE.IF.ptA
+@22
+tb_top.CORE.IF.predtA[31:0]
+@28
+tb_top.CORE.IF.pushB
+@22
+tb_top.CORE.IF.pcB[31:0]
+tb_top.CORE.IF.instrB[31:0]
+@28
+tb_top.CORE.IF.ptB
+@22
+tb_top.CORE.IF.predtB[31:0]
 @200
 -
--Operand Forwarding
-@22
-tb_top.ISSUE.i_alu_fwd_data[31:0]
-tb_top.ISSUE.i_alu_fwd_rd[4:0]
+-== FETCH QUEUE (decouples IF/ID) ==
 @28
-tb_top.ISSUE.i_alu_fwd_writes_rd
+tb_top.CORE.IF.FQ.i_flush
+tb_top.CORE.IF.FQ.push0_fire
+tb_top.CORE.IF.FQ.push1_fire
 @22
-tb_top.ISSUE.i_retire_fwd_data[31:0]
-tb_top.ISSUE.i_retire_fwd_rd[4:0]
+tb_top.CORE.IF.FQ.push_count[1:0]
 @28
-tb_top.ISSUE.i_retire_fwd_writes_rd
+tb_top.CORE.IF.FQ.pop_fire
 @22
-tb_top.ISSUE.i_lsu_fwd_data[31:0]
+tb_top.CORE.IF.FQ.occupancy[3:0]
+tb_top.CORE.IF.FQ.free_slots[3:0]
 @28
-tb_top.ISSUE.i_lsu_fwd_data_valid
+tb_top.CORE.IF.FQ.o_full
+tb_top.CORE.IF.FQ.o_empty
 @22
-tb_top.ISSUE.i_lsu_fwd_rd[4:0]
+tb_top.CORE.IF.FQ.wr_ptr_q[3:0]
+tb_top.CORE.IF.FQ.rd_ptr_q[3:0]
 @200
 -
--to ALU
+-- queue head -> decode --
 @28
-tb_top.ISSUE.alu_if.m_valid
+tb_top.CORE.IF.o_if_valid
 @22
-tb_top.ISSUE.alu_if.m_pc[31:0]
+tb_top.CORE.IF.o_if_pc[31:0]
+tb_top.CORE.IF.o_if_instr[31:0]
+@28
+tb_top.CORE.IF.o_if_pred_taken
+@22
+tb_top.CORE.IF.o_if_pred_target[31:0]
 @200
 -
--to LSU
+-== BPU ==
 @28
-tb_top.ISSUE.lsu_if.m_valid
+tb_top.CORE.bpu_pred_is_branch
 @22
-tb_top.ISSUE.lsu_if.m_addr_base[31:0]
+tb_top.CORE.bpu_pred_pc[31:0]
+tb_top.CORE.bpu_pred_offset_pc[31:0]
 @28
-tb_top.ISSUE.lsu_if.s_stall_from_lsu
+tb_top.CORE.bpu_pred_taken
 @22
-tb_top.ISSUE.lsu_if.m_store_data[31:0]
+tb_top.CORE.bpu_pred_target[31:0]
 @28
-tb_top.ISSUE.lsu_if.m_uop.is_load
-tb_top.ISSUE.lsu_if.m_uop.is_store
+tb_top.CORE.bpu_update_valid
+@22
+tb_top.CORE.bpu_update_pc[31:0]
+@28
+tb_top.CORE.bpu_update_taken
+@22
+tb_top.CORE.bpu_update_target[31:0]
 @200
 -
--ALU COMPUTE
--
+-== DECODE ==
 @28
-tb_top.ALU.o_valid
+tb_top.CORE.ID.i_stall
+tb_top.CORE.ID.i_flush
+tb_top.CORE.ID.id_valid_q
 @22
-tb_top.ALU.alu_inst.i_op1[31:0]
-tb_top.ALU.alu_inst.i_op2[31:0]
-tb_top.ALU.issue_if.m_uop.alu_op[9:0]
-tb_top.ALU.o_alu_result[31:0]
+tb_top.CORE.ID.id_pc_q[31:0]
+tb_top.CORE.ID.id_instr_q[31:0]
+@28
+tb_top.CORE.ID.o_dec_valid
+@22
+tb_top.CORE.ID.o_dec_pc[31:0]
+@28
+tb_top.CORE.ID.o_uop.valid
+@22
+tb_top.CORE.ID.o_uop.opcode[6:0]
+tb_top.CORE.ID.o_uop.rs1[4:0]
+tb_top.CORE.ID.o_uop.rs2[4:0]
+tb_top.CORE.ID.o_uop.rd[4:0]
+tb_top.CORE.ID.o_uop.imm[31:0]
+tb_top.CORE.ID.o_uop.alu_op[9:0]
+@28
+tb_top.CORE.ID.o_uop.writes_rd
+tb_top.CORE.ID.o_uop.is_branch
+tb_top.CORE.ID.o_uop.is_jump
+tb_top.CORE.ID.o_uop.is_load
+tb_top.CORE.ID.o_uop.is_store
+tb_top.CORE.ID.o_stall_to_if
 @200
 -
--LSU
+-== ISSUE ==
 @28
-tb_top.LSU.valid_q
+tb_top.CORE.ISSUE.i_flush
+tb_top.CORE.ISSUE.buf_valid_q
+@23
+tb_top.CORE.ISSUE.buf_pc_q[31:0]
 @22
-tb_top.LSU.addr_base_q[31:0]
-tb_top.LSU.store_data_q[31:0]
-tb_top.LSU.pc_q[31:0]
+tb_top.CORE.ISSUE.state_q[1:0]
 @28
-tb_top.LSU.uop_q.is_load
-tb_top.LSU.uop_q.is_store
+tb_top.CORE.ISSUE.o_stall_to_decode
+@22
+tb_top.CORE.ISSUE.rs1_data[31:0]
+tb_top.CORE.ISSUE.rs2_data[31:0]
+tb_top.CORE.ISSUE.op1[31:0]
+tb_top.CORE.ISSUE.op2[31:0]
 @200
 -
+-- branch resolution / redirect --
 @28
-tb_top.LSU.o_valid
+tb_top.CORE.ISSUE.o_branch_taken
 @22
-tb_top.LSU.o_load_data[31:0]
+tb_top.CORE.ISSUE.o_branch_target[31:0]
 @28
-tb_top.LSU.issue_if.s_stall_from_lsu
-@200
--DMEM Interface
-@28
-tb_top.LSU.dmem_if.m_valid
+tb_top.CORE.ISSUE.o_mispredict
 @22
-tb_top.LSU.dmem_if.m_addr[31:0]
-tb_top.LSU.dmem_if.m_wstrb[3:0]
-tb_top.LSU.dmem_if.m_wdata[31:0]
-tb_top.LSU.dmem_if.s_rdata[31:0]
-@28
-tb_top.LSU.dmem_if.s_ready
+tb_top.CORE.ISSUE.o_redirect_pc[31:0]
 @200
 -
--RETIRE
+-- operand forwarding --
 @28
-tb_top.RETIRE.o_wb_en
+tb_top.CORE.fwd_alu_issue_writes_rd
 @22
-tb_top.RETIRE.o_wb_data[31:0]
+tb_top.CORE.fwd_alu_issue_rd[4:0]
+tb_top.CORE.fwd_alu_issue_data[31:0]
+@28
+tb_top.CORE.fwd_lsu_issue_valid
+@22
+tb_top.CORE.fwd_lsu_issue_rd[4:0]
+tb_top.CORE.fwd_lsu_issue_data[31:0]
+@28
+tb_top.CORE.fwd_retire_issue_writes_rd
+@22
+tb_top.CORE.fwd_retire_issue_rd[4:0]
+tb_top.CORE.fwd_retire_issue_data[31:0]
+@200
+-
+-== CSR / TRAP ==
+@28
+tb_top.CORE.ISSUE.CSR_UNIT.i_valid
+tb_top.CORE.ISSUE.CSR_UNIT.trap_taken
+tb_top.CORE.ISSUE.CSR_UNIT.mret_taken
+tb_top.CORE.ISSUE.CSR_UNIT.csr_we
+@22
+tb_top.CORE.ISSUE.CSR_UNIT.trap_cause_code[31:0]
+@200
+-
+-== DISPATCH -> ALU ==
+@28
+tb_top.CORE.alu_if.m_valid
+@22
+tb_top.CORE.alu_if.m_pc[31:0]
+tb_top.CORE.alu_if.m_op1[31:0]
+tb_top.CORE.alu_if.m_op2[31:0]
+@200
+-
+-== DISPATCH -> LSU ==
+@28
+tb_top.CORE.lsu_if.m_valid
+@22
+tb_top.CORE.lsu_if.m_addr_base[31:0]
+tb_top.CORE.lsu_if.m_store_data[31:0]
+@28
+tb_top.CORE.lsu_if.m_uop.is_load
+tb_top.CORE.lsu_if.m_uop.is_store
+tb_top.CORE.lsu_if.s_stall_from_lsu
+@200
+-
+-== ALU ==
+@28
+tb_top.CORE.ALU.i_stall
+tb_top.CORE.ALU.valid_q
+@22
+tb_top.CORE.ALU.pc_q[31:0]
+@28
+tb_top.CORE.ALU.o_valid
+@22
+tb_top.CORE.ALU.o_alu_result[31:0]
+@200
+-
+-== LSU ==
+@28
+tb_top.CORE.LSU.valid_q
+@22
+tb_top.CORE.LSU.pc_q[31:0]
+tb_top.CORE.LSU.mem_addr[31:0]
+tb_top.CORE.LSU.store_data_q[31:0]
+@28
+tb_top.CORE.LSU.uop_q.is_load
+tb_top.CORE.LSU.uop_q.is_store
+tb_top.CORE.LSU.o_valid
+@22
+tb_top.CORE.LSU.o_load_data[31:0]
+@200
+-
+-- DMEM (32-bit) --
+@28
+tb_top.CORE.dmem_if.m_valid
+@22
+tb_top.CORE.dmem_if.m_addr[31:0]
+tb_top.CORE.dmem_if.m_wstrb[3:0]
+tb_top.CORE.dmem_if.m_wdata[31:0]
+tb_top.CORE.dmem_if.s_rdata[31:0]
+@28
+tb_top.CORE.dmem_if.s_ready
+@200
+-
+-== RETIRE ==
+@28
+tb_top.CORE.RETIRE.i_alu_valid
+tb_top.CORE.RETIRE.i_lsu_valid
+tb_top.CORE.RETIRE.o_wb_en
+@22
+tb_top.CORE.RETIRE.o_wb_rd[4:0]
 @24
-tb_top.RETIRE.o_wb_data[31:0]
-tb_top.RETIRE.o_wb_rd[4:0]
+tb_top.CORE.RETIRE.o_wb_data[31:0]
 [pattern_trace] 1
 [pattern_trace] 0
