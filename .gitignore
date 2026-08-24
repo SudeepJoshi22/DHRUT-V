@@ -37,3 +37,4 @@ tests/asm/bpu_stress.S
 CLAUDE.md
 fpnew/
 .claude-worktrees
+tools/riscof/subset_test.yaml
