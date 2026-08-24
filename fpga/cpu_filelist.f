@@ -13,6 +13,7 @@
 ../rtl/pipeline/bpu.sv
 ../rtl/pipeline/csr_unit.sv
 ../rtl/pipeline/decode.sv
+../rtl/pipeline/fetch_queue.sv
 ../rtl/pipeline/ifetch.sv
 ../rtl/pipeline/issue.sv
 ../rtl/pipeline/lsu.sv
