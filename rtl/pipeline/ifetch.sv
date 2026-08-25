@@ -88,17 +88,58 @@ module if_stage (
 
   // Per-slot pre-decode, each against its own PC.
   logic        s0_is_branch, s0_is_jal, s1_is_branch, s1_is_jal;
+  logic        s0_is_jalr, s1_is_jalr;
   logic [31:0] s0_btarget, s0_jtarget, s1_btarget, s1_jtarget;
 
   assign s0_is_branch = slot0_usable && (riscv_opcode_t'(instr0[6:0]) == OPCODE_BRANCH);
   assign s0_is_jal    = slot0_usable && (riscv_opcode_t'(instr0[6:0]) == OPCODE_JAL);
+  assign s0_is_jalr   = slot0_usable && (riscv_opcode_t'(instr0[6:0]) == OPCODE_JALR);
   assign s0_btarget   = pc0 + b_imm(instr0);
   assign s0_jtarget   = pc0 + j_imm(instr0);
 
   assign s1_is_branch = slot1_usable && (riscv_opcode_t'(instr1[6:0]) == OPCODE_BRANCH);
   assign s1_is_jal    = slot1_usable && (riscv_opcode_t'(instr1[6:0]) == OPCODE_JAL);
+  assign s1_is_jalr   = slot1_usable && (riscv_opcode_t'(instr1[6:0]) == OPCODE_JALR);
   assign s1_btarget   = pc1 + b_imm(instr1);
   assign s1_jtarget   = pc1 + j_imm(instr1);
+
+  // =================================================================
+  // Return Address Stack: call/return classification
+  // =================================================================
+  // Per the RISC-V spec's JALR hint rules, x1 and x5 are the link
+  // registers. See rtl/pipeline/ras.sv for the full table.
+  function automatic logic is_link(input logic [4:0] r);
+    return (r == 5'd1) || (r == 5'd5);
+  endfunction
+
+  logic s0_rd_link, s0_rs1_link, s1_rd_link, s1_rs1_link;
+  logic s0_is_call, s0_is_ret, s1_is_call, s1_is_ret;
+
+  assign s0_rd_link  = is_link(instr0[11:7]);
+  assign s0_rs1_link = is_link(instr0[19:15]);
+  assign s1_rd_link  = is_link(instr1[11:7]);
+  assign s1_rs1_link = is_link(instr1[19:15]);
+
+  // A call is a JAL or JALR that links (rd is x1/x5). A return is a JALR
+  // reading a link register, except the rd==rs1 case which the spec
+  // classifies as a pure push.
+  assign s0_is_call = (s0_is_jal || s0_is_jalr) && s0_rd_link;
+  assign s0_is_ret  = s0_is_jalr && s0_rs1_link &&
+                      !(s0_rd_link && (instr0[11:7] == instr0[19:15]));
+  assign s1_is_call = (s1_is_jal || s1_is_jalr) && s1_rd_link;
+  assign s1_is_ret  = s1_is_jalr && s1_rs1_link &&
+                      !(s1_rd_link && (instr1[11:7] == instr1[19:15]));
+
+  logic        ras_top_valid;
+  logic [31:0] ras_top_pc;
+  logic        ras_push, ras_pop;
+  logic [31:0] ras_push_pc;
+
+  // A return is only predicted when the stack actually holds something;
+  // otherwise this falls back to the old behaviour (no prediction, Issue
+  // resolves and redirects).
+  logic s0_ret_pred, s1_ret_pred;
+  assign s0_ret_pred = s0_is_ret && ras_top_valid;
 
   // =================================================================
   // BPU query: the predictor has a single port, so query the FIRST
@@ -128,11 +169,22 @@ module if_stage (
   logic        s0_taken, s1_taken;
   logic [31:0] s0_target, s1_target;
 
-  assign s0_taken  = (s0_is_branch && i_bpu_pred_taken) || s0_is_jal;
-  assign s0_target = (s0_is_branch && i_bpu_pred_taken) ? i_bpu_pred_target : s0_jtarget;
+  assign s0_taken  = (s0_is_branch && i_bpu_pred_taken) || s0_is_jal || s0_ret_pred;
+  assign s0_target = (s0_is_branch && i_bpu_pred_taken) ? i_bpu_pred_target :
+                     s0_is_jal                         ? s0_jtarget        :
+                                                         ras_top_pc;
 
-  assign s1_taken  = (query_s1 && i_bpu_pred_taken) || s1_is_jal;
-  assign s1_target = (query_s1 && i_bpu_pred_taken) ? i_bpu_pred_target : s1_jtarget;
+  // Slot 1 gets a return prediction only when slot 0 is not itself a
+  // JALR. A JALR in slot 0 always transfers control, so slot 1 is off the
+  // architectural path; and slot 0's own RAS update would not yet be
+  // visible on ras_top_pc (it is registered), so slot 1 would predict
+  // from a stale top.
+  assign s1_ret_pred = s1_is_ret && ras_top_valid && !s0_is_jalr;
+
+  assign s1_taken  = (query_s1 && i_bpu_pred_taken) || s1_is_jal || s1_ret_pred;
+  assign s1_target = (query_s1 && i_bpu_pred_taken) ? i_bpu_pred_target :
+                     s1_is_jal                     ? s1_jtarget        :
+                                                     ras_top_pc;
 
   // =================================================================
   // Group assembly: map the usable, non-truncated instructions onto the
@@ -180,6 +232,53 @@ module if_stage (
       next_pc = s1_taken ? s1_target : (aligned_addr + 32'd8);
     end
   end
+
+  // =================================================================
+  // Return Address Stack: update selection
+  // =================================================================
+  // At most ONE stack operation per fetch group. A JAL or JALR always
+  // transfers control, so once slot 0 holds one, slot 1 is off the path
+  // and must not touch the stack. Slot 1 only acts when slot 0 is neither
+  // a JAL/JALR nor a predicted-taken branch.
+  //
+  // Only fired on a completed fetch (fetch_fire): a request that never
+  // handshakes has not really fetched those instructions, and pushing for
+  // it would corrupt the call depth.
+  logic ras_from_s0, ras_from_s1;
+
+  assign ras_from_s0 = s0_is_jal || s0_is_jalr;
+  assign ras_from_s1 = !ras_from_s0
+                    && !(s0_is_branch && i_bpu_pred_taken)
+                    && (s1_is_jal || s1_is_jalr);
+
+  always_comb begin
+    ras_push    = 1'b0;
+    ras_pop     = 1'b0;
+    ras_push_pc = pc0 + 32'd4;
+
+    if (fetch_fire && !i_flush) begin
+      if (ras_from_s0) begin
+        ras_push    = s0_is_call;
+        ras_pop     = s0_is_ret;
+        ras_push_pc = pc0 + 32'd4;
+      end
+      else if (ras_from_s1) begin
+        ras_push    = s1_is_call;
+        ras_pop     = s1_is_ret;
+        ras_push_pc = pc1 + 32'd4;
+      end
+    end
+  end
+
+  ras RAS (
+    .clk       (clk),
+    .rst_n     (rst_n),
+    .i_push    (ras_push),
+    .i_pop     (ras_pop),
+    .i_push_pc (ras_push_pc),
+    .o_top     (ras_top_pc),
+    .o_valid   (ras_top_valid)
+  );
 
   // =================================================================
   // PC Update Logic

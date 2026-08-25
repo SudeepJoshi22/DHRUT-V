@@ -411,9 +411,25 @@ module issue_stage (
         o_branch_taken  = actual_taken;
         o_branch_target = actual_target;
 
-        // No indirect (JALR/BTB) prediction yet: always redirect.
-        branch_mispredict_r  = 1'b1;
-        branch_redirect_pc_r = actual_target;
+        // Indirect jumps are now predicted for the case that matters:
+        // a function return, via the return address stack in fetch
+        // (rtl/pipeline/ras.sv). Redirect only when that prediction was
+        // absent or wrong - exactly the same test as JAL uses.
+        //
+        // This used to be an unconditional `branch_mispredict_r = 1'b1`,
+        // i.e. a guaranteed full flush on every JALR, including every
+        // function return. At 2-wide issue each of those flushes costs
+        // twice as many issue slots as it did at 1-wide, which is what
+        // made this the highest-value prediction work left.
+        //
+        // A JALR the RAS cannot predict (a computed jump, or a return
+        // with an empty/stale stack) simply arrives with pred_taken low
+        // and redirects as before - no correctness dependence on the
+        // stack being right.
+        if (!buf_uop0_q.pred_taken || (actual_target != buf_uop0_q.pred_target)) begin
+          branch_mispredict_r  = 1'b1;
+          branch_redirect_pc_r = actual_target;
+        end
       end
     end
   end
