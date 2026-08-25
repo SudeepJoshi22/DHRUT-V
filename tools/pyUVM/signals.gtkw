@@ -221,21 +221,104 @@ tb_top.CORE.ID.g_lane[1].DEC.o_uop.is_store
 tb_top.CORE.issue_accept_cnt[1:0]
 @200
 -
--== ISSUE ==
+-== ISSUE (2-wide) ==
 @28
 tb_top.CORE.ISSUE.i_flush
-tb_top.CORE.ISSUE.buf_valid_q
-@23
-tb_top.CORE.ISSUE.buf_pc_q[31:0]
 @22
-tb_top.CORE.ISSUE.state_q[1:0]
+tb_top.CORE.ISSUE.o_accept_cnt[1:0]
+tb_top.CORE.ISSUE.o_instret_cnt[1:0]
 @28
+tb_top.CORE.ISSUE.latch_new
+tb_top.CORE.ISSUE.pair_ok
 tb_top.CORE.ISSUE.o_stall_to_decode
+@200
+-
+-- pairing verdict (why a bundle did / didn't dual-issue) --
+@28
+tb_top.CORE.ISSUE.HAZ.o_lane1_capable
+tb_top.CORE.ISSUE.HAZ.o_raw_hazard
+tb_top.CORE.ISSUE.HAZ.o_waw_hazard
+@200
+-
+-- issue lane 0 (any instruction class) --
+@28
+tb_top.CORE.ISSUE.buf_valid0_q
+tb_top.CORE.ISSUE.issue_en0
+tb_top.CORE.ISSUE.lane0_ops_ready
+@23
+tb_top.CORE.ISSUE.buf_pc0_q[31:0]
 @22
-tb_top.CORE.ISSUE.rs1_data[31:0]
-tb_top.CORE.ISSUE.rs2_data[31:0]
-tb_top.CORE.ISSUE.op1[31:0]
-tb_top.CORE.ISSUE.op2[31:0]
+tb_top.CORE.ISSUE.buf_uop0_q.rs1[4:0]
+tb_top.CORE.ISSUE.buf_uop0_q.rs2[4:0]
+tb_top.CORE.ISSUE.buf_uop0_q.rd[4:0]
+tb_top.CORE.ISSUE.op1_0[31:0]
+tb_top.CORE.ISSUE.op2_0[31:0]
+@200
+-
+-- issue lane 1 (simple ALU ops only) --
+@28
+tb_top.CORE.ISSUE.buf_valid1_q
+tb_top.CORE.ISSUE.issue_en1
+tb_top.CORE.ISSUE.lane1_ops_ready
+@23
+tb_top.CORE.ISSUE.buf_pc1_q[31:0]
+@22
+tb_top.CORE.ISSUE.buf_uop1_q.rs1[4:0]
+tb_top.CORE.ISSUE.buf_uop1_q.rs2[4:0]
+tb_top.CORE.ISSUE.buf_uop1_q.rd[4:0]
+tb_top.CORE.ISSUE.op1_1[31:0]
+tb_top.CORE.ISSUE.op2_1[31:0]
+@200
+-
+-== SCOREBOARD ==
+-- inert today (bypass always covers); bites with a multi-cycle MDU or an LDQ --
+@22
+tb_top.CORE.ISSUE.SB.o_busy[31:0]
+tb_top.CORE.ISSUE.SB.set_hit[31:0]
+tb_top.CORE.ISSUE.SB.clr_hit[31:0]
+@200
+-
+-== FORWARDING (age-ordered, youngest first) ==
+-- 1. ALU lane 1 --
+@28
+tb_top.CORE.fwd_alu1_writes_rd
+@22
+tb_top.CORE.fwd_alu1_rd[4:0]
+tb_top.CORE.fwd_alu1_data[31:0]
+@200
+-
+-- 2. ALU lane 0 / LSU (mutually exclusive) --
+@28
+tb_top.CORE.fwd_alu0_writes_rd
+@22
+tb_top.CORE.fwd_alu0_rd[4:0]
+tb_top.CORE.fwd_alu0_data[31:0]
+@28
+tb_top.CORE.fwd_lsu_valid
+@22
+tb_top.CORE.fwd_lsu_rd[4:0]
+tb_top.CORE.fwd_lsu_data[31:0]
+@200
+-
+-- 3/4. Retire lanes 1 then 0 --
+@28
+tb_top.CORE.fwd_retire1_writes_rd
+@22
+tb_top.CORE.fwd_retire1_rd[4:0]
+tb_top.CORE.fwd_retire1_data[31:0]
+@28
+tb_top.CORE.fwd_retire0_writes_rd
+@22
+tb_top.CORE.fwd_retire0_rd[4:0]
+tb_top.CORE.fwd_retire0_data[31:0]
+@200
+-
+-- bypass hits (paired with SB.o_busy for readiness) --
+@28
+tb_top.CORE.ISSUE.fwd_hit_rs1_0
+tb_top.CORE.ISSUE.fwd_hit_rs2_0
+tb_top.CORE.ISSUE.fwd_hit_rs1_1
+tb_top.CORE.ISSUE.fwd_hit_rs2_1
 @200
 -
 -- branch resolution / redirect --
@@ -249,24 +332,6 @@ tb_top.CORE.ISSUE.o_mispredict
 tb_top.CORE.ISSUE.o_redirect_pc[31:0]
 @200
 -
--- operand forwarding --
-@28
-tb_top.CORE.fwd_alu_issue_writes_rd
-@22
-tb_top.CORE.fwd_alu_issue_rd[4:0]
-tb_top.CORE.fwd_alu_issue_data[31:0]
-@28
-tb_top.CORE.fwd_lsu_issue_valid
-@22
-tb_top.CORE.fwd_lsu_issue_rd[4:0]
-tb_top.CORE.fwd_lsu_issue_data[31:0]
-@28
-tb_top.CORE.fwd_retire_issue_writes_rd
-@22
-tb_top.CORE.fwd_retire_issue_rd[4:0]
-tb_top.CORE.fwd_retire_issue_data[31:0]
-@200
--
 -== CSR / TRAP ==
 @28
 tb_top.CORE.ISSUE.CSR_UNIT.i_valid
@@ -274,19 +339,23 @@ tb_top.CORE.ISSUE.CSR_UNIT.trap_taken
 tb_top.CORE.ISSUE.CSR_UNIT.mret_taken
 tb_top.CORE.ISSUE.CSR_UNIT.csr_we
 @22
+tb_top.CORE.ISSUE.CSR_UNIT.i_instret_cnt[1:0]
 tb_top.CORE.ISSUE.CSR_UNIT.trap_cause_code[31:0]
 @200
 -
--== DISPATCH -> ALU ==
+-== DISPATCH -> ALU0 / ALU1 / LSU ==
 @28
-tb_top.CORE.alu_if.m_valid
+tb_top.CORE.alu0_if.m_valid
 @22
-tb_top.CORE.alu_if.m_pc[31:0]
-tb_top.CORE.alu_if.m_op1[31:0]
-tb_top.CORE.alu_if.m_op2[31:0]
-@200
--
--== DISPATCH -> LSU ==
+tb_top.CORE.alu0_if.m_pc[31:0]
+tb_top.CORE.alu0_if.m_op1[31:0]
+tb_top.CORE.alu0_if.m_op2[31:0]
+@28
+tb_top.CORE.alu1_if.m_valid
+@22
+tb_top.CORE.alu1_if.m_pc[31:0]
+tb_top.CORE.alu1_if.m_op1[31:0]
+tb_top.CORE.alu1_if.m_op2[31:0]
 @28
 tb_top.CORE.lsu_if.m_valid
 @22
@@ -298,16 +367,28 @@ tb_top.CORE.lsu_if.m_uop.is_store
 tb_top.CORE.lsu_if.s_stall_from_lsu
 @200
 -
--== ALU ==
+-== ALU0 ==
 @28
-tb_top.CORE.ALU.i_stall
-tb_top.CORE.ALU.valid_q
+tb_top.CORE.ALU0.i_stall
+tb_top.CORE.ALU0.valid_q
 @22
-tb_top.CORE.ALU.pc_q[31:0]
+tb_top.CORE.ALU0.pc_q[31:0]
 @28
-tb_top.CORE.ALU.o_valid
+tb_top.CORE.ALU0.o_valid
 @22
-tb_top.CORE.ALU.o_alu_result[31:0]
+tb_top.CORE.ALU0.o_alu_result[31:0]
+@200
+-
+-== ALU1 ==
+@28
+tb_top.CORE.ALU1.i_stall
+tb_top.CORE.ALU1.valid_q
+@22
+tb_top.CORE.ALU1.pc_q[31:0]
+@28
+tb_top.CORE.ALU1.o_valid
+@22
+tb_top.CORE.ALU1.o_alu_result[31:0]
 @200
 -
 -== LSU ==
@@ -337,14 +418,24 @@ tb_top.CORE.dmem_if.s_rdata[31:0]
 tb_top.CORE.dmem_if.s_ready
 @200
 -
--== RETIRE ==
+-== RETIRE lane 0 (ALU0 or LSU) ==
 @28
-tb_top.CORE.RETIRE.i_alu_valid
-tb_top.CORE.RETIRE.i_lsu_valid
-tb_top.CORE.RETIRE.o_wb_en
+tb_top.CORE.RETIRE0.i_alu_valid
+tb_top.CORE.RETIRE0.i_lsu_valid
+tb_top.CORE.RETIRE0.o_wb_en
 @22
-tb_top.CORE.RETIRE.o_wb_rd[4:0]
+tb_top.CORE.RETIRE0.o_wb_rd[4:0]
 @24
-tb_top.CORE.RETIRE.o_wb_data[31:0]
+tb_top.CORE.RETIRE0.o_wb_data[31:0]
+@200
+-
+-== RETIRE lane 1 (ALU1) ==
+@28
+tb_top.CORE.RETIRE1.i_alu_valid
+tb_top.CORE.RETIRE1.o_wb_en
+@22
+tb_top.CORE.RETIRE1.o_wb_rd[4:0]
+@24
+tb_top.CORE.RETIRE1.o_wb_data[31:0]
 [pattern_trace] 1
 [pattern_trace] 0

@@ -66,9 +66,20 @@ module alu_stage (
   assign o_alu_fwd_result           = valid_q       ?   alu_result      :   'd0;
   assign o_alu_fwd_writes_rd        = valid_q       ?   uop_q.writes_rd :   'd0;
 
-  // Send result to Retire
+  // Send result to Retire.
+  //
+  // o_valid must be a ONE-SHOT: the input register above holds during
+  // i_stall, so valid_q stays 1 for the whole stall, and Retire (whose
+  // i_stall is tied 0) would latch the same result again every cycle -
+  // duplicate write-backs and duplicate trace lines. Gating on !i_stall
+  // means "this result is fresh and the pipeline is advancing".
+  //
+  // At 1-wide this was unreachable (Issue can never dispatch to the ALU
+  // while the LSU is stalling, so valid_q was always 0 during a stall).
+  // At 2-wide it fires immediately: lane 0 = load, lane 1 = ALU op puts
+  // a valid result in this stage for the entire memory stall.
   assign o_alu_result               = alu_result;
   assign o_uop_forward              = uop_q;
-  assign o_valid                    = valid_q & !i_flush;
+  assign o_valid                    = valid_q & !i_stall & !i_flush;
 
 endmodule

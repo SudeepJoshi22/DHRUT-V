@@ -20,7 +20,7 @@ interface lsu_issue_if (input logic clk, rst_n);
   logic        m_valid;
   uop_t        m_uop;
   logic [31:0] m_pc;
-  logic [31:0] m_addr_base;    // base address (rs1 + imm offset)
+  logic [31:0] m_addr_base;    // rs1 only - the +imm happens in the LSU (lsu.sv)
   logic [31:0] m_store_data;   // data to store (rs2)
 
   // Slave (LSU) → Master (ISSUE) back-pressure

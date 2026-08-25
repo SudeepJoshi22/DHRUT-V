@@ -26,14 +26,28 @@ replaces an older heuristic ("IF valid and the PC changed"), which a
 queue in a single cycle, and a self-targeting jump (`j .`) re-presents the
 same PC without it being the same dynamic instruction.
 
-The pipeline is in-order,
-and (per rtl/cpu_core.sv) only IF/decode/issue are squashed on `mispredict`
--- ALU/LSU/RETIRE always run i_flush=1'b0, so once dispatched an
-instruction always completes. That means "retirement" can be detected
-directly off ALU.o_valid / LSU.o_valid (cpu_core's alu_retire_valid /
-lsu_valid) without waiting an extra cycle for the retire_wb_* registers,
-and the associated PC/uop can be read straight from ALU.pc_q/uop_q or
-LSU.pc_q/uop_q (already tapped by monitor_config.yaml's extraction blocks).
+The pipeline is in-order, and (per rtl/cpu_core.sv) only IF/decode/issue
+are squashed on `mispredict` -- ALU0/ALU1/LSU/RETIRE0/RETIRE1 all run
+i_flush=1'b0, so once dispatched an instruction always completes. That
+invariant is upheld by Issue refusing to dispatch lane 1 alongside a
+redirecting lane 0 (issue.sv: `issue_en1` is gated on `!o_mispredict`),
+so no wrong-path uop ever enters an ALU. It means "retirement" can be
+detected directly off the units' o_valid without waiting an extra cycle
+for the retire_wb_* registers, and the associated PC/uop read straight
+from ALUn.pc_q/uop_q or LSU.pc_q/uop_q.
+
+Two issue lanes, so up to TWO instructions retire per cycle. They are
+emitted in program order within the cycle: lane 0's completion (ALU0 or
+LSU -- mutually exclusive, asserted in cpu_core.sv) before lane 1's
+(ALU1). Order matters more than it looks: _pop_matching consumes the
+queue by PC and silently drops anything in front of the match, so
+emitting a younger instruction first would discard the older one as
+"flushed" and corrupt the queue for the rest of the run.
+
+Note the branch case is a stage EARLIER than the others -- it is caught
+at Issue via the BPU-update pulse, not at completion -- so a branch seen
+in cycle N belongs to a YOUNGER bundle than an ALU/LSU completion seen in
+the same cycle. It is therefore emitted last.
 
 Hierarchy: these pipeline signals live inside the cpu_core instance
 (tb_top.CORE.*), reached via hier.get_core() rather than a hardcoded path
@@ -260,21 +274,28 @@ class CpuTracer(uvm_component):
                     instr = (uop_bus >> (UOP_W * slot)) & 0xFFFFFFFF
                     self._queue.append(_InFlightInsn(pc, instr))
 
-            # ── 2. Match ALU/LSU retirement events against the queue ──
-            alu_valid = bool(self._val(getattr(self.core, "alu_retire_valid", None), 0))
+            # ── 2. Match retirement events against the queue ──
+            alu0_valid = bool(self._val(getattr(self.core, "alu0_retire_valid", None), 0))
+            alu1_valid = bool(self._val(getattr(self.core, "alu1_retire_valid", None), 0))
             lsu_valid = bool(self._val(getattr(self.core, "lsu_valid", None), 0))
             # BRANCH-opcode uops (is_branch) are resolved entirely inside
-            # ISSUE (rtl/pipeline/issue.sv: alu_if.m_valid/lsu_if.m_valid
+            # ISSUE (rtl/pipeline/issue.sv: alu0_if.m_valid/lsu_if.m_valid
             # are forced low for is_branch) -- they never reach ALU/LSU, so
             # they must be captured here via the branch-resolution pulse
-            # (o_update_valid == issue_en && buf_uop_q.is_branch, wired to
-            # bpu_update_valid at tb_top) or they'd never retire in-trace.
+            # (o_update_valid == issue_en0 && buf_uop0_q.is_branch, wired to
+            # bpu_update_valid at cpu_core) or they'd never retire in-trace.
             branch_valid = bool(self._val(getattr(self.core, "bpu_update_valid", None), 0))
 
-            if alu_valid:
-                self._retire_from_alu()
+            # Program order within the cycle -- see the module docstring.
+            # ALU0 and LSU are mutually exclusive, so their relative order
+            # here is arbitrary; ALU1 must follow both, and the branch pulse
+            # (a stage earlier, hence a younger bundle) must come last.
+            if alu0_valid:
+                self._retire_from_alu(0)
             if lsu_valid:
                 self._retire_from_lsu()
+            if alu1_valid:
+                self._retire_from_alu(1)
             if branch_valid:
                 self._retire_from_branch()
 
@@ -299,20 +320,32 @@ class CpuTracer(uvm_component):
         )
         return None
 
-    def _retire_from_alu(self):
-        alu = self.core.ALU
+    def _retire_from_alu(self, lane):
+        """Emit the instruction completing in ALU lane `lane` (0 or 1).
+
+        The two ALUs are separate module instances (CORE.ALU0 / CORE.ALU1)
+        rather than one widened module, precisely so these stay plain
+        scalar handles -- Verilator's VPI would present a packed
+        `logic [1:0][31:0] pc_q` as one flat 64-bit vector and silently
+        hand back a concatenation of both lanes.
+        """
+        alu = getattr(self.core, f"ALU{lane}", None)
+        if alu is None:
+            return
         pc = self._val(getattr(alu, "pc_q", None), 0)
         entry = self._pop_matching(pc)
         if entry is None:
             return
 
-        rd = self._val(getattr(self.core, "fwd_alu_issue_rd", None), 0)
-        writes_rd = bool(self._val(getattr(self.core, "fwd_alu_issue_writes_rd", None), 0))
-        result = self._val(getattr(self.core, "alu_retire_result", None), 0)
+        result = self._val(getattr(self.core, f"alu{lane}_retire_result", None), 0)
 
         uop = getattr(alu, "uop_q", None)
         opcode, funct3, alu_op, is_immediate, is_branch, is_jump, rs1, rs2 = \
             self._decode_uop_fields(uop)
+        # Taken straight off the retiring uop rather than off the forwarding
+        # bus: same values, one fewer per-lane signal name to keep in sync.
+        rd = self._uop_field(uop, "rd")
+        writes_rd = bool(self._uop_field(uop, "writes_rd"))
 
         self._emit(entry.pc, entry.instr, rd, writes_rd, result,
                    False, False, 0,
@@ -357,7 +390,7 @@ class CpuTracer(uvm_component):
         if entry is None:
             return
 
-        uop = getattr(issue, "buf_uop_q", None)
+        uop = getattr(issue, "buf_uop0_q", None)
         opcode, funct3, alu_op, is_immediate, is_branch, is_jump, rs1, rs2 = \
             self._decode_uop_fields(uop)
 
