@@ -38,8 +38,15 @@ module retire (
   uop_t        uop_q;
   logic [31:0] result_q;
 
+  // i_flush is a synchronous clear, kept out of the async-reset condition --
+  // see the note in alu_stage.sv.
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
+    if (!rst_n) begin
+      valid_q       <= 1'b0;
+      uop_q         <= '0;
+      result_q  <= '0;
+    end
+    else if (i_flush) begin
       valid_q       <= 1'b0;
       uop_q         <= '0;
       result_q  <= '0;

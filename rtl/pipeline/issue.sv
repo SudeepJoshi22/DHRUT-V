@@ -171,8 +171,18 @@ module issue_stage (
   assign o_accept_cnt  = latch_new ? (pair_ok ? 2'd2 : 2'd1) : 2'd0;
   assign o_instret_cnt = {1'b0, issue_en0} + {1'b0, issue_en1};
 
+  // i_flush is a synchronous clear, kept out of the async-reset condition --
+  // see the note in alu_stage.sv. Both buffer slots are invalidated on flush
+  // exactly as before.
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
+    if (!rst_n) begin
+      buf_valid0_q <= 1'b0;
+      buf_uop0_q   <= '0;
+      buf_pc0_q    <= '0;
+      buf_valid1_q <= 1'b0;
+      buf_uop1_q   <= '0;
+      buf_pc1_q    <= '0;
+    end else if (i_flush) begin
       buf_valid0_q <= 1'b0;
       buf_uop0_q   <= '0;
       buf_pc0_q    <= '0;

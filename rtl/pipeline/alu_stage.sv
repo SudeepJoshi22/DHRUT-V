@@ -31,8 +31,20 @@ module alu_stage (
   logic [31:0] op1_q;
   logic [31:0] op2_q;
 
+  // i_flush is a SYNCHRONOUS clear and must be a separate branch from the
+  // asynchronous reset. Folding it in as `!rst_n || i_flush` describes an
+  // async load whose condition names a signal that is not in the event list;
+  // strict elaborators (slang) reject it. Behaviour is unchanged -- i_flush
+  // was only ever sampled at posedge clk regardless.
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
+    if (!rst_n) begin
+      valid_q <= 1'b0;
+      uop_q   <= '0;
+      pc_q    <= '0;
+      op1_q   <= '0;
+      op2_q   <= '0;
+    end
+    else if (i_flush) begin
       valid_q <= 1'b0;
       uop_q   <= '0;
       pc_q    <= '0;

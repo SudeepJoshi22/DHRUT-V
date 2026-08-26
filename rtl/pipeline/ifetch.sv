@@ -376,9 +376,16 @@ module if_stage (
   assign self_redirect = (next_pc[31:3] == aligned_addr[31:3]);
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
+    if (!rst_n) begin
+      last_fetched_pc_q <= 32'hFFFFFFFF;
+      last_fetch_self_q <= 1'b0;
+    end
+    else if (i_flush) begin
       // A flush redirects pc_q, so the pre-flush history says nothing
-      // about whether the next request is a duplicate.
+      // about whether the next request is a duplicate. Synchronous clear,
+      // kept out of the async-reset condition -- see alu_stage.sv. These
+      // blocks are `ifdef SIMULATION so slang never sees them today, but the
+      // pattern is the same defect and would surface the moment it did.
       last_fetched_pc_q <= 32'hFFFFFFFF;
       last_fetch_self_q <= 1'b0;
     end
@@ -423,7 +430,11 @@ module if_stage (
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
+    if (!rst_n) begin
+      last_dispatch_pc_q   <= 32'hFFFFFFFF;
+      last_dispatch_self_q <= 1'b0;
+    end
+    else if (i_flush) begin
       last_dispatch_pc_q   <= 32'hFFFFFFFF;
       last_dispatch_self_q <= 1'b0;
     end

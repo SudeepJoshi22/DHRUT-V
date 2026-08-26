@@ -163,8 +163,15 @@ module fetch_queue #(
   // =================================================================
   // Pointers
   // =================================================================
+  // i_flush is a synchronous clear, kept out of the async-reset condition --
+  // see the note in alu_stage.sv. Emptying the queue by zeroing both pointers
+  // is what the flush did before; only the branch structure changed.
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
+    if (!rst_n) begin
+      wr_ptr_q <= '0;
+      rd_ptr_q <= '0;
+    end
+    else if (i_flush) begin
       wr_ptr_q <= '0;
       rd_ptr_q <= '0;
     end
