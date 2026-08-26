@@ -1,3 +1,5 @@
+import riscv_uop_pkg::*;
+
 module lsu (
   input  logic        clk,
   input  logic        rst_n,

@@ -39,9 +39,14 @@ mkdir -p $TEST_OUT_DIR
 
 echo "▶ Building test: $TEST_NAME"
 echo "  Output dir: $TEST_OUT_DIR"
+# EXTRA_CFLAGS lets a test be built with a compile-time override, e.g.
+#   EXTRA_CFLAGS=-DDELAY_SHIFT=4 ./tools/simulate.sh fpga_blink
+# which shrinks fpga_blink.S's delay loop from ~4.2M iterations (sized to be
+# watchable on hardware) down to something simulable in seconds.
 riscv-none-elf-gcc -march=rv32i_zicsr -mabi=ilp32 \
     -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
     -T $TESTS_DIR/linker.ld \
+    $EXTRA_CFLAGS \
     $S_FILE -o $ELF
 
 riscv-none-elf-objcopy -O verilog $ELF $HEX
@@ -51,6 +56,16 @@ echo "✔ Build complete:"
 echo "  ELF: $ELF"
 echo "  HEX: $HEX"
 echo "  DIS: $DIS"
+
+# BUILD_ONLY=1 stops here, before Spike and the simulator. Needed for the FPGA
+# flow: fpga/mkmem.py turns $HEX into BSRAM init images, and a program sized for
+# hardware (e.g. fpga_blink.S at its default DELAY_SHIFT=22, ~4.2M delay
+# iterations per step) is deliberately impractical to simulate. Without this the
+# only way to produce a hardware-sized image would be to sit through that run.
+if [ "${BUILD_ONLY:-0}" = "1" ]; then
+    echo "▶ BUILD_ONLY=1 — skipping Spike and simulation."
+    exit 0
+fi
 
 # ----------------------------------------
 # VERIFY WITH SPIKE

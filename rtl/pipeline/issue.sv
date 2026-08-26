@@ -76,6 +76,12 @@ module issue_stage (
   logic unit_ack;
   assign unit_ack   =   !downstream_stall;
 
+  // Dispatch enable — declared here (ahead of the buffer FSM that consumes it)
+  // rather than next to the dispatch mux below, so it is never referenced
+  // before its declaration. Strict SV elaborators (slang) reject that.
+  logic dispatch_en;
+  assign dispatch_en = issue_en && !downstream_stall && unit_ack;
+
   // Next-state logic
   always_comb begin
     state_d = state_q;
@@ -322,9 +328,6 @@ module issue_stage (
   // ───────────────────────────────────────────────
   // 5. Dispatch to ALU or LSU – gated on dispatch_en
   // ───────────────────────────────────────────────
-  logic dispatch_en;
-  assign dispatch_en    = issue_en && !downstream_stall && unit_ack;
-
   always_comb begin
     alu_if.m_valid = 1'b0;
     lsu_if.m_valid = 1'b0;
