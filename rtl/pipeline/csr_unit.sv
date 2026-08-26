@@ -13,7 +13,11 @@ module csr_unit (
   input  logic        clk,
   input  logic        rst_n,
 
-  input  logic        i_valid,      // resolve this cycle (Issue's issue_en)
+  input  logic        i_valid,      // resolve this cycle (Issue's issue_en0)
+  // How many uops issued this cycle (0..2). minstret advances by this, not
+  // by 1: a 2-wide machine issues two instructions in one cycle and a
+  // hardcoded +1 would under-count every paired bundle.
+  input  logic [1:0]  i_instret_cnt,
   input  uop_t         i_uop,        // buffered uop from Issue (opcode/funct3/imm/rs1/is_illegal/instr_bits)
   input  logic [31:0] i_pc,          // PC of i_uop
   input  logic [31:0] i_rs1_data,    // forwarded rs1 value
@@ -188,6 +192,12 @@ module csr_unit (
   // trap/mret/counter-tick on the same field can't coincide except for the
   // counters, where SW winning that one cycle is the desired behavior.
   // ───────────────────────────────────────────────
+  // 33-bit so the carry out of minstret is a real bit rather than an
+  // equality test against 0xFFFF_FFFF - see the minstret block below.
+  logic [32:0] minstret_sum;
+  assign minstret_sum = {1'b0, csr_hwif_out.minstret.MINSTRET.value} +
+                        {31'b0, i_instret_cnt};
+
   always_comb begin
     // NOTE: assigning '0 to this whole (unpacked, heterogeneous) struct at
     // once trips up Verilator's C++ codegen, so default each leaf field
@@ -219,13 +229,17 @@ module csr_unit (
     csr_hwif_in.mcycleh.MCYCLEH.next = csr_hwif_out.mcycleh.MCYCLEH.value +
                                         ((csr_hwif_out.mcycle.MCYCLE.value == 32'hFFFF_FFFF) ? 32'd1 : 32'd0);
 
-    // minstret(h): increments once per issued uop (see i_instret_inc note
-    // in rtl/csr/csr_regfile.rdl - approximates retire, not a true pulse).
-    csr_hwif_in.minstret.MINSTRET.we      = i_valid;
-    csr_hwif_in.minstret.MINSTRET.next    = csr_hwif_out.minstret.MINSTRET.value + 32'd1;
-    csr_hwif_in.minstreth.MINSTRETH.we    = i_valid;
+    // minstret(h): advances by the number of uops issued this cycle (see
+    // i_instret_inc note in rtl/csr/csr_regfile.rdl - approximates retire,
+    // not a true pulse). The carry into minstreth comes from a real 33-bit
+    // sum rather than an equality test: at 2-wide the counter can step
+    // straight OVER the wrap value (0xFFFF_FFFF + 2), and testing for an
+    // exact match would miss it and lose 2^32 counts.
+    csr_hwif_in.minstret.MINSTRET.we      = (i_instret_cnt != 2'd0);
+    csr_hwif_in.minstret.MINSTRET.next    = minstret_sum[31:0];
+    csr_hwif_in.minstreth.MINSTRETH.we    = (i_instret_cnt != 2'd0);
     csr_hwif_in.minstreth.MINSTRETH.next  = csr_hwif_out.minstreth.MINSTRETH.value +
-                                             ((i_valid && (csr_hwif_out.minstret.MINSTRET.value == 32'hFFFF_FFFF)) ? 32'd1 : 32'd0);
+                                             (minstret_sum[32] ? 32'd1 : 32'd0);
 
     if (trap_taken) begin
       csr_hwif_in.mstatus.MPIE.we   = 1'b1;

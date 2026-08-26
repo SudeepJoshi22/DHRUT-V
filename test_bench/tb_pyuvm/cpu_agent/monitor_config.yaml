@@ -31,12 +31,13 @@ stages:
         type: "int"
         description: "Raw instruction bits"
       
-      # Stall signal from decode stage
-      - name: "stall_IF"
-        signal_path: "decode_to_fetch_stall"
+      # How many queue entries decode consumed this cycle (0..2).
+      # 0 is the new "stalled": there is no stall wire any more.
+      - name: "pop_cnt"
+        signal_path: "decode_pop_cnt"
         format: "{:1d}"
-        type: "bool"
-        description: "Stall signal to IF stage"
+        type: "int"
+        description: "Fetch-queue entries taken by decode this cycle"
 
   # ─────────────────────────────────────────────────────────────────────────
   # DECODE Stage - Instruction Decoding and UOP Generation
@@ -132,14 +133,14 @@ stages:
     signals:
       # Valid micro-operation in issue buffer
       - name: "valid"
-        signal_path: "ISSUE.buf_valid_q"
+        signal_path: "ISSUE.buf_valid0_q"
         format: "{:1d}"
         type: "bool"
         description: "UOP in issue buffer is valid"
 
       # Program Counter in issue buffer
       - name: "PC"
-        signal_path: "ISSUE.buf_pc_q"
+        signal_path: "ISSUE.buf_pc0_q"
         format: "0x{:08x}"
         type: "int"
         description: "PC of instruction in issue buffer"
@@ -154,7 +155,7 @@ stages:
 
       # Dispatch destination
       - name: "to_ALU"
-        signal_path: "alu_if.m_valid"
+        signal_path: "alu0_if.m_valid"
         format: "{:1d}"
         type: "bool"
         description: "Issued to ALU"
@@ -181,13 +182,13 @@ stages:
       
       # ALU operands (from ISSUE stage perspectives)
       - name: "op1"
-        signal_path: "ISSUE.op1"
+        signal_path: "ISSUE.op1_0"
         format: "0x{:08x}"
         type: "int"
         description: "Resolved operand 1 (with forwarding)"
       
       - name: "op2"
-        signal_path: "ISSUE.op2"
+        signal_path: "ISSUE.op2_0"
         format: "0x{:08x}"
         type: "int"
         description: "Resolved operand 2 (with forwarding)"
@@ -202,20 +203,20 @@ stages:
   # ─────────────────────────────────────────────────────────────────────────
   # ALU Stage - Arithmetic/Logic Execution
   # ─────────────────────────────────────────────────────────────────────────
-  ALU:
-    display_name: "ALU"
+  ALU0:
+    display_name: "ALU0"
     description: "ALU execution stage - performs arithmetic and logic operations"
     signals:
       # Valid micro-operation signal
       - name: "valid"
-        signal_path: "ALU.valid_q"
+        signal_path: "ALU0.valid_q"
         format: "{:1d}"
         type: "bool"
         description: "ALU operation in progress"
 
       # Program Counter
       - name: "PC"
-        signal_path: "ALU.pc_q"
+        signal_path: "ALU0.pc_q"
         format: "0x{:08x}"
         type: "int"
         description: "PC of instruction in ALU"
@@ -230,24 +231,63 @@ stages:
 
       # ALU operand 1
       - name: "op1"
-        signal_path: "ALU.op1_q"
+        signal_path: "ALU0.op1_q"
         format: "0x{:08x}"
         type: "int"
         description: "ALU operand 1"
 
       # ALU operand 2
       - name: "op2"
-        signal_path: "ALU.op2_q"
+        signal_path: "ALU0.op2_q"
         format: "0x{:08x}"
         type: "int"
         description: "ALU operand 2"
 
       # ALU result value
       - name: "result"
-        signal_path: "ALU.alu_result"
+        signal_path: "ALU0.alu_result"
         format: "0x{:08x}"
         type: "int"
         description: "ALU result value"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ALU1 - the secondary (lane 1) ALU. Only ever holds simple ALU ops:
+  # OP / OP-IMM / LUI / AUIPC (see rtl/pipeline/issue_hazard.sv). Idle here
+  # with a busy ALU0 means the bundle did not pair.
+  # ─────────────────────────────────────────────────────────────────────────
+  ALU1:
+    display_name: "ALU1"
+    description: "Secondary ALU (issue lane 1) - simple ALU ops only"
+    signals:
+      - name: "valid"
+        signal_path: "ALU1.valid_q"
+        format: "{:1d}"
+        type: "bool"
+        description: "Lane 1 ALU operation in progress"
+
+      - name: "PC"
+        signal_path: "ALU1.pc_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "PC of instruction in lane 1 ALU"
+
+      - name: "op1"
+        signal_path: "ALU1.op1_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Lane 1 ALU operand 1"
+
+      - name: "op2"
+        signal_path: "ALU1.op2_q"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Lane 1 ALU operand 2"
+
+      - name: "result"
+        signal_path: "ALU1.alu_result"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Lane 1 ALU result value"
 
   # ─────────────────────────────────────────────────────────────────────────
   # LSU Stage - Load/Store Execution
@@ -426,49 +466,85 @@ stages:
     description: "Operand forwarding buses from ALU/LSU/Retire back into Issue"
     signals:
       - name: "alu_rd"
-        signal_path: "fwd_alu_issue_rd"
+        signal_path: "fwd_alu0_rd"
         format: "x{:02d}"
         type: "int"
         description: "ALU forward destination register"
 
       - name: "alu_data"
-        signal_path: "fwd_alu_issue_data"
+        signal_path: "fwd_alu0_data"
         format: "0x{:08x}"
         type: "int"
         description: "ALU forward data"
 
       - name: "alu_wr"
-        signal_path: "fwd_alu_issue_writes_rd"
+        signal_path: "fwd_alu0_writes_rd"
         format: "{:1d}"
         type: "bool"
         description: "ALU forward writes_rd qualifier"
 
       - name: "lsu_rd"
-        signal_path: "fwd_lsu_issue_rd"
+        signal_path: "fwd_lsu_rd"
         format: "x{:02d}"
         type: "int"
         description: "LSU forward destination register"
 
       - name: "lsu_data"
-        signal_path: "fwd_lsu_issue_data"
+        signal_path: "fwd_lsu_data"
         format: "0x{:08x}"
         type: "int"
         description: "LSU forward data"
 
       - name: "ret_rd"
-        signal_path: "fwd_retire_issue_rd"
+        signal_path: "fwd_retire0_rd"
         format: "x{:02d}"
         type: "int"
         description: "Retire forward destination register"
 
       - name: "ret_data"
-        signal_path: "fwd_retire_issue_data"
+        signal_path: "fwd_retire0_data"
         format: "0x{:08x}"
         type: "int"
         description: "Retire forward data"
 
+      - name: "alu1_rd"
+        signal_path: "fwd_alu1_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "ALU lane 1 forwarding register (youngest bypass source)"
+
+      - name: "alu1_data"
+        signal_path: "fwd_alu1_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "ALU lane 1 forwarding value"
+
+      - name: "alu1_wr"
+        signal_path: "fwd_alu1_writes_rd"
+        format: "{:1d}"
+        type: "bool"
+        description: "ALU lane 1 writes rd"
+
+      - name: "ret1_rd"
+        signal_path: "fwd_retire1_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "Retire lane 1 forwarding register"
+
+      - name: "ret1_data"
+        signal_path: "fwd_retire1_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Retire lane 1 forwarding value"
+
+      - name: "ret1_wr"
+        signal_path: "fwd_retire1_writes_rd"
+        format: "{:1d}"
+        type: "bool"
+        description: "Retire lane 1 writes rd"
+
       - name: "ret_wr"
-        signal_path: "fwd_retire_issue_writes_rd"
+        signal_path: "fwd_retire0_writes_rd"
         format: "{:1d}"
         type: "bool"
         description: "Retire forward writes_rd qualifier"
@@ -555,29 +631,50 @@ stages:
     signals:
       # Register file write enable
       - name: "wb_en"
-        signal_path: "retire_wb_en"
+        signal_path: "retire0_wb_en"
         format: "{:1d}"
         type: "bool"
         description: "Write-back enabled"
       
       # Destination register (write-back)
       - name: "wb_rd"
-        signal_path: "retire_wb_rd"
+        signal_path: "retire0_wb_rd"
         format: "x{:02d}"
         type: "int"
         description: "Write-back register"
       
       # Write-back data
       - name: "wb_data"
-        signal_path: "retire_wb_data"
+        signal_path: "retire0_wb_data"
         format: "0x{:08x}"
         type: "int"
         description: "Write-back data value"
 
+      # ── lane 1 write-back port ──
+      # Both ports fire in the same cycle when a bundle paired. They can
+      # never target the same rd (ARF.sv asserts it).
+      - name: "wb1_en"
+        signal_path: "retire1_wb_en"
+        format: "{:1d}"
+        type: "bool"
+        description: "Lane 1 write-back enabled"
+
+      - name: "wb1_rd"
+        signal_path: "retire1_wb_rd"
+        format: "x{:02d}"
+        type: "int"
+        description: "Lane 1 write-back register"
+
+      - name: "wb1_data"
+        signal_path: "retire1_wb_data"
+        format: "0x{:08x}"
+        type: "int"
+        description: "Lane 1 write-back data value"
+
 # ───────────────────────────────────────────────────────────────────────────
 # Optional: Define which stages to display (subset of available stages)
 # ───────────────────────────────────────────────────────────────────────────
-display_stages: ["FETCH", "DECODE", "ISSUE", "ALU", "LSU", "RETIRE", "BPU", "REDIRECT", "FORWARD", "CSR"]
+display_stages: ["FETCH", "DECODE", "ISSUE", "ALU0", "ALU1", "LSU", "RETIRE", "BPU", "REDIRECT", "FORWARD", "CSR"]
 
 # ───────────────────────────────────────────────────────────────────────────
 # UOP Bit Extraction Configuration
@@ -638,7 +735,7 @@ uop_extraction:
       bits: [31, 0]
 
 uop_issue_extraction:
-  signal_path: "ISSUE.buf_uop_q"
+  signal_path: "ISSUE.buf_uop0_q"
   fields:
     - name: "uop_iss_opcode"
       bits: [143, 137]
@@ -650,7 +747,7 @@ uop_issue_extraction:
       bits: [32, 32]
 
 uop_alu_extraction:
-  signal_path: "ALU.uop_q"
+  signal_path: "ALU0.uop_q"
   fields:
     - name: "uop_alu_opcode"
       bits: [143, 137]

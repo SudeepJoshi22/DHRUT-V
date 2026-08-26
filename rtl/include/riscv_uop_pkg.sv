@@ -32,7 +32,15 @@ package riscv_uop_pkg;
   } alu_op_t;
 
   // Micro-op structure (will grow later)
+  //
+  // NOTE ON FIELD ORDER: the testbench tracer bit-slices this struct by
+  // hardcoded offsets (test_bench/tb_pyuvm/cpu_agent/cpu_tracer.py,
+  // UOP_BITS). In a packed struct the FIRST member occupies the MSBs, so a
+  // new field added at the TOP leaves every existing offset untouched -
+  // which is why `way` goes here rather than next to the fields it relates
+  // to. Anything inserted lower down must be mirrored in UOP_BITS.
   typedef struct packed {
+    logic        way;             // decode/issue lane this uop came from (0 = older)
     logic        valid;           // valid decoded instruction
     riscv_opcode_t opcode;
     alu_op_t     alu_op;          // for arithmetic ops

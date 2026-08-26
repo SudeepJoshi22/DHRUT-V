@@ -27,6 +27,13 @@ export PYTHONPATH := $(REPO_ROOT)/test_bench:$(PYTHONPATH)
 # per field, each writing only its own disjoint member of the shared
 # field_combo/field_storage packed struct (rtl/csr/generated/) - legal SV,
 # but Verilator flags it at whole-variable granularity. Known false positive.
-EXTRA_ARGS += --sv --trace --trace-structs -Wno-MULTIDRIVEN
+# --assert +define+SIMULATION: the RTL's SVA checks (ifetch.sv,
+# fetch_queue.sv, bpu.sv) are wrapped in `ifdef SIMULATION`, and nothing
+# used to define it - so every one of them was dead code in the normal
+# flow. That mattered: fetch_queue's assert_no_overflow would have caught
+# the queue-overflow bug (an instruction silently dropped) the moment it
+# happened. Both flags are needed - the define compiles the assertions
+# in, --assert makes Verilator actually evaluate them.
+EXTRA_ARGS += --sv --trace --trace-structs -Wno-MULTIDRIVEN --assert +define+SIMULATION
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

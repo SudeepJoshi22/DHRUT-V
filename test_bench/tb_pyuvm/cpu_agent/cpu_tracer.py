@@ -12,17 +12,42 @@ actually writes a register; the memory field ([mem 0x...]) is present only
 for loads/stores.
 
 Why a software queue: this pipeline's uop_t (rtl/include/riscv_uop_pkg.sv)
-does not carry the raw instruction word or PC past decode, so the raw
-32-bit instruction has to be captured at IF (if_id_instr/if_id_pc) and
-carried forward in software, keyed to the instruction that eventually
-completes execution in ALU/LSU. The pipeline is single-issue and in-order,
-and (per rtl/cpu_core.sv) only IF/decode/issue are squashed on `mispredict`
--- ALU/LSU/RETIRE always run i_flush=1'b0, so once dispatched an
-instruction always completes. That means "retirement" can be detected
-directly off ALU.o_valid / LSU.o_valid (cpu_core's alu_retire_valid /
-lsu_valid) without waiting an extra cycle for the retire_wb_* registers,
-and the associated PC/uop can be read straight from ALU.pc_q/uop_q or
-LSU.pc_q/uop_q (already tapped by monitor_config.yaml's extraction blocks).
+does not carry the PC past decode, so the PC (and the raw instruction
+word alongside it) has to be captured earlier and carried forward in
+software, keyed to the instruction that eventually completes execution in
+ALU/LSU.
+
+Where it is captured: at the Decode -> Issue hand-off, driven by
+`issue_accept_cnt` (rtl/cpu_core.sv) -- the exact number of decode slots
+Issue consumed this cycle. That count is the handshake the RTL itself
+uses, so it cannot disagree with what actually entered the pipeline. It
+replaces an older heuristic ("IF valid and the PC changed"), which a
+2-wide decode breaks in two ways: more than one instruction can leave the
+queue in a single cycle, and a self-targeting jump (`j .`) re-presents the
+same PC without it being the same dynamic instruction.
+
+The pipeline is in-order, and (per rtl/cpu_core.sv) only IF/decode/issue
+are squashed on `mispredict` -- ALU0/ALU1/LSU/RETIRE0/RETIRE1 all run
+i_flush=1'b0, so once dispatched an instruction always completes. That
+invariant is upheld by Issue refusing to dispatch lane 1 alongside a
+redirecting lane 0 (issue.sv: `issue_en1` is gated on `!o_mispredict`),
+so no wrong-path uop ever enters an ALU. It means "retirement" can be
+detected directly off the units' o_valid without waiting an extra cycle
+for the retire_wb_* registers, and the associated PC/uop read straight
+from ALUn.pc_q/uop_q or LSU.pc_q/uop_q.
+
+Two issue lanes, so up to TWO instructions retire per cycle. They are
+emitted in program order within the cycle: lane 0's completion (ALU0 or
+LSU -- mutually exclusive, asserted in cpu_core.sv) before lane 1's
+(ALU1). Order matters more than it looks: _pop_matching consumes the
+queue by PC and silently drops anything in front of the match, so
+emitting a younger instruction first would discard the older one as
+"flushed" and corrupt the queue for the rest of the run.
+
+Note the branch case is a stage EARLIER than the others -- it is caught
+at Issue via the BPU-update pulse, not at completion -- so a branch seen
+in cycle N belongs to a YOUNGER bundle than an ALU/LSU completion seen in
+the same cycle. It is therefore emitted last.
 
 Hierarchy: these pipeline signals live inside the cpu_core instance
 (tb_top.CORE.*), reached via hier.get_core() rather than a hardcoded path
@@ -72,11 +97,16 @@ BRANCH_NAMES = {0: "beq", 1: "bne", 4: "blt", 5: "bge", 6: "bltu", 7: "bgeu"}
 LOAD_NAMES = {0: "lb", 1: "lh", 2: "lw", 4: "lbu", 5: "lhu"}
 STORE_NAMES = {0: "sb", 1: "sh", 2: "sw"}
 
-# Bit positions of uop_t fields within the packed 145-bit struct, used as a
+# Total width of uop_t, needed to slice a slot out of the packed 2-wide
+# decode bundle (idg_uop). Keep in sync with riscv_uop_pkg.sv.
+UOP_W = 146
+
+# Bit positions of uop_t fields within the packed 146-bit struct, used as a
 # fallback when per-field handles aren't exposed by the simulator.
 # Derived from rtl/include/riscv_uop_pkg.sv - in a packed struct the FIRST
-# declared field occupies the MSBs, so these count down from bit 144:
-#   valid 144 | opcode 143:137 | alu_op 136:127 | rs1 126:122 | rs2 121:117
+# declared field occupies the MSBs. `way` was added at the very top
+# precisely so it takes bit 145 and leaves every offset below it alone:
+#   way 145 | valid 144 | opcode 143:137 | alu_op 136:127 | rs1 126:122 | rs2 121:117
 #   rd 116:112 | funct3 111:109 | imm 108:77 | uses_rs1 76 | uses_rs2 75
 #   writes_rd 74 | is_immediate 73 | is_branch 72 | is_jump 71 | is_load 70
 #   is_store 69 | lsu_sign_extend 68 | lsu_access_size 67:66 | pred_taken 65
@@ -99,6 +129,7 @@ UOP_BITS = {
     "is_jump":      (71, 71),
     "is_load":      (70, 70),
     "is_store":     (69, 69),
+    "lsu_access_size": (67, 66),
     "pred_taken":   (65, 65),
     "is_illegal":   (32, 32),
     "instr_bits":   (31, 0),
@@ -169,8 +200,6 @@ class CpuTracer(uvm_component):
         self.core = hier.get_core(self.dut)
 
         self._queue = deque()
-        self._last_if_pc = None
-        self._last_if_valid = False
 
         self._trace_path = os.environ.get("CPU_TRACE_FILE", DEFAULT_TRACE_FILE)
         self._trace_file = None
@@ -194,7 +223,7 @@ class CpuTracer(uvm_component):
 
     def _emit(self, pc, instr, rd, writes_rd, wb_data, is_load, is_store, mem_addr,
                opcode, funct3, alu_op, is_immediate, is_branch, is_jump, rs1, rs2, imm,
-               store_data=None):
+               store_data=None, store_size=2):
         if self._trace_file is None:
             return
 
@@ -210,8 +239,13 @@ class CpuTracer(uvm_component):
             commit_line += f" mem 0x{mem_addr & 0xFFFFFFFF:08x}"
             # Spike's --log-commits prints the stored value after the address
             # for stores (loads instead report the loaded value as the rd write).
+            # It prints only the bytes the access actually writes -- 0x2a for
+            # an SB, 0x0054 for an SH -- so mask and width-format to match,
+            # or every sub-word store shows as a spurious trace diff.
             if is_store and store_data is not None:
-                commit_line += f" 0x{store_data & 0xFFFFFFFF:08x}"
+                nibbles = {0: 2, 1: 4}.get(store_size, 8)
+                mask = (1 << (nibbles * 4)) - 1
+                commit_line += f" 0x{store_data & mask:0{nibbles}x}"
 
         self._trace_file.write(disasm_line + "\n")
         self._trace_file.write(commit_line + "\n")
@@ -225,35 +259,43 @@ class CpuTracer(uvm_component):
         while True:
             await RisingEdge(self.dut.clk)
 
-            # ── 1. Push newly-arrived instructions from IF into the queue ──
-            if_id_valid = bool(self._val(getattr(self.core, "if_id_valid", None), 0))
-            if_id_pc = self._val(getattr(self.core, "if_id_pc", None), 0)
-            if_id_instr = self._val(getattr(self.core, "if_id_instr", None), 0)
+            # ── 1. Push the uops Issue accepted from Decode this cycle ──
+            # idg_pc / idg_uop are packed 2-wide bundles (slot 0 in the low
+            # bits, slot 0 = the older instruction). accept_cnt says how many
+            # of them, starting at slot 0, actually entered Issue.
+            accept_cnt = self._val(getattr(self.core, "issue_accept_cnt", None), 0)
+            if accept_cnt:
+                pc_bus = self._val(getattr(self.core, "idg_pc", None), 0)
+                uop_bus = self._val(getattr(self.core, "idg_uop", None), 0)
+                for slot in range(min(accept_cnt, 2)):
+                    pc = (pc_bus >> (32 * slot)) & 0xFFFFFFFF
+                    # instr_bits is uop_t[31:0], so it falls at the bottom of
+                    # each slot's slice.
+                    instr = (uop_bus >> (UOP_W * slot)) & 0xFFFFFFFF
+                    self._queue.append(_InFlightInsn(pc, instr))
 
-            is_new_entry = if_id_valid and (
-                not self._last_if_valid or if_id_pc != self._last_if_pc
-            )
-            if is_new_entry:
-                self._queue.append(_InFlightInsn(if_id_pc, if_id_instr))
-
-            self._last_if_valid = if_id_valid
-            self._last_if_pc = if_id_pc
-
-            # ── 2. Match ALU/LSU retirement events against the queue ──
-            alu_valid = bool(self._val(getattr(self.core, "alu_retire_valid", None), 0))
+            # ── 2. Match retirement events against the queue ──
+            alu0_valid = bool(self._val(getattr(self.core, "alu0_retire_valid", None), 0))
+            alu1_valid = bool(self._val(getattr(self.core, "alu1_retire_valid", None), 0))
             lsu_valid = bool(self._val(getattr(self.core, "lsu_valid", None), 0))
             # BRANCH-opcode uops (is_branch) are resolved entirely inside
-            # ISSUE (rtl/pipeline/issue.sv: alu_if.m_valid/lsu_if.m_valid
+            # ISSUE (rtl/pipeline/issue.sv: alu0_if.m_valid/lsu_if.m_valid
             # are forced low for is_branch) -- they never reach ALU/LSU, so
             # they must be captured here via the branch-resolution pulse
-            # (o_update_valid == issue_en && buf_uop_q.is_branch, wired to
-            # bpu_update_valid at tb_top) or they'd never retire in-trace.
+            # (o_update_valid == issue_en0 && buf_uop0_q.is_branch, wired to
+            # bpu_update_valid at cpu_core) or they'd never retire in-trace.
             branch_valid = bool(self._val(getattr(self.core, "bpu_update_valid", None), 0))
 
-            if alu_valid:
-                self._retire_from_alu()
+            # Program order within the cycle -- see the module docstring.
+            # ALU0 and LSU are mutually exclusive, so their relative order
+            # here is arbitrary; ALU1 must follow both, and the branch pulse
+            # (a stage earlier, hence a younger bundle) must come last.
+            if alu0_valid:
+                self._retire_from_alu(0)
             if lsu_valid:
                 self._retire_from_lsu()
+            if alu1_valid:
+                self._retire_from_alu(1)
             if branch_valid:
                 self._retire_from_branch()
 
@@ -278,20 +320,32 @@ class CpuTracer(uvm_component):
         )
         return None
 
-    def _retire_from_alu(self):
-        alu = self.core.ALU
+    def _retire_from_alu(self, lane):
+        """Emit the instruction completing in ALU lane `lane` (0 or 1).
+
+        The two ALUs are separate module instances (CORE.ALU0 / CORE.ALU1)
+        rather than one widened module, precisely so these stay plain
+        scalar handles -- Verilator's VPI would present a packed
+        `logic [1:0][31:0] pc_q` as one flat 64-bit vector and silently
+        hand back a concatenation of both lanes.
+        """
+        alu = getattr(self.core, f"ALU{lane}", None)
+        if alu is None:
+            return
         pc = self._val(getattr(alu, "pc_q", None), 0)
         entry = self._pop_matching(pc)
         if entry is None:
             return
 
-        rd = self._val(getattr(self.core, "fwd_alu_issue_rd", None), 0)
-        writes_rd = bool(self._val(getattr(self.core, "fwd_alu_issue_writes_rd", None), 0))
-        result = self._val(getattr(self.core, "alu_retire_result", None), 0)
+        result = self._val(getattr(self.core, f"alu{lane}_retire_result", None), 0)
 
         uop = getattr(alu, "uop_q", None)
         opcode, funct3, alu_op, is_immediate, is_branch, is_jump, rs1, rs2 = \
             self._decode_uop_fields(uop)
+        # Taken straight off the retiring uop rather than off the forwarding
+        # bus: same values, one fewer per-lane signal name to keep in sync.
+        rd = self._uop_field(uop, "rd")
+        writes_rd = bool(self._uop_field(uop, "writes_rd"))
 
         self._emit(entry.pc, entry.instr, rd, writes_rd, result,
                    False, False, 0,
@@ -320,11 +374,14 @@ class CpuTracer(uvm_component):
         # architectural value Spike reports; wdata_aligned is the
         # byte-lane-shifted bus value, which Spike does not print.
         store_data = self._val(getattr(lsu, "store_data_q", None), 0) if is_store else None
+        # 00 = byte, 01 = halfword, 10 = word (riscv_uop_pkg.sv)
+        store_size = self._uop_field(uop, "lsu_access_size")
 
         self._emit(entry.pc, entry.instr, rd, writes_rd, load_data,
                    is_load, is_store, mem_addr,
                    opcode, funct3, alu_op, is_immediate, is_branch, is_jump, rs1, rs2,
-                   self._extract_imm(uop), store_data=store_data)
+                   self._extract_imm(uop), store_data=store_data,
+                   store_size=store_size)
 
     def _retire_from_branch(self):
         issue = self.core.ISSUE
@@ -333,7 +390,7 @@ class CpuTracer(uvm_component):
         if entry is None:
             return
 
-        uop = getattr(issue, "buf_uop_q", None)
+        uop = getattr(issue, "buf_uop0_q", None)
         opcode, funct3, alu_op, is_immediate, is_branch, is_jump, rs1, rs2 = \
             self._decode_uop_fields(uop)
 

@@ -1,355 +1,225 @@
 import riscv_uop_pkg::*;
 
+// =================================================================
+// decode_stage - 2-wide instruction decode
+// =================================================================
+// Holds a 2-entry, program-ordered, compacting buffer of fetched
+// instructions and presents both of them, decoded, to Issue every
+// cycle. This is the IF/ID pipeline register generalised from one
+// entry to two.
+//
+// Every cycle the buffer:
+//   1. drops the `i_accept_cnt` oldest entries (what Issue consumed),
+//   2. shifts what is left down to slot 0 (so slot 0 is always the
+//      oldest live instruction and there is never a hole),
+//   3. refills the freed slots from the fetch queue heads, reporting
+//      how many it took on `o_pop_cnt`.
+//
+// Because refill happens in the same cycle as the accept, a steady
+// stream keeps both slots occupied and both decoders busy.
+//
+// Backpressure: there is no stall signal. `i_accept_cnt == 0` IS the
+// stall - the buffer simply keeps what it holds and pops nothing, which
+// backs pressure up into the fetch queue exactly as the old
+// o_stall_to_if chain did.
+//
+// Phase 2 note: Issue is still 1-wide, so i_accept_cnt is only ever 0
+// or 1 today. Slot 1 is nevertheless decoded for real every cycle, and
+// assert_decode_lanes_agree below checks lane 1's result against lane
+// 0's when that same instruction shifts down - so the second lane is
+// live and verified before Phase 3 starts consuming it.
+
 module decode_stage (
   input  logic        clk,
   input  logic        rst_n,
 
-  // From IF (unregistered inputs)
-  input  logic        i_if_valid,
-  input  logic [31:0] i_if_pc,
-  input  logic [31:0] i_if_instr,
-  input  logic        i_if_pred_taken,
-  input  logic [31:0] i_if_pred_target,
+  // From the fetch queue: up to two instructions, slot 0 the older.
+  // i_if_valid[1] implies i_if_valid[0] (the queue never has a hole).
+  input  logic [1:0]        i_if_valid,
+  input  logic [1:0][31:0]  i_if_pc,
+  input  logic [1:0][31:0]  i_if_instr,
+  input  logic [1:0]        i_if_pred_taken,
+  input  logic [1:0][31:0]  i_if_pred_target,
 
-  // Stall & flush control inputs
-  input  logic        i_stall,      // from later stages
-  input  logic        i_flush,
+  // How many of the decode slots Issue consumed this cycle (0..2).
+  input  logic [1:0]        i_accept_cnt,
 
-  // Outputs to EX
-  output logic        o_dec_valid,
-  output uop_t        o_uop,
-  output logic [31:0] o_dec_pc,
+  input  logic              i_flush,
 
-  // Stall request output to IF
-  output logic        o_stall_to_if
+  // To Issue: up to two decoded uops, slot 0 the older.
+  output logic [1:0]        o_dec_valid,
+  output uop_t [1:0]        o_uop,
+  output logic [1:0][31:0]  o_dec_pc,
+
+  // Back to fetch: how many entries to pop from the fetch queue.
+  output logic [1:0]        o_pop_cnt
 );
 
   // ───────────────────────────────────────────────
-  // 1. IF/ID pipeline register (at beginning of ID)
+  // 1. The 2-entry IF/ID buffer
   // ───────────────────────────────────────────────
-  logic        id_valid_q;
-  logic [31:0] id_pc_q;
-  logic [31:0] id_instr_q;
-  logic        id_pred_taken_q;
-  logic [31:0] id_pred_target_q;
+  typedef struct packed {
+    logic [31:0] pc;
+    logic [31:0] instr;
+    logic        pred_taken;
+    logic [31:0] pred_target;
+  } id_entry_t;
+
+  id_entry_t [1:0] id_q;
+  logic      [1:0] id_v_q;
+
+  // Fetch-queue heads packaged as buffer entries.
+  id_entry_t [1:0] fq_e;
+  always_comb begin
+    for (int i = 0; i < 2; i++) begin
+      fq_e[i] = '{pc:          i_if_pc[i],
+                  instr:       i_if_instr[i],
+                  pred_taken:  i_if_pred_taken[i],
+                  pred_target: i_if_pred_target[i]};
+    end
+  end
+
+  // What survives this cycle's accept, already compacted towards slot 0.
+  logic      [1:0] keep_v;
+  id_entry_t [1:0] keep_e;
+
+  // Buffer state for the next cycle: survivors + refill.
+  logic      [1:0] nxt_v;
+  id_entry_t [1:0] nxt_e;
+
+  always_comb begin
+    keep_v = 2'b00;
+    keep_e = '0;
+
+    unique case (i_accept_cnt)
+      2'd0: begin
+        keep_v = id_v_q;
+        keep_e = id_q;
+      end
+      2'd1: begin
+        // Slot 0 consumed; slot 1 (if any) becomes the new slot 0.
+        keep_v[0] = id_v_q[1];
+        keep_e[0] = id_q[1];
+      end
+      default: begin
+        // Both consumed (or a malformed count, caught by assertion) -
+        // nothing survives.
+      end
+    endcase
+
+    nxt_v     = keep_v;
+    nxt_e     = keep_e;
+    o_pop_cnt = 2'd0;
+
+    if (!keep_v[0]) begin
+      // Buffer emptied: take up to a full pair from the queue.
+      if (i_if_valid[0]) begin
+        nxt_v[0]  = 1'b1;
+        nxt_e[0]  = fq_e[0];
+        o_pop_cnt = 2'd1;
+        if (i_if_valid[1]) begin
+          nxt_v[1]  = 1'b1;
+          nxt_e[1]  = fq_e[1];
+          o_pop_cnt = 2'd2;
+        end
+      end
+    end
+    else if (!keep_v[1]) begin
+      // One survivor: top the buffer back up with the queue head.
+      if (i_if_valid[0]) begin
+        nxt_v[1]  = 1'b1;
+        nxt_e[1]  = fq_e[0];
+        o_pop_cnt = 2'd1;
+      end
+    end
+
+    // A mispredict redirect kills everything already in the buffer, and
+    // the fetch queue is flushed in the same cycle - so pop nothing.
+    if (i_flush) begin
+      nxt_v     = 2'b00;
+      o_pop_cnt = 2'd0;
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || i_flush) begin
-      id_valid_q       <= 1'b0;
-      id_pc_q          <= '0;
-      id_instr_q       <= '0;
-      id_pred_taken_q  <= 1'b0;
-      id_pred_target_q <= '0;
+    if (!rst_n) begin
+      id_v_q <= 2'b00;
+      id_q   <= '0;
     end
-    else if (!i_stall) begin
-      id_valid_q       <= i_if_valid;
-      id_pc_q          <= i_if_pc;
-      id_instr_q       <= i_if_instr;
-      id_pred_taken_q  <= i_if_pred_taken;
-      id_pred_target_q <= i_if_pred_target;
+    else begin
+      id_v_q <= nxt_v;
+      id_q   <= nxt_e;
     end
-    // else: stall → hold current values
   end
 
   // ───────────────────────────────────────────────
-  // 2. Stall request to upstream (IF)
+  // 2. The two decode lanes
   // ───────────────────────────────────────────────
+  uop_t [1:0] dec_uop;   // raw decoder output, before the `way` stamp
 
-  assign o_stall_to_if = i_stall;  // simple chain for now
-  // Later: o_stall_to_if = i_stall || my_own_stall_condition
-
-  // ---------------------------------------------------------------------------
-  // Valid instruction pipeline
-  // ---------------------------------------------------------------------------
-  logic                 instr_valid;
-  riscv_opcode_t        opcode;
-  logic     [4:0]       rs1, rs2, rd;
-  logic     [2:0]       funct3;
-  logic     [6:0]       funct7;
-  
-  logic     [31:0]      imm_i, imm_s, imm_b, imm_u, imm_j;
-
-  alu_op_t              alu_operation;
-
-  logic                 lsu_sign_extend;
-  logic     [1:0]       lsu_access_size;
-
-  assign instr_valid = id_valid_q && !i_flush;
-  // ---------------------------------------------------------------------------
-  // Instruction field extraction (only when valid)
-  // ---------------------------------------------------------------------------
-  assign opcode  = riscv_opcode_t'(id_instr_q[6:0]);
-  assign rd      = id_instr_q[11:7];
-  assign funct3  = id_instr_q[14:12];
-  assign rs1     = id_instr_q[19:15];
-  assign rs2     = id_instr_q[24:20];
-  assign funct7  = id_instr_q[31:25];
-
-  // ---------------------------------------------------------------------------
-  // Immediate generation (RV32I standard) – using registered instruction
-  // ---------------------------------------------------------------------------
-  assign imm_i = {{20{id_instr_q[31]}}, id_instr_q[31:20]};
-  assign imm_s = {{20{id_instr_q[31]}}, id_instr_q[31:25], id_instr_q[11:7]};
-  assign imm_b = {{19{id_instr_q[31]}}, id_instr_q[31], id_instr_q[7], id_instr_q[30:25], id_instr_q[11:8], 1'b0};
-  assign imm_u = {id_instr_q[31:12], 12'b0};
-  assign imm_j = {{11{id_instr_q[31]}}, id_instr_q[31], id_instr_q[19:12], id_instr_q[20], id_instr_q[30:21], 1'b0};
-
-  // ---------------------------------------------------------------------------
-  // Arithmetic and Branch operation decoding (OP & OP-IMM)
-  // ---------------------------------------------------------------------------
-
-  always_comb begin
-  
-      unique if (opcode == OPCODE_OP_IMM) begin : decode_op_imm
-          // ─────────────── OP-IMM (I-type immediates) ───────────────
-          case (funct3)
-              3'b000:   alu_operation = ALU_ADD;   // addi
-              3'b001:   alu_operation = ALU_SLL;   // slli
-              3'b010:   alu_operation = ALU_SLT;   // slti
-              3'b011:   alu_operation = ALU_SLTU;  // sltiu
-              3'b100:   alu_operation = ALU_XOR;   // xori
-              3'b101: begin   // srli / srai
-                if (funct7[5] == 1'b1)          // bit 30 set → assume srai (funct7 should be 0100000)
-                        alu_operation = ALU_SRA;
-                else
-                        alu_operation = ALU_SRL;    // srli, or any non-srai
-              end
-              3'b110:   alu_operation = ALU_OR;    // ori
-              3'b111:   alu_operation = ALU_AND;   // andi
-              default:  alu_operation = ALU_ADD;  // or ALU_INVALID if you want strict checking
-          endcase
-
-      end else if (opcode == OPCODE_OP) begin : decode_op
-          // ─────────────── OP (R-type, register-register) ───────────────
-          // Here funct7[5] selects sub/sra vs add/srl
-          case ({funct7[5], funct3})
-              4'b0_000: alu_operation = ALU_ADD;  // add
-              4'b1_000: alu_operation = ALU_SUB;  // sub
-              4'b0_001: alu_operation = ALU_SLL;  // sll
-              4'b0_010: alu_operation = ALU_SLT;  // slt
-              4'b0_011: alu_operation = ALU_SLTU; // sltu
-              4'b0_100: alu_operation = ALU_XOR;  // xor
-              4'b0_101: alu_operation = ALU_SRL;  // srl
-              4'b1_101: alu_operation = ALU_SRA;  // sra
-              4'b0_110: alu_operation = ALU_OR;   // or
-              4'b0_111: alu_operation = ALU_AND;  // and
-              default:  alu_operation = ALU_ADD;  
-          endcase
-      
-      end else begin
-                        alu_operation = ALU_ADD;
-      end
-      // Note: LUI / AUIPC usually don't use the ALU in the same way
-      //       (they generate immediate directly → handled elsewhere)
+  for (genvar g = 0; g < 2; g++) begin : g_lane
+    decoder DEC (
+      .i_valid       (id_v_q[g] && !i_flush),
+      .i_instr       (id_q[g].instr),
+      .i_pred_taken  (id_q[g].pred_taken),
+      .i_pred_target (id_q[g].pred_target),
+      .o_uop         (dec_uop[g])
+    );
   end
 
-  // ---------------------------------------------------------------------------
-  // Load/Store type decoding → set lsu_sign_extend and lsu_access_size
-  // ---------------------------------------------------------------------------
+  // Stamp the lane index. Done here rather than in `decoder` so the two
+  // lanes' outputs are otherwise bit-identical for the same instruction,
+  // which is what assert_decode_lanes_agree relies on.
+  uop_t [1:0] uop_w;
   always_comb begin
-    // Default values (non-load/store)
-    lsu_sign_extend  = 1'b0;
-    lsu_access_size  = 2'b00;  // byte (default/safe)
-
-    if (instr_valid) begin
-      case (opcode)
-        OPCODE_LOAD: begin
-          lsu_sign_extend = ~funct3[2];      // 0xxx = sign-extend (LB/LH), 1xxx = zero-extend (LBU/LHU)
-          lsu_access_size = funct3[1:0];     // 00=byte, 01=half, 10=word
-        end
-        OPCODE_STORE: begin
-          lsu_sign_extend = 1'b0;            // stores never extend
-          lsu_access_size = funct3[1:0];     // 00=SB, 01=SH, 10=SW
-        end
-
-        default: begin
-          // Non-memory ops → leave defaults
-        end
-      endcase
-    end
+    uop_w        = dec_uop;
+    uop_w[0].way = 1'b0;
+    uop_w[1].way = 1'b1;
   end
 
-  // ---------------------------------------------------------------------------
-  // Main decode logic → fill o_uop (using registered values)
-  // ---------------------------------------------------------------------------
-  always_comb begin
-    // Default: invalid
-    o_dec_valid = 1'b0;
-    o_uop       = '0;
+  assign o_uop       = uop_w;
+  assign o_dec_valid = id_v_q & {2{!i_flush}};
+  assign o_dec_pc    = {id_q[1].pc, id_q[0].pc};
 
-    if (instr_valid) begin
-      o_dec_valid        = 1'b1;
-      o_uop.valid        = 1'b1;
-      o_uop.opcode       = opcode;
-      o_uop.funct3       = funct3;
-      o_uop.rs1          = rs1;
+`ifdef SIMULATION
+  // ───────────────────────────────────────────────────────────────────────────
+  // Decode buffer integrity
+  // ───────────────────────────────────────────────────────────────────────────
 
-      o_uop.rs2          = rs2;
-      o_uop.rd           = rd;
-      o_uop.pred_taken   = id_pred_taken_q;
-      o_uop.pred_target  = id_pred_target_q;
-      o_uop.instr_bits   = id_instr_q;
+  // 1. The buffer compacts, so slot 1 can never be occupied while slot 0
+  //    is empty. A hole here would let Issue consume out of program order.
+  assert_no_hole: assert property (
+    @(posedge clk) disable iff (!rst_n)
+    id_v_q[1] |-> id_v_q[0]
+  ) else $error("DECODE ERROR: slot1 valid with slot0 empty - decode buffer has a hole");
 
-      case (opcode)
-        OPCODE_OP_IMM: begin
-          o_uop.is_immediate = 1'b1;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = imm_i;
-          o_uop.alu_op       = alu_operation;
-          o_uop.uses_rs1     = 1'b1;
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = (rd != 5'd0);
-        end
+  // 2. Issue must never claim to have taken more uops than decode offered
+  //    (that would silently skip instructions).
+  assert_accept_le_occupancy: assert property (
+    @(posedge clk) disable iff (!rst_n || i_flush)
+    (i_accept_cnt <= ({1'b0, id_v_q[0]} + {1'b0, id_v_q[1]}))
+  ) else $error("DECODE ERROR: Issue accepted %0d uops, decode held only %0d",
+                i_accept_cnt, id_v_q[0] + id_v_q[1]);
 
-        OPCODE_OP: begin
-          o_uop.is_immediate = 1'b0;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = 32'b0;
-          o_uop.alu_op       = alu_operation;
-          o_uop.uses_rs1     = 1'b1;
-          o_uop.uses_rs2     = 1'b1;
-          o_uop.writes_rd    = (rd != 5'd0);
-        end
+  // 3. The two lanes must be the same decoder. When slot 1 shifts down to
+  //    slot 0 (accept of exactly 1), lane 0 re-decodes the very instruction
+  //    lane 1 decoded last cycle; the two results must be bit-identical.
+  //    Until Issue goes 2-wide nothing downstream reads o_uop[1], so this
+  //    is what keeps lane 1 honest - and what stops the simulator from
+  //    optimising it away as dead logic.
+  assert_decode_lanes_agree: assert property (
+    @(posedge clk) disable iff (!rst_n || i_flush)
+    (id_v_q[1] && (i_accept_cnt == 2'd1)) |=> (dec_uop[0] == $past(dec_uop[1]))
+  ) else $error("DECODE ERROR: lane0/lane1 disagree for pc=0x%h (instr=0x%h)",
+                id_q[0].pc, id_q[0].instr);
 
-        OPCODE_LUI: begin
-          o_uop.is_immediate = 1'b1;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = imm_u;
-          o_uop.alu_op       = ALU_ADD;  // LUI = rd = imm_u (upper 20 bits)
-          o_uop.uses_rs1     = 1'b0;
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = (rd != 5'd0);
-        end
+  // 4. Popping from the fetch queue is only legal for entries the queue
+  //    actually presents.
+  assert_pop_le_available: assert property (
+    @(posedge clk) disable iff (!rst_n)
+    (o_pop_cnt <= ({1'b0, i_if_valid[0]} + {1'b0, i_if_valid[1]}))
+  ) else $error("DECODE ERROR: popping %0d entries but queue offers only %0d",
+                o_pop_cnt, i_if_valid[0] + i_if_valid[1]);
+`endif
 
-        OPCODE_AUIPC: begin
-          o_uop.is_immediate = 1'b1;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = imm_u;
-          o_uop.alu_op       = ALU_ADD;  // rd = pc + imm_u
-          o_uop.uses_rs1     = 1'b0;     // uses pc instead
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = (rd != 5'd0);
-        end
-        OPCODE_BRANCH: begin
-          o_uop.is_immediate = 1'b0;
-          o_uop.is_branch    = 1'b1;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = imm_b;
-          o_uop.alu_op       = ALU_ADD;          // Not used for branch condition anymore
-          o_uop.uses_rs1     = 1'b1;
-          o_uop.uses_rs2     = 1'b1;
-          o_uop.writes_rd    = 1'b0;             // branches never write rd
-        end
-        OPCODE_JAL: begin
-          o_uop.is_immediate = 1'b1;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b1;
-          o_uop.imm          = imm_j;
-          o_uop.alu_op       = ALU_ADD;             // Link value (pc+4)
-          o_uop.uses_rs1     = 1'b0;
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
-        end
-        OPCODE_JALR: begin
-          o_uop.is_immediate = 1'b1;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b1;
-          o_uop.imm          = imm_i;
-          o_uop.alu_op       = ALU_ADD;             // Link value (pc+4)
-          o_uop.uses_rs1     = 1'b0;
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = (rd != 5'd0);     // link if rd != x0
-        end
-        // Load & Store cases (now setting LSU fields)
-        OPCODE_LOAD: begin
-          o_uop.is_immediate = 1'b0;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = imm_i;
-          o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
-          o_uop.uses_rs1     = 1'b1;
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = (rd != 5'd0);
-          o_uop.is_load      = 1'b1;
-          o_uop.is_store     = 1'b0;
-          o_uop.lsu_sign_extend = lsu_sign_extend;
-          o_uop.lsu_access_size = lsu_access_size;
-        end
-        OPCODE_STORE: begin
-          o_uop.is_immediate = 1'b0;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.imm          = imm_s;
-          o_uop.alu_op       = ALU_ADD;  // addr = rs1 + imm
-          o_uop.uses_rs1     = 1'b1;
-          o_uop.uses_rs2     = 1'b1;
-          o_uop.writes_rd    = 1'b0;
-          o_uop.is_load      = 1'b0;
-          o_uop.is_store     = 1'b1;
-          o_uop.lsu_sign_extend = lsu_sign_extend;
-          o_uop.lsu_access_size = lsu_access_size;
-        end
-        OPCODE_MISC_MEM: begin
-          // FENCE: single-hart in-order core already provides program order,
-          // so this is a pure no-op (no side effects, doesn't write rd).
-          o_uop.is_immediate = 1'b0;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.uses_rs1     = 1'b0;
-          o_uop.uses_rs2     = 1'b0;
-          o_uop.writes_rd    = 1'b0;
-        end
-
-        OPCODE_SYSTEM: begin
-          o_uop.is_immediate = 1'b0;
-          o_uop.is_branch    = 1'b0;
-          o_uop.is_jump      = 1'b0;
-          o_uop.alu_op       = ALU_ADD;                    // CSR read value passed through the ALU as-is
-          o_uop.imm          = {20'b0, id_instr_q[31:20]};  // CSR addr (funct3!=0) or funct12 (funct3==0)
-
-          if (funct3 == 3'b000) begin
-            // Privileged/environment group: ECALL / EBREAK / MRET, selected by funct12 in Issue.
-            o_uop.uses_rs1  = 1'b0;
-            o_uop.uses_rs2  = 1'b0;
-            o_uop.writes_rd = 1'b0;
-            unique case (id_instr_q[31:20])
-              12'h000, 12'h001, 12'h302: o_uop.is_illegal = 1'b0;  // ECALL, EBREAK, MRET
-              default:                   o_uop.is_illegal = 1'b1;  // reserved (WFI, SFENCE.VMA, ...)
-            endcase
-          end else if (funct3 == 3'b100) begin
-            // Reserved funct3 — not a defined CSR or privileged instruction.
-            o_uop.uses_rs1  = 1'b0;
-            o_uop.uses_rs2  = 1'b0;
-            o_uop.writes_rd = 1'b0;
-            o_uop.is_illegal = 1'b1;
-          end else begin
-            // CSRRW/S/C (register form, funct3[2]=0) or CSRRWI/SI/CI (immediate
-            // form, funct3[2]=1 — the "rs1" field instead carries a 5-bit zimm,
-            // which decode already extracts unconditionally above).
-            o_uop.uses_rs1  = ~funct3[2];
-            o_uop.uses_rs2  = 1'b0;
-            o_uop.writes_rd = (rd != 5'd0);
-          end
-        end
-
-        default: begin
-          // Unrecognized/reserved opcode (or unimplemented extension) →
-          // still a valid, in-order uop that traps as an illegal instruction
-          // at Issue, rather than silently vanishing from the pipeline.
-          o_uop.is_illegal = 1'b1;
-          o_uop.uses_rs1   = 1'b0;
-          o_uop.uses_rs2   = 1'b0;
-          o_uop.writes_rd  = 1'b0;
-        end
-      endcase
-    end
-  end
-
-  // PC output is always the registered one
-  assign o_dec_pc = id_pc_q;
-  
 endmodule

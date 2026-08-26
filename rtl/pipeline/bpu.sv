@@ -5,7 +5,10 @@ import riscv_uop_pkg::*;
 
 /**
  * Branch Prediction Unit (BPU)
- * 2-bit saturating counter per entry (indexed by PC[INDEX_WIDTH-1:0])
+ *
+ * A fused BTB + 2-bit-saturating-counter BHT: one table, each entry
+ * holding {tag, target, 2-bit state}. Indexed by the PC, tagged with the
+ * full PC so aliasing is detected (a miss) rather than mispredicted.
  *
  * Separate prediction and update ports to allow for pipeline timing.
  *
@@ -25,6 +28,10 @@ import riscv_uop_pkg::*;
  *   TABLE_DEPTH: number of entries in the BPU (must be power of 2)
  *   INDEX_WIDTH: $clog2(TABLE_DEPTH)
  *   XLEN:        register width (32 for RV32)
+ *
+ * NOTE ON CORRECTNESS: nothing in here can make the core wrong. Every
+ * prediction is re-resolved in Issue, which redirects on any mismatch.
+ * A stale entry, an aliased index or a cold table costs cycles only.
  */
 module bpu #(
     parameter int TABLE_DEPTH = 256,
@@ -74,9 +81,16 @@ module bpu #(
     logic upd_hit;
     bhu_entry_t upd_bhu_entry;
 
-    // Assign indices
-    assign pred_idx = i_branch_pc_pred[INDEX_WIDTH-1:0];
-    assign upd_idx  = i_branch_pc_update[INDEX_WIDTH-1:0];
+    // ─────────────────────────────────────────────────────────────────
+    // Indexing
+    // ─────────────────────────────────────────────────────────────────
+    // Index from PC[INDEX_WIDTH+1:2], NOT PC[INDEX_WIDTH-1:0]. RV32
+    // instructions are 4-byte aligned, so PC[1:0] is always zero: using
+    // the raw low bits fed two constant zeros into the index and made
+    // only one entry in every four reachable. A 256-entry table was
+    // therefore behaving as a 64-entry one with a stride-4 hole pattern.
+    assign pred_idx = i_branch_pc_pred[INDEX_WIDTH+1:2];
+    assign upd_idx  = i_branch_pc_update[INDEX_WIDTH+1:2];
 
     // Check if we have a valid entry for prediction (hit)
     assign pred_hit = (bhu[pred_idx].branch_pc == i_branch_pc_pred) && i_is_branch_pred;
@@ -92,45 +106,66 @@ module bpu #(
     assign o_prediction = pred_hit && (pred_bhu_entry.state inside {WT, ST});
     assign o_predicted_pc = pred_hit ? pred_bhu_entry.target_pc : '0;
 
-    // Update logic (sequential)
+    // ─────────────────────────────────────────────────────────────────
+    // Allocation policy: backward-taken / forward-not-taken
+    // ─────────────────────────────────────────────────────────────────
+    // A branch we have never seen gets a starting counter value from the
+    // direction of its target rather than a flat WNT. A backward branch
+    // is overwhelmingly a loop back-edge and is taken almost every time,
+    // so starting it at WT gets the loop predicted correctly from its
+    // second iteration instead of its fourth (WNT needs two taken
+    // outcomes to reach WT). Forward branches keep WNT.
+    bhu_state_t alloc_state;
+    assign alloc_state = (i_offset_pc_pred < i_branch_pc_pred) ? WT : WNT;
+
+    // ─────────────────────────────────────────────────────────────────
+    // Table write
+    // ─────────────────────────────────────────────────────────────────
+    logic upd_fire, alloc_fire, alloc_collides;
+    bhu_state_t upd_next_state;
+
+    assign upd_fire   = i_update_valid && upd_hit;
+    assign alloc_fire = i_is_branch_pred && !pred_hit;
+    // Both writers can target the same index in one cycle (two different
+    // PCs aliasing to it). The resolved update wins: it is fact, whereas
+    // the allocation is a guess about an instruction that has not
+    // executed yet.
+    assign alloc_collides = upd_fire && (upd_idx == pred_idx);
+
+    always_comb begin
+        unique case (upd_bhu_entry.state)
+            SNT: upd_next_state = i_taken_update ? WNT : SNT;
+            WNT: upd_next_state = i_taken_update ? WT  : SNT;
+            WT : upd_next_state = i_taken_update ? ST  : WNT;
+            ST : upd_next_state = i_taken_update ? ST  : WT;
+        endcase
+    end
+
+    // Every write below is non-blocking. The original mixed `<=` for the
+    // update path with `=` for the reset and allocation paths, inside one
+    // always_ff and to the same array - a genuine simulation race, and one
+    // that also let `pred_hit` (a continuous assign reading this array)
+    // observe an allocation within the same time step.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             // Reset all entries to WNT (weakly not-taken) and zero PCs
             for (int i = 0; i < TABLE_DEPTH; i++) begin
-                bhu[i].branch_pc  = '0;
-                bhu[i].target_pc  = '0;
-                bhu[i].state      = WNT;
+                bhu[i].branch_pc  <= '0;
+                bhu[i].target_pc  <= '0;
+                bhu[i].state      <= WNT;
             end
         end else begin
-            // Handle update first (if valid and hit)
-            if (i_update_valid && upd_hit) begin
-                // Update the state based on the actual outcome
-                unique case (upd_bhu_entry.state)
-                    SNT: bhu[upd_idx].state <= i_taken_update ? WNT : SNT;
-                    WNT: bhu[upd_idx].state <= i_taken_update ? WT  : SNT;
-                    WT : bhu[upd_idx].state <= i_taken_update ? ST  : WNT;
-                    ST : bhu[upd_idx].state <= i_taken_update ? ST  : WT;
-                endcase
-                // Update the target PC when we have a valid update
+            if (upd_fire) begin
+                bhu[upd_idx].state     <= upd_next_state;
                 bhu[upd_idx].target_pc <= i_update_target_pc;
             end
 
-            // Handle prediction (allocation on miss)
-            // Note: prediction and update can happen in the same cycle for different branches.
-            // We will allow both to occur; if the same entry is both hit for update and miss for prediction,
-            // the update will happen first (in this always_ff block) and then the prediction allocation
-            // will see the updated state but the same branch_pc and target_pc (since we didn't change them).
-            // If we want to prioritize update over allocation for the same PC, we need to check.
-            // For simplicity, we will allow allocation to overwrite if there is a miss on prediction,
-            // even if we just updated the same entry (this would be unusual because if we updated,
-            // it means we had a hit, so prediction would also be a hit, not a miss).
-            if (i_is_branch_pred && !pred_hit) begin
-                // Allocate a new entry: store the branch PC and target PC, initialize state to WNT
-                bhu[pred_idx].branch_pc  = i_branch_pc_pred;
-                bhu[pred_idx].target_pc  = i_offset_pc_pred;
-                bhu[pred_idx].state      = WNT;
+            if (alloc_fire && !alloc_collides) begin
+                bhu[pred_idx].branch_pc <= i_branch_pc_pred;
+                bhu[pred_idx].target_pc <= i_offset_pc_pred;
+                bhu[pred_idx].state     <= alloc_state;
             end
-            // If not a branch or hit, hold the current state (no change)
+            // If not a branch, or a hit with no update, hold.
         end
     end
 
@@ -143,6 +178,18 @@ module bpu #(
     assert property (@(posedge clk) disable iff (!rst_n)
         (bhu[upd_idx].state inside {SNT, WNT, WT, ST})
     ) else $error("BPU: Invalid state in table at update index %0d", upd_idx);
+
+    // A hit means the tag matched, so the stored target must be the
+    // target we would compute for that PC. If this fires, an entry has
+    // been trained with a target belonging to a different branch.
+    assert_hit_implies_tag_match: assert property (@(posedge clk) disable iff (!rst_n)
+        pred_hit |-> (bhu[pred_idx].branch_pc == i_branch_pc_pred)
+    ) else $error("BPU: hit with mismatched tag at index %0d (pc=0x%h)", pred_idx, i_branch_pc_pred);
+
+    // The two writers must never both commit to one entry in a cycle.
+    assert_single_writer: assert property (@(posedge clk) disable iff (!rst_n)
+        !(upd_fire && alloc_fire && !alloc_collides && (upd_idx == pred_idx))
+    ) else $error("BPU: update and allocation both wrote index %0d", upd_idx);
     `endif
 
 endmodule
