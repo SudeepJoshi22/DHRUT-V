@@ -23,6 +23,22 @@
 #   make flash-nv TOP=... FILELIST=... CST=...   -> flash to onboard flash
 #
 #   make clean TOP=<top_module>   -> remove that top's generated files
+#
+# ---- CPU on hardware -------------------------------------------------------
+# cpu_core has SystemVerilog *interface* ports (mem_if.master imem_if/dmem_if),
+# so it cannot be a synthesis top on its own -- there is no parent to
+# instantiate the interfaces, and a .cst can only constrain flat scalar ports.
+# rtl/cpu_top.sv is the wrapper: it instantiates the two mem_if instances at
+# the right widths (imem 64-bit, dmem 32-bit), hooks cpu_core onto them, backs
+# both with BSRAM, and exposes clk/rst_n_btn/led.
+#
+#   make mem TEST=add                                   # program image -> *.hex
+#   make check     TOP=cpu_top FILELIST=cpu_top_filelist.f
+#   make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+#   make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+#
+# Run `make mem` FIRST: cpu_top's $readmemh reads imem_init.hex/dmem_init.hex
+# from this directory at elaboration time, so synthesis needs them present.
 
 DEVICE     = GW2AR-LV18QN88C8/I7
 FAMILY     = GW2A-18C
@@ -75,7 +91,22 @@ flash: $(BITSTREAM)
 flash-nv: $(BITSTREAM)
 	openFPGALoader -b tangnano20k -f $(BITSTREAM)
 
+# ---- Program image for cpu_top's BSRAMs ------------------------------------
+# Converts a test built by tools/simulate.sh into the two $readmemh files
+# cpu_top instantiates its BSRAMs with. mkmem.py also prints the program's real
+# .tohost address, which tests/linker.ld floats after .text -- pass it through
+# as TOHOST_ADDR if it differs from cpu_top.sv's default, or the PASS LED will
+# never light.
+TEST ?= add
+TEST_DIR = ../tests/build/$(TEST)
+
+mem:
+	./mkmem.py $(TEST_DIR)/$(TEST).hex --elf $(TEST_DIR)/$(TEST).elf --outdir .
+
 clean:
 	rm -f $(JSON) $(PACK_JSON) $(BITSTREAM)
 
-.PHONY: check synth bitstream flash flash-nv clean
+clean-mem:
+	rm -f imem_init.hex dmem_init.hex
+
+.PHONY: check synth bitstream flash flash-nv clean clean-mem mem

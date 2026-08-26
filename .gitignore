@@ -41,3 +41,6 @@ fpnew/
 .claude-worktrees
 tools/oss-cad-suite
 tools/oss-cad-suite-linux-x64-20260821.tgz
+# Generated BSRAM init images (fpga/mkmem.py output, per-test)
+fpga/imem_init.hex
+fpga/dmem_init.hex
