@@ -88,7 +88,15 @@ synth:
 	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS) -json $(JSON); stat"
 
 # ---- Full flow: synth -> PnR -> pack -> (optionally) flash -----------------
-$(JSON): $(FILELIST)
+# The netlist depends on every source the filelist NAMES, not just on the
+# filelist itself. Depending on $(FILELIST) alone meant that editing RTL
+# without touching the list left a stale .json in place: make skipped
+# synthesis and nextpnr ran on the old netlist. That surfaced as a baffling
+# "ERROR: Unconstrained IO:rst_n_btn_IBUF_I" after a port was renamed -- the
+# netlist still had the old port name while the .cst had the new one.
+SRCS = $(shell grep -v '^[[:space:]]*\#' $(FILELIST) 2>/dev/null | grep -v '^[[:space:]]*$$')
+
+$(JSON): $(FILELIST) $(SRCS)
 	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS) -json $(JSON)"
 
 $(PACK_JSON): $(JSON) $(CST)
