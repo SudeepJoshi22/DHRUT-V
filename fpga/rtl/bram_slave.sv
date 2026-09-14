@@ -41,15 +41,16 @@ module bram_slave #(
   mem_if.slave bus
 );
 
+  // INIT_FILE minus a trailing ".hex", for building the per-lane filenames
+  // in the writable branch below. Empty stays empty (no init).
+  localparam string INIT_STEM =
+      (INIT_FILE == "") ? "" :
+      (INIT_FILE.len() > 4 && INIT_FILE.substr(INIT_FILE.len()-4, INIT_FILE.len()-1) == ".hex")
+        ? INIT_FILE.substr(0, INIT_FILE.len()-5) : INIT_FILE;
+
   localparam int BYTES      = DATA_W / 8;
   localparam int BYTE_SHIFT = $clog2(BYTES);   // 3 for 64-bit, 2 for 32-bit
   localparam int IDX_W      = $clog2(DEPTH);
-
-  logic [DATA_W-1:0] mem [0:DEPTH-1];
-
-  initial begin
-    if (INIT_FILE != "") $readmemh(INIT_FILE, mem);
-  end
 
   logic [IDX_W-1:0] idx;
   logic             is_write;
@@ -64,7 +65,7 @@ module bram_slave #(
 
   logic              state_q;
   logic [31:0]       req_addr_q;
-  logic [DATA_W-1:0] rdata_q;
+  logic [DATA_W-1:0] rdata_w;      // read data presented to the bus
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -82,25 +83,71 @@ module bram_slave #(
     end
   end
 
-  // Single-port BSRAM access: the read and the byte-enable write share one
-  // always_ff with no reset, which is what lets this infer as BSRAM rather
-  // than a wall of FFs. A store commits here, at capture time; that is safe
-  // because lsu.sv has no flush input and so never withdraws a store.
-  always_ff @(posedge clk) begin
-    if (state_q == S_IDLE && accept) begin
-      rdata_q <= mem[idx];
-      if (is_write) begin
-        for (int b = 0; b < BYTES; b++) begin
-          if (bus.m_wstrb[b]) mem[idx][b*8 +: 8] <= bus.m_wdata[b*8 +: 8];
+  // Storage. Two shapes, because Yosys' Gowin BRAM rules
+  // (tools/oss-cad-suite/share/yosys/gowin/brams.txt) have no mapping for a
+  // read combined with a BYTE-MASKED PARTIAL write of a wider word. Written
+  // that way the whole array falls into fabric -- a 2048x32 dmem costs a few
+  // thousand LUT4s of storage plus a ~2048:1 address mux per output bit.
+  // Splitting it into byte-wide arrays, each written as a WHOLE word under
+  // its own strobe, is the form the rules do match.
+  //
+  // The ROM case keeps the original single-array shape: WRITABLE=0 folds the
+  // write branch away, and it already infers cleanly (that is why imem got
+  // BSRAM while dmem did not).
+  //
+  // Both paths preserve what inference depends on -- synchronous read, and
+  // NO reset anywhere on the array -- and both keep the original timing: a
+  // store commits at capture time, which is safe because lsu.sv has no flush
+  // input and so never withdraws a store.
+  generate
+    if (WRITABLE) begin : g_ram
+      // Each lane loads its OWN image. Splitting a word-wide $readmemh into
+      // lanes in an initial block does not elaborate ("evaluation does not
+      // resolve to a constant in design initialization"), so fpga/mkmem.py
+      // emits one file per lane: INIT_FILE "dmem_init.hex" is read here as
+      // "dmem_init_b0.hex" .. "b3.hex". INIT_STEM carries the name without
+      // its .hex suffix so the lane index can be appended.
+      for (genvar b = 0; b < BYTES; b++) begin : g_lane
+        logic [7:0] mem_b [0:DEPTH-1];
+        logic [7:0] rd_q;
+
+        initial begin
+          if (INIT_STEM != "")
+            $readmemh($sformatf("%s_b%0d.hex", INIT_STEM, b), mem_b);
         end
+
+        always_ff @(posedge clk) begin
+          if (state_q == S_IDLE && accept) begin
+            // Read-first, exactly as before: the non-blocking read samples
+            // the pre-write value even on a lane being written this cycle.
+            rd_q <= mem_b[idx];
+            if (is_write && bus.m_wstrb[b]) mem_b[idx] <= bus.m_wdata[b*8 +: 8];
+          end
+        end
+
+        assign rdata_w[b*8 +: 8] = rd_q;
       end
     end
-  end
+    else begin : g_rom
+      logic [DATA_W-1:0] mem [0:DEPTH-1];
+      logic [DATA_W-1:0] rd_q;
+
+      initial begin
+        if (INIT_FILE != "") $readmemh(INIT_FILE, mem);
+      end
+
+      always_ff @(posedge clk) begin
+        if (state_q == S_IDLE && accept) rd_q <= mem[idx];
+      end
+
+      assign rdata_w = rd_q;
+    end
+  endgenerate
 
   assign bus.s_ready = (state_q == S_RESP)
                        && bus.m_valid
                        && !bus.m_flush
                        && (bus.m_addr == req_addr_q);
-  assign bus.s_rdata = rdata_q;
+  assign bus.s_rdata = rdata_w;
 
 endmodule

@@ -129,6 +129,18 @@ module lsu (
   assign dmem_if.m_addr   = mem_addr;
   assign dmem_if.m_wdata  = wdata_aligned;
   assign dmem_if.m_wstrb  = wstrb;
+  // The data side never withdraws a request: this stage has no flush input,
+  // and valid_q only clears on s_ready, so a request stays up until the
+  // slave answers it. m_flush therefore ties low -- but it must be DRIVEN,
+  // not left dangling. Undriven, it is a don't-care that synthesis is free
+  // to fold to 1, which makes the slave's `accept = m_valid && !m_flush`
+  // constant-false and lets opt delete the entire data memory as dead. That
+  // is exactly what happened to fpga/rtl/bram_slave.sv's DMEM instance: the
+  // 2048x32 array vanished before the memory passes ever saw it, so loads
+  // would have returned a constant on hardware. Simulation could not catch
+  // it -- the cocotb dmem driver never reads m_flush, and bram_slave is not
+  // instantiated in the sim testbench at all.
+  assign dmem_if.m_flush  = 1'b0;
 
   // ───────────────────────────────────────────────
   // Stall back to ISSUE

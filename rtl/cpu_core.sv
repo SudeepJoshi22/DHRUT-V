@@ -174,7 +174,30 @@ module cpu_core (
   // ───────────────────────────────────────────────
   // Branch Prediction Unit (BPU)
   // ───────────────────────────────────────────────
-  bpu BPU (
+  // TABLE_DEPTH is sized for the FPGA, not for peak IPC. bpu.sv holds a
+  // 66-bit entry (32-bit tag + 32-bit target + 2-bit counter) in a PACKED
+  // array with an async reset over every entry, so it can never infer as
+  // BSRAM or LUT-RAM: it becomes flip-flops plus two TABLE_DEPTH:1 x 66-bit
+  // read mux trees and a TABLE_DEPTH-way write decoder. At the 256-entry
+  // default that is 16,896 FFs -- 85% of the entire design's registers --
+  // and the mux trees dominate LUT usage. cpu_top came out 3.4x over the
+  // GW2AR-18's 20,736 LUTs almost entirely because of this one array.
+  //
+  // Shrinking the table cannot change ISA behaviour: a predictor only
+  // affects how often the redirect path corrects a guess, never the
+  // architectural result, so the retired-instruction trace stays identical
+  // to Spike. Only IPC moves. Raise it again on a larger part.
+  bpu #(
+    .TABLE_DEPTH (32),
+    .INDEX_WIDTH (5),     // must remain $clog2(TABLE_DEPTH)
+    // 10-bit tag instead of the full 32-bit PC. Two branches now collide
+    // only if they share an index AND their PC[16:7] match -- i.e. they are
+    // 128 KB apart -- which no program this part can hold will do. It drops
+    // 22 bits per entry from both the storage and the read mux tree, and
+    // the mux tree is what actually costs: the BPU synthesised to 9,598
+    // muxes against only 2,112 flip-flops.
+    .TAG_WIDTH   (10)
+  ) BPU (
     .clk                 (clk),
     .rst_n               (rst_n),
     .i_is_branch_pred    (bpu_pred_is_branch),

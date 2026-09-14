@@ -36,7 +36,15 @@ import riscv_uop_pkg::*;
 module bpu #(
     parameter int TABLE_DEPTH = 256,
     parameter int INDEX_WIDTH = 8,  // $clog2(TABLE_DEPTH)
-    parameter int XLEN = 32
+    parameter int XLEN = 32,
+    // Bits of PC kept as the hit tag. XLEN stores the whole PC, so a hit is
+    // exact and only conflict misses are possible. A narrower tag makes the
+    // entry (and the mux tree that reads it) smaller at the cost of false
+    // hits between two branches sharing the same index AND the same low tag
+    // bits -- which predicts the wrong target. That is a mispredict, not a
+    // wrong result: Issue re-resolves every branch and redirects on any
+    // mismatch, exactly as the header note says. Costs cycles only.
+    parameter int TAG_WIDTH = XLEN
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -62,10 +70,17 @@ module bpu #(
     } bhu_state_t;
 
     // Branch History Table entry
+    // Tag slice: PC[1:0] is always 0 for RV32 and PC[INDEX_WIDTH+1:2] is the
+    // index itself, so the useful tag starts above the index.
+    localparam int TAG_LSB = INDEX_WIDTH + 2;
+    localparam int TAG_HI  = (TAG_LSB + TAG_WIDTH > XLEN) ? XLEN - 1
+                                                          : TAG_LSB + TAG_WIDTH - 1;
+    localparam int TAG_W   = TAG_HI - TAG_LSB + 1;
+
     typedef struct packed {
-        logic [XLEN-1:0] branch_pc;
-        logic [XLEN-1:0] target_pc;
-        bhu_state_t      state;
+        logic [TAG_W-1:0] tag;
+        logic [XLEN-1:0]  target_pc;
+        bhu_state_t       state;
     } bhu_entry_t;
 
     // Table arrays
@@ -93,12 +108,12 @@ module bpu #(
     assign upd_idx  = i_branch_pc_update[INDEX_WIDTH+1:2];
 
     // Check if we have a valid entry for prediction (hit)
-    assign pred_hit = (bhu[pred_idx].branch_pc == i_branch_pc_pred) && i_is_branch_pred;
+    assign pred_hit = (bhu[pred_idx].tag == i_branch_pc_pred[TAG_HI:TAG_LSB]) && i_is_branch_pred;
     // Read the entry for prediction (always read, we'll use conditionally)
     assign pred_bhu_entry = bhu[pred_idx];
 
     // Check if we have a valid entry for update (hit)
-    assign upd_hit = (bhu[upd_idx].branch_pc == i_branch_pc_update) && i_update_valid;
+    assign upd_hit = (bhu[upd_idx].tag == i_branch_pc_update[TAG_HI:TAG_LSB]) && i_update_valid;
     // Read the entry for update (always read)
     assign upd_bhu_entry = bhu[upd_idx];
 
@@ -150,7 +165,7 @@ module bpu #(
         if (!rst_n) begin
             // Reset all entries to WNT (weakly not-taken) and zero PCs
             for (int i = 0; i < TABLE_DEPTH; i++) begin
-                bhu[i].branch_pc  <= '0;
+                bhu[i].tag        <= '0;
                 bhu[i].target_pc  <= '0;
                 bhu[i].state      <= WNT;
             end
@@ -161,7 +176,7 @@ module bpu #(
             end
 
             if (alloc_fire && !alloc_collides) begin
-                bhu[pred_idx].branch_pc <= i_branch_pc_pred;
+                bhu[pred_idx].tag       <= i_branch_pc_pred[TAG_HI:TAG_LSB];
                 bhu[pred_idx].target_pc <= i_offset_pc_pred;
                 bhu[pred_idx].state     <= alloc_state;
             end
@@ -179,11 +194,14 @@ module bpu #(
         (bhu[upd_idx].state inside {SNT, WNT, WT, ST})
     ) else $error("BPU: Invalid state in table at update index %0d", upd_idx);
 
-    // A hit means the tag matched, so the stored target must be the
-    // target we would compute for that PC. If this fires, an entry has
-    // been trained with a target belonging to a different branch.
+    // A hit means the stored tag matched the incoming PC's tag slice. With
+    // TAG_WIDTH < XLEN this is deliberately weaker than full-PC equality:
+    // two branches sharing an index and a tag slice alias, and the second
+    // one gets the first's target. That is a mispredict, corrected by
+    // Issue's redirect -- so the property to check is tag equality, not PC
+    // equality. At the default TAG_WIDTH = XLEN the two coincide.
     assert_hit_implies_tag_match: assert property (@(posedge clk) disable iff (!rst_n)
-        pred_hit |-> (bhu[pred_idx].branch_pc == i_branch_pc_pred)
+        pred_hit |-> (bhu[pred_idx].tag == i_branch_pc_pred[TAG_HI:TAG_LSB])
     ) else $error("BPU: hit with mismatched tag at index %0d (pc=0x%h)", pred_idx, i_branch_pc_pred);
 
     // The two writers must never both commit to one entry in a cycle.

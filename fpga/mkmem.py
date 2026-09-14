@@ -133,10 +133,24 @@ def main():
     dpath = args.outdir / "dmem_init.hex"
     write_hex(ipath, imem, 8)
     write_hex(dpath, dmem, 4)
+
+    # Per-byte-lane dmem images. fpga/rtl/bram_slave.sv splits the writable
+    # array into BYTES byte-wide memories so that each is written as a WHOLE
+    # word under its own strobe -- Yosys' Gowin BRAM rules have no mapping
+    # for a read plus a byte-masked PARTIAL write, and without the split the
+    # entire 2048x32 array lands in fabric instead of BSRAM. Each lane loads
+    # its own file because splitting a word-wide $readmemh inside an initial
+    # block does not elaborate. dmem_init.hex above is kept for reference and
+    # for any consumer that still wants the word-wide view.
+    for b in range(4):
+        lane = [(w >> (8 * b)) & 0xFF for w in dmem]
+        write_hex(args.outdir / f"dmem_init_b{b}.hex", lane, 1)
     print(f"wrote  : {ipath} ({args.imem_depth} x 64-bit, "
           f"{args.imem_depth * 8 // 1024} KB)")
     print(f"wrote  : {dpath} ({args.dmem_depth} x 32-bit, "
           f"{args.dmem_depth * 4 // 1024} KB)")
+    print(f"wrote  : {args.outdir}/dmem_init_b0..b3.hex "
+          f"(byte lanes, {args.dmem_depth} x 8-bit each)")
 
     if args.elf:
         th = tohost_from_elf(args.elf)
