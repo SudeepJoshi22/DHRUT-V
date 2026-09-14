@@ -131,8 +131,25 @@ TEST_DIR = ../tests/build/$(TEST)
 mem:
 	./mkmem.py $(TEST_DIR)/$(TEST).hex --elf $(TEST_DIR)/$(TEST).elf --outdir .
 
+# ---- Cleaning ---------------------------------------------------------------
+# clean      -- just $(TOP)'s outputs, so other tops' bitstreams survive
+# clean-mem  -- the generated program images
+# clean-all  -- everything this directory generates (tens of MB): every top's
+#               netlist/packed netlist/bitstream, every tool log, the formal
+#               work directories and the area baselines
+#
+# Sources are never touched: *.v *.sv *.f *.cst *.py *.md, and formal/*.sby
+# and formal/*.sv (only formal/<task>/ work DIRECTORIES are removed).
 clean:
 	rm -f $(JSON) $(PACK_JSON) $(BITSTREAM)
+
+clean-all: clean-mem
+	@echo "Removing generated files in $(CURDIR):"
+	@ls -1 *.json *.fs *.log 2>/dev/null | sed 's/^/    /' || true
+	@ls -d formal/*/ 2>/dev/null | sed 's/^/    /' || true
+	@rm -f *.json *.fs *.log
+	@rm -rf formal/*/
+	@echo "Done. Sources untouched."
 
 # ---- Per-module area report -------------------------------------------------
 # Ranks every module by LUT usage so area work can be aimed rather than
@@ -152,4 +169,4 @@ area:
 clean-mem:
 	rm -f imem_init.hex dmem_init.hex dmem_init_b*.hex
 
-.PHONY: check synth bitstream flash flash-nv clean clean-mem mem area
+.PHONY: check synth bitstream flash flash-nv clean clean-all clean-mem mem area

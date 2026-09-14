@@ -126,6 +126,7 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `mem` | program image -> `imem_init.hex` / `dmem_init*.hex` | no |
 | `area` | per-module LUT/FF ranking + budget verdict | no |
 | `clean` | remove `<TOP>`'s `.json` / `.pack.json` / `.fs` | no |
+| `clean-all` | remove **everything** generated here -- all tops, all logs, formal work dirs, area baselines (tens of MB) | no |
 | `clean-mem` | remove the generated memory images | no |
 
 ### Variables
@@ -168,6 +169,10 @@ make flash-nv TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 
 # Sanity-check the toolchain on something trivial before blaming the CPU
 make bitstream TOP=blink FILELIST=blink.f CST=tangnano20k.cst
+
+# Reclaim disk: logs and bitstreams add up fast (43 MB after one session).
+# Lists what it removes; sources are never touched.
+make clean-all
 
 # NOTE: you cannot elaborate cpu_core on its own -- `make check TOP=cpu_core
 # FILELIST=cpu_filelist.f` fails with "unconnected interface port 'imem_if'",
