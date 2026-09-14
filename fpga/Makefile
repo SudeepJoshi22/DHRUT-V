@@ -3,8 +3,9 @@
 #
 # ---- Quick resource/synthesis check (no PnR, no .cst needed) --------------
 #   make check TOP=<top_module> FILELIST=<file.f>
-#     e.g. make check TOP=cpu_core FILELIST=cpu_core.f
-#          make check TOP=blink    FILELIST=blink.f
+#     e.g. make check TOP=blink   FILELIST=blink.f
+#          make check TOP=cpu_top FILELIST=cpu_top_filelist.f
+#     NOT cpu_core: it has interface ports and cannot be a top (see below).
 #   -> elaborates + maps to Gowin primitives + prints `stat` (LUT/FF/BRAM/DSP).
 #      Use this for anything that doesn't have physical top-level ports yet.
 #
@@ -141,6 +142,6 @@ area:
 	./area_report.py --filelist $(AREA_FILELIST) $(ARGS)
 
 clean-mem:
-	rm -f imem_init.hex dmem_init.hex
+	rm -f imem_init.hex dmem_init.hex dmem_init_b*.hex
 
-.PHONY: check synth bitstream flash flash-nv clean clean-mem mem
+.PHONY: check synth bitstream flash flash-nv clean clean-mem mem area
