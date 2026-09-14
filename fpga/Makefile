@@ -106,6 +106,21 @@ mem:
 clean:
 	rm -f $(JSON) $(PACK_JSON) $(BITSTREAM)
 
+# ---- Per-module area report -------------------------------------------------
+# Ranks every module by LUT usage so area work can be aimed rather than
+# guessed. Always runs synthesis to completion: cell counts taken before
+# techmap do NOT predict post-ABC9 LUTs (shrinking the fetch queue once looked
+# like -2,771 cells pre-map and turned out to be +2,750 LUTs after).
+#
+#   make area                     -> rank modules, print the budget verdict
+#   make area ARGS="--save b.json"    -> record a baseline
+#   make area ARGS="--compare b.json" -> per-module delta vs that baseline
+# FILELIST defaults to blink.f for the other targets, which is not what you
+# want here -- area work is always about the CPU.
+AREA_FILELIST ?= cpu_top_filelist.f
+area:
+	./area_report.py --filelist $(AREA_FILELIST) $(ARGS)
+
 clean-mem:
 	rm -f imem_init.hex dmem_init.hex
 

@@ -1,0 +1,13 @@
+[options]
+mode bmc
+depth 1
+
+[engines]
+smtbmc z3
+
+[script]
+read_slang lsu_equiv.sv --top lsu_dp_equiv
+prep -top lsu_dp_equiv
+
+[files]
+lsu_equiv.sv

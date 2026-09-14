@@ -89,38 +89,52 @@ module lsu (
   logic [31:0] wdata_aligned;
   logic [3:0]  wstrb;
 
+  // One barrel shifter, not one per access size. Written as a case arm per
+  // size, each with its own `<<`, this inferred a separate 32-bit shifter
+  // for the byte path and another for the halfword path. The shift amount
+  // is the same expression in both, so the datapath is: mask the operand to
+  // its size, then shift once.
+  //
+  // The strobe is likewise a single shift. A byte store is 4'b0001 shifted
+  // by the byte offset; a halfword is 4'b0011 shifted by the same offset,
+  // which yields 4'b0011 at offset 0 and 4'b1100 at offset 2 -- exactly the
+  // old table, and 4'b0110 / 4'b1000 at the misaligned offsets 1 and 3,
+  // which the old code mapped to 4'b0000 via `default`. That difference is
+  // preserved explicitly by h_aligned below rather than left to chance.
+  logic [1:0]  byte_off;
+  logic [31:0] store_masked;
+  logic [3:0]  strb_base;
+  logic        h_aligned;
+
+  assign byte_off  = mem_addr[1:0];
+  assign h_aligned = (byte_off[0] == 1'b0);   // halfword needs even offset
+
   always_comb begin
-    wstrb         = 4'b0000;
-    wdata_aligned = store_data_q;
-
-    if (uop_q.is_store) begin
-      case (uop_q.lsu_access_size)
-        2'b00: begin  // byte
-          case (mem_addr[1:0])
-            2'b00: wstrb = 4'b0001;
-            2'b01: wstrb = 4'b0010;
-            2'b10: wstrb = 4'b0100;
-            2'b11: wstrb = 4'b1000;
-          endcase
-          wdata_aligned = {24'b0, store_data_q[7:0]} << (mem_addr[1:0] * 8);
-        end
-
-        2'b01: begin  // halfword
-          case (mem_addr[1:0])
-            2'b00: wstrb = 4'b0011;
-            2'b10: wstrb = 4'b1100;
-            default: wstrb = 4'b0000;
-          endcase
-          wdata_aligned = {16'b0, store_data_q[15:0]} << (mem_addr[1:0] * 8);
-        end
-
-        2'b10: begin  // word
-          wstrb = 4'b1111;
-        end
-        default: wstrb = 4'b0000;
-      endcase
-    end
+    unique case (uop_q.lsu_access_size)
+      2'b00:   store_masked = {24'b0, store_data_q[7:0]};
+      2'b01:   store_masked = {16'b0, store_data_q[15:0]};
+      default: store_masked = store_data_q;
+    endcase
   end
+
+  always_comb begin
+    unique case (uop_q.lsu_access_size)
+      2'b00:   strb_base = 4'b0001;
+      2'b01:   strb_base = h_aligned ? 4'b0011 : 4'b0000;
+      2'b10:   strb_base = 4'b1111;
+      default: strb_base = 4'b0000;
+    endcase
+  end
+
+  // Word accesses are not shifted (the old code never shifted them), so
+  // the shift amount is forced to zero for size 2'b10.
+  logic [1:0] shift_off;
+  assign shift_off = (uop_q.lsu_access_size == 2'b10) ? 2'b00 : byte_off;
+
+  assign wdata_aligned = uop_q.is_store ? (store_masked << {shift_off, 3'b000})
+                                        : store_data_q;
+  assign wstrb         = uop_q.is_store ? (strb_base   <<  shift_off)
+                                        : 4'b0000;
 
   // ───────────────────────────────────────────────
   // Drive memory interface
@@ -156,32 +170,29 @@ module lsu (
   // ───────────────────────────────────────────────
   // Load data handling (sign/zero extension)
   // ───────────────────────────────────────────────
+  // Mirror of the store path: ONE right-shift aligns the addressed lane to
+  // bit 0, then one extension stage. Previously each (size, offset) pair
+  // was its own case arm with its own slice and its own sign-extend, so the
+  // byte path alone built four 32-bit result muxes.
+  //
+  // The misaligned-halfword result (offset 1 or 3) stays 32'b0, as before.
+  logic [31:0] load_shifted;
+  logic        sx;
+
+  assign load_shifted = dmem_if.s_rdata >> {byte_off, 3'b000};
+  assign sx           = uop_q.lsu_sign_extend;
+
   always_comb begin
+    // Default matches the old code's untaken-if fall-through.
     o_load_data = dmem_if.s_rdata;
 
     if (uop_q.is_load && o_valid) begin
-      case (uop_q.lsu_access_size)
-        2'b00: begin  // byte
-          case (mem_addr[1:0])
-            2'b00: o_load_data = {{24{uop_q.lsu_sign_extend & dmem_if.s_rdata[7]}},   dmem_if.s_rdata[7:0]};
-            2'b01: o_load_data = {{24{uop_q.lsu_sign_extend & dmem_if.s_rdata[15]}},  dmem_if.s_rdata[15:8]};
-            2'b10: o_load_data = {{24{uop_q.lsu_sign_extend & dmem_if.s_rdata[23]}},  dmem_if.s_rdata[23:16]};
-            2'b11: o_load_data = {{24{uop_q.lsu_sign_extend & dmem_if.s_rdata[31]}},  dmem_if.s_rdata[31:24]};
-          endcase
-        end
-
-        2'b01: begin  // halfword
-          case (mem_addr[1:0])
-            2'b00: o_load_data = {{16{uop_q.lsu_sign_extend & dmem_if.s_rdata[15]}},  dmem_if.s_rdata[15:0]};
-            2'b10: o_load_data = {{16{uop_q.lsu_sign_extend & dmem_if.s_rdata[31]}},  dmem_if.s_rdata[31:16]};
-            default: o_load_data = 32'b0;
-          endcase
-        end
-
-        2'b10: begin  // word
-          o_load_data = dmem_if.s_rdata;
-        end
-
+      unique case (uop_q.lsu_access_size)
+        2'b00:   o_load_data = {{24{sx & load_shifted[7]}},  load_shifted[7:0]};
+        2'b01:   o_load_data = h_aligned
+                               ? {{16{sx & load_shifted[15]}}, load_shifted[15:0]}
+                               : 32'b0;
+        2'b10:   o_load_data = dmem_if.s_rdata;
         default: o_load_data = 32'b0;
       endcase
     end

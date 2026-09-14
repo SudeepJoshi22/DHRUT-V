@@ -1,0 +1,13 @@
+[options]
+mode bmc
+depth 1
+
+[engines]
+smtbmc z3
+
+[script]
+read_slang alu_equiv.sv --top alu_equiv
+prep -top alu_equiv
+
+[files]
+alu_equiv.sv
