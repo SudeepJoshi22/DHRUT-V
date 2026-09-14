@@ -188,8 +188,8 @@ module cpu_core (
   // architectural result, so the retired-instruction trace stays identical
   // to Spike. Only IPC moves. Raise it again on a larger part.
   bpu #(
-    .TABLE_DEPTH (32),
-    .INDEX_WIDTH (5),     // must remain $clog2(TABLE_DEPTH)
+    .TABLE_DEPTH (16),
+    .INDEX_WIDTH (4),     // must remain $clog2(TABLE_DEPTH)
     // 10-bit tag instead of the full 32-bit PC. Two branches now collide
     // only if they share an index AND their PC[16:7] match -- i.e. they are
     // 128 KB apart -- which no program this part can hold will do. It drops
