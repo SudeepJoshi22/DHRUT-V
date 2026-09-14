@@ -80,6 +80,12 @@ REPO = HERE.parent
 # overstates LUT pressure.
 BUDGET = {"lut": 20736, "alu": 15552, "ff": 15552, "bsram": 46, "lutram": 648}
 
+# Must match fpga/Makefile's SYNTH_OPTS, or the report measures a different
+# design than `make bitstream` builds. -nowidelut maps to plain LUT4s instead
+# of the MUX2_LUT5..8 tree: smaller here (17,015 -> 14,257) and far easier to
+# route, since wide LUTs tie LUT4s into clusters that must be placed together.
+SYNTH_OPTS = os.environ.get("SYNTH_OPTS", "-nowidelut")
+
 LUT_CELLS = re.compile(r"^LUT[1-4]$")
 ALU_CELLS = re.compile(r"^ALU$")
 FF_CELLS = re.compile(r"^DFF[NSRPCE]*$")
@@ -138,10 +144,11 @@ def run_yosys(files, keep_hierarchy):
         # flags are required to get per-module numbers.
         script = (
             f"read_slang {joined} --top cpu_top --keep-hierarchy; "
-            f"synth_gowin -top cpu_top -noflatten; stat"
+            f"synth_gowin -top cpu_top {SYNTH_OPTS} -noflatten; stat"
         )
     else:
-        script = f"read_slang {joined} --top cpu_top; synth_gowin -top cpu_top; stat"
+        script = (f"read_slang {joined} --top cpu_top; "
+                  f"synth_gowin -top cpu_top {SYNTH_OPTS}; stat")
 
     proc = subprocess.run(
         [find_yosys(), "-m", "slang", "-p", script],

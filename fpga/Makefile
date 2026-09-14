@@ -43,6 +43,13 @@
 DEVICE     = GW2AR-LV18QN88C8/I7
 FAMILY     = GW2A-18C
 
+# The Tang Nano 20K's oscillator. WITHOUT this nextpnr assumes 12 MHz, reports
+# "PASS at 12.00 MHz", and never checks the design against the clock it will
+# actually run at -- the Fmax it prints is then an informational by-product
+# rather than a met constraint. Set it so timing is genuinely verified, and so
+# the placer optimises for the real target.
+FREQ_MHZ   = 27
+
 # Defaults — override any of these on the command line, e.g.:
 #   make check TOP=cpu_core FILELIST=cpu_core.f
 TOP        ?= blink
@@ -62,21 +69,33 @@ BITSTREAM  = $(TOP).fs
 # doesn't need to be patched to work here.
 BUILD_FILES = FILES=$$(grep -v '^[[:space:]]*\#' $(FILELIST) | grep -v '^[[:space:]]*$$' | tr '\n' ' ');
 
+# -nowidelut: map to plain LUT4s instead of the MUX2_LUT5..8 wide-LUT tree.
+# Counter-intuitively this is smaller AND easier to route on this design:
+#   default     LUT4 17015  MUX2_LUT 5706
+#   -nowidelut  LUT4 14257  MUX2_LUT    0
+# Wide LUTs also tie groups of LUT4s into clusters that must be placed
+# adjacently, and at 87% utilisation that congestion stopped nextpnr's router
+# converging (overused wires climbed 18 -> 426 over 136k iterations). Removing
+# them drops utilisation to ~69% and frees the placer.
+# Override with SYNTH_OPTS= to compare.
+SYNTH_OPTS ?= -nowidelut
+
 check:
-	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP); stat"
+	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS); stat"
 
 synth:
-	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) -json $(JSON); stat"
+	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS) -json $(JSON); stat"
 
 # ---- Full flow: synth -> PnR -> pack -> (optionally) flash -----------------
 $(JSON): $(FILELIST)
-	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) -json $(JSON)"
+	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS) -json $(JSON)"
 
 $(PACK_JSON): $(JSON) $(CST)
 	nextpnr-himbaechel \
 		--json $(JSON) \
 		--write $(PACK_JSON) \
 		--device $(DEVICE) \
+		--freq $(FREQ_MHZ) \
 		--vopt family=$(FAMILY) \
 		--vopt cst=$(CST)
 
