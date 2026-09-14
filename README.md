@@ -74,6 +74,10 @@ cd DHRUT-V
 # Run the installer (installs toolchain, spike, verilator, and venv)
 ./tools/install.sh
 
+# FPGA flow only (yosys, nextpnr, gowin_pack, openFPGALoader, SymbiYosys).
+# Kept separate: ~1.5 GB, and not needed to run the simulation tests.
+./tools/install.sh fpga-tools
+
 # Reload shell to update PATH
 source ~/.bashrc
 ```
@@ -164,7 +168,7 @@ DHRUT-V/
 │   ├── linker.ld           # Linker script for bare-metal
 │   └── build/              # Generated HEX/ELF/DIS artifacts
 ├── tools/                  # Tooling & Scripts
-│   ├── install.sh          # Full environment setup
+│   ├── install.sh          # Environment setup ('fpga-tools' for the FPGA flow)
 │   ├── lint.sh             # Verilator linting script
 │   ├── simulate.sh         # Simulation entry point
 │   └── riscof/             # RISCOF configuration and plugins

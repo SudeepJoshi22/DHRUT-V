@@ -14,10 +14,19 @@ XPACK_GCC_VER="15.2.0-1"
 XPACK_GCC_TAR="xpack-riscv-none-elf-gcc-${XPACK_GCC_VER}-linux-x64.tar.gz"
 XPACK_GCC_URL="https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${XPACK_GCC_VER}/${XPACK_GCC_TAR}"
 
+# OSS CAD Suite (yosys + slang, nextpnr-himbaechel, gowin_pack,
+# openFPGALoader, SymbiYosys/z3). Only needed for the FPGA flow, so it is NOT
+# part of the default install -- see the `fpga-tools` subcommand below.
+OSS_CAD_VER="20260821"
+OSS_CAD_TAG="2026-08-21"
+OSS_CAD_TAR="oss-cad-suite-linux-x64-${OSS_CAD_VER}.tgz"
+OSS_CAD_URL="https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${OSS_CAD_TAG}/${OSS_CAD_TAR}"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 TOOLS_DIR="$REPO_ROOT/tools"
 INSTALL_PREFIX="$TOOLS_DIR/toolchain"
 VENV_DIR="$REPO_ROOT/venv"
+OSS_CAD_DIR="$TOOLS_DIR/oss-cad-suite"
 
 GCC_DIR="$INSTALL_PREFIX/xpack-riscv-none-elf-gcc-${XPACK_GCC_VER}"
 
@@ -31,6 +40,76 @@ VERILATOR_INSTALL_DIR="$TOOLS_DIR/verilator-install"   # ←←← MOVED HERE (f
 
 mkdir -p "$TOOLS_DIR" "$INSTALL_PREFIX"
 
+# -------------------------------------------------------------------
+# Subcommands
+# -------------------------------------------------------------------
+usage() {
+    cat <<USAGE
+Usage: tools/install.sh [command]
+
+  (no command)   Simulation toolchain: xPack RISC-V GCC, Spike, Verilator,
+                 and the Python venv (cocotb / pyuvm / riscof). This is what
+                 you need to run tests/ and tools/simulate.sh.
+
+  fpga-tools     OSS CAD Suite only -- yosys + slang, nextpnr-himbaechel,
+                 gowin_pack, openFPGALoader, SymbiYosys. Needed for fpga/
+                 (synthesis, bitstream, formal proofs) and nothing else.
+                 ~1.5 GB download, unpacked into tools/oss-cad-suite/.
+
+  all            Both of the above.
+
+The FPGA tools are deliberately a separate command: they are a large download
+that most work on this repo does not need, and their bundled Verilator/Python
+would shadow the venv's if both were on PATH at once. Activate exactly one:
+
+  source venv/bin/activate                  # simulation
+  source tools/oss-cad-suite/environment    # FPGA / synthesis
+USAGE
+}
+
+install_fpga_tools() {
+    if [ -x "$OSS_CAD_DIR/bin/yosys" ]; then
+        echo -e "${GREEN}OSS CAD Suite already present at $OSS_CAD_DIR${NC}"
+        echo "  $("$OSS_CAD_DIR/bin/yosys" -V 2>/dev/null | head -1)"
+        return 0
+    fi
+    echo -e "${YELLOW}Downloading OSS CAD Suite ${OSS_CAD_VER} (~1.5 GB)...${NC}"
+    # Unpacks to a top-level oss-cad-suite/ directory, so extract into tools/.
+    wget --show-progress -O - "$OSS_CAD_URL" | tar -xz -C "$TOOLS_DIR"
+    if [ ! -x "$OSS_CAD_DIR/bin/yosys" ]; then
+        echo -e "${RED}✗ OSS CAD Suite did not unpack as expected${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ OSS CAD Suite installed at $OSS_CAD_DIR${NC}"
+    echo ""
+    echo "  source tools/oss-cad-suite/environment"
+    echo "  cd fpga && make check TOP=cpu_top FILELIST=cpu_top_filelist.f"
+}
+
+CMD="${1:-sim}"
+case "$CMD" in
+    fpga-tools)
+        install_fpga_tools
+        exit 0
+        ;;
+    all)
+        install_fpga_tools
+        echo ""
+        ;;
+    sim|"")
+        ;;
+    -h|--help|help)
+        usage
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $CMD${NC}"
+        echo ""
+        usage
+        exit 1
+        ;;
+esac
+
 echo -e "${GREEN}=== DHRUT-V Setup Script (Ubuntu/Debian only) ===${NC}"
 echo "This script installs:"
 echo " • xPack RISC-V GCC"
@@ -40,6 +119,9 @@ echo " • Python venv with cocotb, pyuvm, riscof"
 echo ""
 echo "Install location: $INSTALL_PREFIX (repo-local)"
 echo "Venv location: $VENV_DIR"
+echo ""
+echo "FPGA tools (yosys/nextpnr/gowin_pack) are NOT installed by this command."
+echo "Run './tools/install.sh fpga-tools' if you need the fpga/ flow."
 echo ""
 
 # -------------------------------------------------------------------
@@ -147,6 +229,13 @@ echo "Now available:"
 echo "  spike --isa=rv32imac your.elf"
 echo "  verilator --version"
 echo "  riscv-none-elf-gcc --version"
+echo ""
+echo "For the FPGA flow (synthesis, bitstream, formal):"
+echo "  ./tools/install.sh fpga-tools"
+echo "  source tools/oss-cad-suite/environment"
+echo ""
+echo "Activate one environment at a time -- OSS CAD Suite ships its own"
+echo "Verilator and Python and will shadow the venv's if both are on PATH."
 echo ""
 echo "Good luck with DHRUT-V"
 echo -e "${GREEN}===========================================================${NC}"
