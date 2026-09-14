@@ -1,0 +1,12 @@
+// Pin probe constraints. Only clk and led0 are known-good pins; `probe` is
+// whatever you are trying to identify.
+IO_LOC "clk" 4;
+IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+IO_LOC "led0" 15;
+IO_PORT "led0" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// The pin under test. 88 is cpu_top.cst's guess for button S1 -- change this
+// number to probe any other pin.
+IO_LOC "probe" 88;
+IO_PORT "probe" IO_TYPE=LVCMOS33 PULL_MODE=UP;

@@ -30,11 +30,27 @@ module cpu_top #(
   // led[5:4]. See the snoop below and tests/asm/fpga_blink.S.
   parameter logic [31:0] LED_ADDR    = 32'h8000_1FFC,
   parameter int    HEARTBEAT_BIT     = 23,          // 27 MHz >> 2^23 ~= 1.6 Hz
-  parameter int    ACTIVITY_BIT      = 21           // fetch-rate blink
+  parameter int    ACTIVITY_BIT      = 21,          // fetch-rate blink
+  // External reset button (S1, pin 88).
+  //
+  // MEASURED ON HARDWARE, not assumed: the pinprobe design (fpga/pinprobe.v)
+  // mirrored this pin onto the known-good led0 and showed it reads 0 when the
+  // button is RELEASED and 1 when PRESSED. The button is therefore ACTIVE
+  // HIGH, which is the opposite of the usual pull-up/press-to-ground wiring
+  // this code originally assumed -- and that inversion held the core in reset
+  // permanently, so the CPU only ran while the button was held down.
+  //
+  // Hence RST_BTN_ACTIVE_LOW = 0. Set it to 1 only for a board where the pin
+  // idles high and the press pulls it to ground.
+  parameter bit    USE_RST_BTN        = 1'b1,
+  parameter bit    RST_BTN_ACTIVE_LOW = 1'b0
 ) (
-  input  logic       clk,        // 27 MHz onboard oscillator
-  input  logic       rst_n_btn,  // onboard button, active low
-  output logic [5:0] led         // onboard LEDs, active low
+  input  logic       clk,      // 27 MHz onboard oscillator
+  // Reset button. NOT active-low despite what a name like rst_n_btn would
+  // suggest -- on this board pressing drives it HIGH. RST_BTN_ACTIVE_LOW
+  // above normalises whichever way it is wired.
+  input  logic       rst_btn,
+  output logic [5:0] led       // onboard LEDs, active low
 );
 
   // ───────────────────────────────────────────────
@@ -49,8 +65,15 @@ module cpu_top #(
     if (!por_cnt[7]) por_cnt <= por_cnt + 8'd1;
   end
 
+  // Button contribution to reset, normalised to active-low, or tied inactive
+  // when the button is not trusted. btn_rst_n == 1 means "not resetting".
+  logic btn_rst_n;
+  assign btn_rst_n = !USE_RST_BTN       ? 1'b1
+                   : RST_BTN_ACTIVE_LOW ? rst_btn
+                                        : ~rst_btn;
+
   logic raw_rst_n;
-  assign raw_rst_n = por_cnt[7] & rst_n_btn;
+  assign raw_rst_n = por_cnt[7] & btn_rst_n;
 
   logic [2:0] rst_sync_q;
   always_ff @(posedge clk or negedge raw_rst_n) begin

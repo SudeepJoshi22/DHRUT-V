@@ -6,9 +6,20 @@
 IO_LOC "clk" 4;
 IO_PORT "clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 
-// Onboard button S1, active low -> external reset
-IO_LOC "rst_n_btn" 88;
-IO_PORT "rst_n_btn" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+// Onboard button S1 -> external reset. CONFIRMED on hardware with the
+// pinprobe design (pinprobe.v), which mirrors this pin onto the known-good
+// led0: the pin reads 0 RELEASED and 1 PRESSED, so the button is ACTIVE HIGH.
+//
+// The port is named rst_btn, not rst_n_btn: there is no _n here. cpu_top.sv
+// sets RST_BTN_ACTIVE_LOW=0 to match. Getting this backwards holds the core
+// in reset permanently and looks exactly like a dead CPU.
+//
+// PULL_MODE=DOWN, not UP: with an active-high button the pin must idle LOW,
+// and the press drives it high. (UP was fighting the board's external
+// pull-down -- it happened to lose, so the level was still right, but there
+// is no reason to leave the two pulling against each other.)
+IO_LOC "rst_btn" 88;
+IO_PORT "rst_btn" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
 
 // Onboard LEDs (active low), bringup status panel:
 //   led[0] heartbeat        -- clock + bitstream alive, independent of the core
@@ -17,8 +28,11 @@ IO_PORT "rst_n_btn" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 //   led[3] tohost == 1      -- PASS
 //   led[5:4] program-driven -- stores to LED_ADDR (tests/asm/fpga_blink.S)
 //
-// PIN NUMBERS BELOW ARE UNVERIFIED: led[1..5] and rst_n_btn were extrapolated
-// from the known-good led0=15 in tangnano20k.cst. Check the board docs.
+// led[0]=15 is known good (tangnano20k.cst, and the pinprobe design drives it).
+// led[1..5] BELOW ARE STILL EXTRAPOLATED from it and unverified -- if the
+// heartbeat on led[0] works but the others stay dark, suspect these numbers
+// before suspecting the CPU. pinprobe.v can check an input pin directly; for
+// these outputs, flashing cpu_top and watching which LEDs move is the test.
 IO_LOC "led[0]" 15;
 IO_LOC "led[1]" 16;
 IO_LOC "led[2]" 17;
