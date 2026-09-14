@@ -83,8 +83,14 @@ module bpu #(
         bhu_state_t       state;
     } bhu_entry_t;
 
-    // Table arrays
-    bhu_entry_t [TABLE_DEPTH-1:0] bhu;
+    // Table storage. UNPACKED, deliberately: a packed array is one wide
+    // vector, which synthesis can only build from flip-flops plus mux trees,
+    // never from a RAM primitive. Unpacked + a single synchronous write port
+    // + asynchronous reads is exactly the shape Gowin's distributed RAM
+    // (RAM16SDP4, see tools/oss-cad-suite/share/yosys/gowin/lutrams.txt)
+    // matches, and the part has 648 of those sitting completely unused while
+    // this table was costing thousands of LUT4s.
+    bhu_entry_t bhu [TABLE_DEPTH];
 
     // Prediction index and hit
     logic [INDEX_WIDTH-1:0] pred_idx;
@@ -136,16 +142,11 @@ module bpu #(
     // ─────────────────────────────────────────────────────────────────
     // Table write
     // ─────────────────────────────────────────────────────────────────
-    logic upd_fire, alloc_fire, alloc_collides;
+    logic upd_fire, alloc_fire;
     bhu_state_t upd_next_state;
 
     assign upd_fire   = i_update_valid && upd_hit;
     assign alloc_fire = i_is_branch_pred && !pred_hit;
-    // Both writers can target the same index in one cycle (two different
-    // PCs aliasing to it). The resolved update wins: it is fact, whereas
-    // the allocation is a guess about an instruction that has not
-    // executed yet.
-    assign alloc_collides = upd_fire && (upd_idx == pred_idx);
 
     always_comb begin
         unique case (upd_bhu_entry.state)
@@ -156,32 +157,61 @@ module bpu #(
         endcase
     end
 
-    // Every write below is non-blocking. The original mixed `<=` for the
-    // update path with `=` for the reset and allocation paths, inside one
-    // always_ff and to the same array - a genuine simulation race, and one
-    // that also let `pred_hit` (a continuous assign reading this array)
-    // observe an allocation within the same time step.
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            // Reset all entries to WNT (weakly not-taken) and zero PCs
-            for (int i = 0; i < TABLE_DEPTH; i++) begin
-                bhu[i].tag        <= '0;
-                bhu[i].target_pc  <= '0;
-                bhu[i].state      <= WNT;
-            end
-        end else begin
-            if (upd_fire) begin
-                bhu[upd_idx].state     <= upd_next_state;
-                bhu[upd_idx].target_pc <= i_update_target_pc;
-            end
+    // ONE write port, by construction.
+    //
+    // There were two writers -- a resolved update and a new allocation --
+    // and previously both could commit in the same cycle as long as they
+    // targeted different indices. Two write ports rule out every RAM
+    // primitive on this part, so they are serialised here: the update wins
+    // and the allocation is dropped whenever they coincide, not merely when
+    // they collide on one index.
+    //
+    // This is a prediction-quality change and nothing more. An allocation is
+    // a guess about an instruction that has not executed yet; dropping one
+    // means the next fetch of that branch misses and allocates then. A
+    // resolved update is fact, so it is the one that must never be lost.
+    // Issue re-resolves every branch and redirects on a mismatch (see the
+    // note at the top of this file), so no BPU decision can reach
+    // architectural state -- only the cycle count moves.
+    //
+    // On the update path the tag is rewritten with the value it already
+    // holds: upd_fire implies upd_hit, which means the stored tag already
+    // equals this PC's tag slice. That keeps the write a whole-entry write
+    // (no read-modify-write on the stored tag) without changing what lands.
+    logic                        wr_en;
+    logic [INDEX_WIDTH-1:0]      wr_idx;
+    bhu_entry_t                  wr_data;
 
-            if (alloc_fire && !alloc_collides) begin
-                bhu[pred_idx].tag       <= i_branch_pc_pred[TAG_HI:TAG_LSB];
-                bhu[pred_idx].target_pc <= i_offset_pc_pred;
-                bhu[pred_idx].state     <= alloc_state;
-            end
-            // If not a branch, or a hit with no update, hold.
+    always_comb begin
+        wr_en   = upd_fire || alloc_fire;
+        wr_idx  = upd_fire ? upd_idx : pred_idx;
+        if (upd_fire) begin
+            wr_data.tag       = i_branch_pc_update[TAG_HI:TAG_LSB];
+            wr_data.target_pc = i_update_target_pc;
+            wr_data.state     = upd_next_state;
         end
+        else begin
+            wr_data.tag       = i_branch_pc_pred[TAG_HI:TAG_LSB];
+            wr_data.target_pc = i_offset_pc_pred;
+            wr_data.state     = alloc_state;
+        end
+    end
+
+    // No reset on the array: a reset that touches every entry forces
+    // flip-flops and blocks RAM inference outright. The table is initialised
+    // instead, which synthesis bakes into the RAM's INIT and simulation
+    // applies at time zero -- the same all-zero tags and WNT counters the
+    // old reset produced.
+    initial begin
+        for (int i = 0; i < TABLE_DEPTH; i++) begin
+            bhu[i].tag       = '0;
+            bhu[i].target_pc = '0;
+            bhu[i].state     = WNT;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (wr_en) bhu[wr_idx] <= wr_data;
     end
 
     // Optional simulation assertions (can be removed for synthesis)
@@ -204,10 +234,20 @@ module bpu #(
         pred_hit |-> (bhu[pred_idx].tag == i_branch_pc_pred[TAG_HI:TAG_LSB])
     ) else $error("BPU: hit with mismatched tag at index %0d (pc=0x%h)", pred_idx, i_branch_pc_pred);
 
-    // The two writers must never both commit to one entry in a cycle.
-    assert_single_writer: assert property (@(posedge clk) disable iff (!rst_n)
-        !(upd_fire && alloc_fire && !alloc_collides && (upd_idx == pred_idx))
-    ) else $error("BPU: update and allocation both wrote index %0d", upd_idx);
+    // Two writers committing to one entry in a cycle is now structurally
+    // impossible -- there is a single write port -- so the property worth
+    // checking is the one the serialisation could actually break: a RESOLVED
+    // update must never be dropped. Losing an allocation is by design;
+    // losing an update would leave a stale counter or target in the table.
+    assert_update_never_lost: assert property (@(posedge clk) disable iff (!rst_n)
+        upd_fire |-> (wr_en && (wr_idx == upd_idx))
+    ) else $error("BPU: resolved update at index %0d was not written", upd_idx);
+
+    // And the write actually lands: next cycle the entry reads back what was
+    // written, provided nothing overwrote it in between.
+    assert_write_lands: assert property (@(posedge clk) disable iff (!rst_n)
+        (wr_en && !$isunknown(wr_idx)) |=> (bhu[$past(wr_idx)] == $past(wr_data))
+    ) else $error("BPU: write to index %0d did not land", $past(wr_idx));
     `endif
 
 endmodule

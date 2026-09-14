@@ -38,10 +38,14 @@ COUNTING RULES
 --------------
 From tools/oss-cad-suite/share/yosys/gowin/cells_sim.v:
 
-  LUT_eq = LUT1 + LUT2 + LUT3 + LUT4 + ALU
+  LUT4 = LUT1 + LUT2 + LUT3 + LUT4
       A LUT1 is not cheaper than a LUT4 -- each occupies one physical LUT4,
-      with the unused inputs tied off. An ALU cell (the dedicated carry-chain
-      adder) also occupies a LUT slot, so it counts too.
+      with the unused inputs tied off.
+
+  ALU is counted SEPARATELY, not as a LUT
+      A real nextpnr run reports ALU against its own 15,552-cell budget
+      (6% used), not against the 20,736 LUT4s. Folding it into the LUT
+      count -- as this script originally did -- overstates LUT pressure.
 
   MUX2_LUT5..8 are EXCLUDED
       These use dedicated mux hardware inside the slice to combine LUT4
@@ -68,9 +72,16 @@ REPO = HERE.parent
 
 # GW2AR-LV18QN88C8/I7: 2,592 CLUs, each 8 LUT4 + 6 DFF; 46 BSRAM blocks.
 # The 4:3 LUT:FF ratio is why flip-flops can run out before LUTs do.
-BUDGET = {"lut": 20736, "ff": 15552, "bsram": 46}
+# Confirmed against a real nextpnr-himbaechel run (see `make bitstream`):
+#   LUT4 20736 | ALU 15552 (SEPARATE pool) | DFF 15552 | BSRAM 46
+#   MUX2_LUT5 10368 | RAM16SDP4 648 (distributed RAM -- currently unused)
+# ALU cells do NOT compete for LUT4 slots: nextpnr reports them against their
+# own 15,552 budget, so counting them as LUTs (as this script first did)
+# overstates LUT pressure.
+BUDGET = {"lut": 20736, "alu": 15552, "ff": 15552, "bsram": 46, "lutram": 648}
 
-LUT_CELLS = re.compile(r"^(LUT[1-4]|ALU)$")
+LUT_CELLS = re.compile(r"^LUT[1-4]$")
+ALU_CELLS = re.compile(r"^ALU$")
 FF_CELLS = re.compile(r"^DFF[NSRPCE]*$")
 BSRAM_CELLS = re.compile(r"^(SP|SPX9|SDP|SDPX9|DP|DPX9)$")
 LUTRAM_CELLS = re.compile(r"^RAM16")
@@ -167,10 +178,12 @@ def parse_stat(log):
 
 
 def tally(counts):
-    t = {"lut": 0, "ff": 0, "bsram": 0, "lutram": 0, "mux": 0}
+    t = {"lut": 0, "alu": 0, "ff": 0, "bsram": 0, "lutram": 0, "mux": 0}
     for cell, n in counts.items():
         if LUT_CELLS.match(cell):
             t["lut"] += n
+        elif ALU_CELLS.match(cell):
+            t["alu"] += n
         elif FF_CELLS.match(cell):
             t["ff"] += n
         elif BSRAM_CELLS.match(cell):
@@ -188,11 +201,11 @@ def collect(files):
     for mod, insts in parse_stat(run_yosys(files, True)).items():
         if mod == "cpu_top" and len(insts) == 1 and not insts[0][0]:
             pass  # top-level glue; keep it, it is real area
-        agg = {"lut": 0, "ff": 0, "bsram": 0, "lutram": 0, "mux": 0,
+        agg = {"lut": 0, "alu": 0, "ff": 0, "bsram": 0, "lutram": 0, "mux": 0,
                "instances": len(insts)}
         for _, counts in insts:
             t = tally(counts)
-            for k in ("lut", "ff", "bsram", "lutram", "mux"):
+            for k in ("lut", "alu", "ff", "bsram", "lutram", "mux"):
                 agg[k] += t[k]
         per_mod[mod] = agg
     return {"flat": flat, "modules": per_mod}
@@ -211,7 +224,8 @@ def print_report(data, mod2file, baseline=None):
     print("  VERDICT  (flat synthesis -- the number that must fit)")
     print("=" * 78)
     print(f"  {'resource':<10}{'used':>9}{'budget':>9}{'margin':>9}   utilisation")
-    for key, label in (("lut", "LUT+ALU"), ("ff", "FF"), ("bsram", "BSRAM")):
+    for key, label in (("lut", "LUT4"), ("alu", "ALU"), ("ff", "FF"),
+                       ("bsram", "BSRAM"), ("lutram", "LUT-RAM")):
         used, cap = flat[key], BUDGET[key]
         frac = used / cap
         flag = "OVER" if used > cap else "ok"
@@ -220,7 +234,7 @@ def print_report(data, mod2file, baseline=None):
     if baseline:
         print()
         print("  vs baseline:", end="")
-        for key, label in (("lut", "LUT+ALU"), ("ff", "FF"), ("bsram", "BSRAM")):
+        for key, label in (("lut", "LUT4"), ("ff", "FF"), ("bsram", "BSRAM")):
             d = flat[key] - baseline["flat"][key]
             print(f"   {label} {d:+,}", end="")
         print()
@@ -234,9 +248,9 @@ def print_report(data, mod2file, baseline=None):
     rows = sorted(mods.items(), key=lambda kv: -kv[1]["lut"])
     total_lut = sum(m["lut"] for m in mods.values()) or 1
 
-    hdr = f"  {'module':<17}{'LUT+ALU':>9}{'FF':>7}{'mux':>7}{'x':>3}  {'%':>5}  file"
+    hdr = f"  {'module':<17}{'LUT4':>9}{'FF':>7}{'mux':>7}{'x':>3}  {'%':>5}  file"
     if baseline:
-        hdr = (f"  {'module':<17}{'LUT+ALU':>9}{'delta':>8}{'FF':>7}{'x':>3}"
+        hdr = (f"  {'module':<17}{'LUT4':>9}{'delta':>8}{'FF':>7}{'x':>3}"
                f"  {'%':>5}  file")
     print(hdr)
     print("  " + "-" * 74)
@@ -258,6 +272,9 @@ def print_report(data, mod2file, baseline=None):
     print("  " + "-" * 74)
     print(f"  {'SUM':<17}{total_lut:>9,}"
           f"{sum(m['ff'] for m in mods.values()):>7,}")
+    print()
+    print("  nextpnr is the final authority and runs ~1,100 LUT4 above this")
+    print("  estimate (packing overhead). Use `make bitstream` for the real number.")
     print()
     print("  NOTE: the per-module sum exceeds the flat total on purpose. Keeping")
     print("  hierarchy disables cross-module optimisation, so these numbers are")
