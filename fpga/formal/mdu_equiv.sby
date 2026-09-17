@@ -1,0 +1,16 @@
+# Proof at XLEN=8 -- see the header of mdu_equiv.sv for why not 32.
+# Depth must cover: reset, accept, XLEN divide iterations, S_DONE.
+[options]
+mode bmc
+depth 16
+
+[engines]
+smtbmc z3
+
+[script]
+read_slang mdu.sv mdu_equiv.sv --top mdu_equiv
+prep -top mdu_equiv
+
+[files]
+../../rtl/pipeline/mdu.sv
+mdu_equiv.sv

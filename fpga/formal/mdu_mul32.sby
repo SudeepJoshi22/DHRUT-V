@@ -1,0 +1,18 @@
+# The 32-bit multiply, at its real width. Only a few cycles are needed
+# because the multiply is one register deep -- see mdu_equiv.sv.
+[options]
+mode bmc
+depth 6
+
+[engines]
+smtbmc z3
+
+[script]
+# read_slang resolves parameters during elaboration, so chparam afterwards
+# finds a non-parametric module. Override at the frontend with -G instead.
+read_slang mdu.sv mdu_equiv.sv --top mdu_equiv -G XLEN=32 -G OP_CLASS=1
+prep -top mdu_equiv
+
+[files]
+../../rtl/pipeline/mdu.sv
+mdu_equiv.sv

@@ -53,3 +53,4 @@ fpga/*.pack.json
 fpga/*.fs
 fpga/*.log
 fpga/formal/*/
+fpga/formal/*/
