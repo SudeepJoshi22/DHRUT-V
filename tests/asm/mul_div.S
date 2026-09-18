@@ -171,6 +171,31 @@ _start:
     li   x4, 10
     bne  x11, x4, fail
 
+    # ── Pipeline: consumer reads an MDU dest that is ALSO live in the
+    #    bypass network from an OLDER producer. This is the exact shape
+    #    riscof mul-01 failed on, and it is the one a naive
+    #    "busy || bypass_hit" readiness rule gets wrong: the addi below
+    #    puts x31 into the bypass network, the mul then targets the SAME
+    #    register, and a consumer that trusts the bypass hit reads the
+    #    addi's stale value instead of the product.
+    lui  x31, 0xb
+    addi x31, x31, 1285      # x31 = 0xb505, now live in the bypass network
+    mul  x31, x31, x31       # same register, multi-cycle -> not bypassable
+    li   x4, 0x80001219      # 0xb505 * 0xb505, low 32 bits
+    bne  x31, x4, fail       # reads x31 immediately after
+
+    # Same hazard, but through a STORE's data operand (rs2) rather than a
+    # branch, because the store path reaches readiness by a different
+    # route and that is how riscof surfaced it.
+    la   x1, scratch
+    lui  x30, 0xb
+    addi x30, x30, 1285
+    mul  x30, x30, x30
+    sw   x30, 0(x1)
+    lw   x5, 0(x1)
+    li   x4, 0x80001219
+    bne  x5, x4, fail
+
 pass:
     li x10, 1
     j terminate
@@ -184,6 +209,10 @@ terminate:
     sw x0, 4(t0)
 spin:
     j spin
+
+.section .data
+.align 4
+scratch: .word 0
 
 .section .tohost,"aw",@progbits
 .align 6

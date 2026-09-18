@@ -378,10 +378,64 @@ module issue_stage (
     return !uses || !busy || hit;
   endfunction
 
+  // ── The MDU's destination must ignore the bypass network ─────────
+  //
+  // op_ready above trusts `hit` to mean "the newest value for this
+  // register is available now". That is true only while every producer is
+  // one cycle and in order, because then the newest write is always the
+  // one sitting in the bypass network. The MDU breaks it: the bypass
+  // network matches on rd alone and has no notion of age, so an OLDER
+  // producer's live entry masks the busy bit for the newer, slower write.
+  //
+  // riscof mul-01 caught exactly this:
+  //     addi x31, x31, 1285   -> x31 = 0xb505, and into the bypass network
+  //     mul  x31, x31, x31    -> dispatched to the MDU, 2 cycles out
+  //     sw   x31, 0(x1)       -> bypass hit on the addi, stored 0xb505
+  // The store read a value that was already stale.
+  //
+  // Since the MDU is not on the bypass network at all, ANY hit on its
+  // destination is necessarily from an older instruction, so the answer
+  // is simply to ignore `hit` for that one register. Issue is in order,
+  // so nothing younger than the multiply can be the true producer.
+  //
+  // One MDU operation is in flight at a time (enforced by
+  // mdu_struct_stall and asserted in cpu_core.sv), so a single rd plus a
+  // valid bit is the whole of the state needed.
+  logic       mdu_pending_q;
+  logic [4:0] mdu_pending_rd_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mdu_pending_q    <= 1'b0;
+      mdu_pending_rd_q <= 5'd0;
+    end
+    else if (i_flush) begin
+      mdu_pending_q <= 1'b0;
+    end
+    else if (o_mdu_valid && o_mdu_uop.writes_rd) begin
+      mdu_pending_q    <= 1'b1;
+      mdu_pending_rd_q <= o_mdu_uop.rd;
+    end
+    else if (i_mdu_result_valid) begin
+      // Cleared on the cycle the result reaches Retire. From the NEXT
+      // cycle Retire's own forwarding port carries it, so a consumer
+      // issuing then gets the right value through the normal bypass.
+      mdu_pending_q <= 1'b0;
+    end
+  end
+
+  function automatic logic blocked_by_mdu(input logic uses, input logic [4:0] rs);
+    return uses && mdu_pending_q && (rs == mdu_pending_rd_q) && (rs != 5'd0);
+  endfunction
+
   assign lane0_ops_ready = op_ready(buf_uop0_q.uses_rs1, sb_query_busy[0], fwd_hit_rs1_0) &&
-                           op_ready(buf_uop0_q.uses_rs2, sb_query_busy[1], fwd_hit_rs2_0);
+                           op_ready(buf_uop0_q.uses_rs2, sb_query_busy[1], fwd_hit_rs2_0) &&
+                           !blocked_by_mdu(buf_uop0_q.uses_rs1, buf_uop0_q.rs1)           &&
+                           !blocked_by_mdu(buf_uop0_q.uses_rs2, buf_uop0_q.rs2);
   assign lane1_ops_ready = op_ready(buf_uop1_q.uses_rs1, sb_query_busy[2], fwd_hit_rs1_1) &&
-                           op_ready(buf_uop1_q.uses_rs2, sb_query_busy[3], fwd_hit_rs2_1);
+                           op_ready(buf_uop1_q.uses_rs2, sb_query_busy[3], fwd_hit_rs2_1) &&
+                           !blocked_by_mdu(buf_uop1_q.uses_rs1, buf_uop1_q.rs1)           &&
+                           !blocked_by_mdu(buf_uop1_q.uses_rs2, buf_uop1_q.rs2);
 
   // ───────────────────────────────────────────────
   // 5. Operand multiplexing

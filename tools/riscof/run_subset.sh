@@ -19,7 +19,12 @@ set -e
 cd "$(dirname "$0")"
 
 CONFIG="config.ini"
-SUITE="riscv-arch-test/riscv-test-suite/rv32i_m/I/src"
+# The arch-test tree splits by extension: .../rv32i_m/I/src for the base
+# integer tests, .../rv32i_m/M/src for multiply/divide. SUITE is therefore
+# chosen per group below rather than fixed.
+SUITE_I="riscv-arch-test/riscv-test-suite/rv32i_m/I/src"
+SUITE_M="riscv-arch-test/riscv-test-suite/rv32i_m/M/src"
+SUITE="$SUITE_I"
 ENV="riscv-arch-test/riscv-test-suite/env"
 WORK_DIR="riscof_work"
 TMP_YAML="subset_test.yaml"
@@ -32,6 +37,10 @@ group_alu="add addi sub and andi or ori xor xori slt slti sltu sltiu"
 group_shift="sll slli srl srli sra srai"
 group_upper="lui auipc"
 group_smoke="add addi jal beq lw sw"
+# RV32M. Lives in a different suite directory, so selecting this group also
+# switches SUITE below. Requires ISA: RV32IMZicsr in dhrutv/dhrutv_isa.yaml,
+# or riscof will not generate these tests at all.
+group_m="mul mulh mulhsu mulhu div divu rem remu"
 
 if [ $# -lt 1 ] || [ "$1" = "--list" ]; then
     echo "Preset groups:"
@@ -41,6 +50,7 @@ if [ $# -lt 1 ] || [ "$1" = "--list" ]; then
     echo "  alu     : $group_alu"
     echo "  shift   : $group_shift"
     echo "  upper   : $group_upper"
+    echo "  m       : $group_m"
     echo
     echo "Usage: $0 <group|test names...>"
     exit 0
@@ -54,6 +64,7 @@ case "$1" in
     alu)    TESTS="$group_alu" ;;
     shift)  TESTS="$group_shift" ;;
     upper)  TESTS="$group_upper" ;;
+    m)      TESTS="$group_m"; SUITE="$SUITE_M" ;;
     *)      TESTS="$*" ;;
 esac
 

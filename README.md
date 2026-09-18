@@ -5,7 +5,8 @@
 
 ---
 
-A fully pipelined, in-order superscalar(not yet) **RISC-V** core written in **SystemVerilog**.
+A fully pipelined, **2-wide in-order superscalar RISC-V** core (RV32IM_Zicsr)
+written in **SystemVerilog**, running on a Sipeed Tang Nano 20K.
 
 Designed for learning, verification, FPGA/ASIC exploration, and as a foundation for future CPU projects.
 
@@ -15,39 +16,78 @@ Designed for learning, verification, FPGA/ASIC exploration, and as a foundation 
 
 ## Micro-architecture
 
-DHRUT-V utilizes a modern 5-stage pipeline decoupled by SystemVerilog interfaces.
+DHRUT-V is a 2-wide in-order superscalar pipeline, decoupled by SystemVerilog
+interfaces. Fetch returns two instructions per access and a queue decouples it
+from decode; two decode lanes feed a 2-wide issue stage with four functional
+units behind it.
+
+Note what does **not** have a forwarding path below: the MDU. Its result is
+several cycles late and reaches consumers only through Retire, which is
+precisely why the scoreboard has to hold dependents back.
 
 ```mermaid
 graph LR
-    IF[Fetch] --> ID[Decode]
-    ID --> IS[Issue/ARF]
-    IS --> EX[Execute/ALU]
-    IS --> LSU[LSU]
-    IS <-->|same-cycle| CSR[CSR Unit]
-    EX --> RE[Retire]
-    LSU --> RE
-    RE -.->|Writeback| IS
-    RE -.->|Forward| IS
-    EX -.->|Forward| IS
-    LSU -.->|Forward| IS
-    IS -.->|Branch/Jump/Trap| IF
+    BPU[BPU + RAS] <--> IF
+    IF["Fetch<br/>64-bit: 2 instr/access"] --> FQ["Fetch Queue<br/>8 entries, 2 push / 2 pop"]
+    FQ --> ID["Decode<br/>2 lanes"]
+    ID --> IS["Issue / ARF<br/>scoreboard + bypass<br/>4R / 2W"]
+    IS <-->|same cycle| CSR[CSR Unit]
+
+    IS -->|lane 0 or 1| ALU0[ALU0]
+    IS -->|lane 1 only| ALU1[ALU1]
+    IS -->|lane 0 only| LSU[LSU]
+    IS -->|lane 0 only| MDU["MDU<br/>mul 2cy / div 34cy"]
+
+    ALU0 --> RE0[Retire 0]
+    LSU --> RE0
+    MDU --> RE0
+    ALU1 --> RE1[Retire 1]
+
+    RE0 -.->|writeback| IS
+    RE1 -.->|writeback| IS
+    ALU0 -.->|forward| IS
+    ALU1 -.->|forward| IS
+    LSU -.->|forward| IS
+    RE0 -.->|forward| IS
+    IS -.->|redirect| IF
 ```
+
+Lane 1 is a bare ALU: it takes OP / OP-IMM / LUI / AUIPC only. Loads, stores,
+branches, jumps, CSR ops and multiply/divide all need a unit that exists once,
+so they stay on the older lane.
 
 ### Pipeline Breakdown
 
-1.  **Fetch (IF)**: Fetches 32-bit instructions from instruction memory using a simple request/acknowledge interface. Supports PC redirection for branches and jumps.
-2.  **Decode (ID)**: Decodes instructions into a rich micro-op (`uop_t`) structure. Identifies source/destination registers and immediate values.
-3.  **Issue (IS)**: The heart of the core.
-    - contains the **Architectural Register File (ARF)**.
-    - Performs **Scoreboarding** and hazard detection(feature yet to be implemented).
-    - Handles **Operand Forwarding** from ALU, LSU, and Retire stages.
-    - Resolves **Branches and Jumps** early to reduce bubbles.
+1.  **Fetch (IF)**: One access returns the **two instructions** of an 8-byte
+    aligned block. A **BPU** (32-entry BTB, 10-bit tags, 2-bit counters,
+    backward-taken/forward-not-taken allocation) and an 8-entry **RAS** predict
+    control flow; Issue re-resolves every branch and redirects on a mismatch,
+    so no prediction can reach architectural state.
+2.  **Fetch Queue**: 8 entries, two push ports and two read ports. Decouples
+    fetch from decode, so an imem stall drains the queue instead of starving
+    decode immediately.
+3.  **Decode (ID)**: Two lanes, each a stateless `decoder` turning one
+    instruction into a `uop_t`. Reports back how many slots it consumed.
+4.  **Issue (IS)**: The heart of the core.
+    - Contains the **Architectural Register File** (4 read, 2 write).
+    - **Scoreboard**: per-register outstanding-write counters. Live and
+      load-bearing since the MDU arrived -- the first unit whose result is not
+      on the bypass network, so its consumers genuinely have to wait.
+    - **Forwarding**: age-ordered bypass, 4 consumers x 5 producers.
+    - **Dual-issue rules** (`issue_hazard.sv`): lane-1 class check plus
+      intra-bundle RAW/WAW.
+    - Resolves **branches and jumps** early to reduce bubbles.
     - Dispatches CSR ops and traps to the **CSR Unit**, resolved the same cycle.
-    - Dispatches uops to functional units.
-4.  **Functional Units**:
-    - **ALU**: Performs arithmetic, logic, and comparison operations.
-    - **LSU**: Handles Load and Store operations with sign-extension and byte/half-word/word alignment.
-5.  **Retire (RE)**: Finalizes instruction execution, collects results, and triggers the write-back to the ARF in the Issue stage.
+5.  **Functional Units**:
+    - **ALU x2**: one per lane, single cycle.
+    - **LSU** (lane 0): loads and stores, sign/zero extension, byte/halfword/word.
+    - **MDU** (lane 0): RV32M. Multiply is one 33x33 signed product covering all
+      four forms; divide is radix-2 restoring long division, ~34 cycles.
+      **Non-blocking** -- a divide does not stall issue, and the scoreboard
+      holds back only its true dependents.
+6.  **Retire (RE) x2**: One per lane. Lane 0 arbitrates ALU0 / LSU / MDU, with
+    the MDU taking priority (ALU0 is held for that cycle); lane 1 takes ALU1.
+    Writes back to the ARF and feeds the forwarding network.
 
 ---
 
@@ -184,8 +224,17 @@ DHRUT-V/
 - [x] Basic pyUVM Verification Infrastructure.
 - [x] Full compliance with RV32I_m RISCOF tests.
 - [x] **CSR Support (Zicsr), M-mode**: implemented, RDL-generated, directed-test-verified (riscof compliance pending).
-- [ ] **Benchmarking and Performance Enhancements**.
-- [ ] **FPGA Deployment**: Booting bare-metal code on a Xilinx/Lattice FPGA.
+- [x] **2-wide superscalar**: dual decode, dual issue, dual retire, age-ordered
+      forwarding, per-register scoreboard.
+- [x] **Branch prediction**: BTB with 2-bit counters plus a return-address stack.
+- [x] **FPGA Deployment**: runs bare-metal code on a **Sipeed Tang Nano 20K**
+      (Gowin GW2AR-18). 74% LUT4, meets timing at 27 MHz; program in BSRAM,
+      status on the six onboard LEDs. See [`fpga/README.md`](fpga/README.md).
+- [x] **RV32M (mul/div)**: multiply on a hard DSP, radix-2 divide, non-blocking
+      behind the scoreboard. **riscof M compliance 8/8**, and the unit is
+      formally verified against a reference model.
+- [ ] **Benchmarking and Performance Enhancements**: Dhrystone and CoreMark
+      ports exist and can now use M.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.
 
 ---
