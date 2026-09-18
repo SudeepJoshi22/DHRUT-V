@@ -51,7 +51,18 @@ CORETIMETYPE barebones_clock(void) {
 #define MYTIMEDIFF(fin, ini)       ((fin) - (ini))
 #define TIMER_RES_DIVIDER          1
 #define SAMPLE_TIME_IMPLEMENTATION 1
-#define EE_TICKS_PER_SEC           (CLOCKS_PER_SEC / TIMER_RES_DIVIDER)
+/* barebones_clock() returns the mcycle CSR, so a "tick" IS a core cycle and
+   ticks-per-second is simply the clock frequency. CLOCKS_PER_SEC comes from
+   <time.h>, which does not exist in this freestanding build (HAS_TIME_H 0),
+   so referencing it does not compile.
+
+   DHRUTV_ASSUMED_MHZ cancels out of the reported score the same way it does
+   for Dhrystone: CoreMark/MHz = iterations / (seconds x MHz), and
+   seconds = cycles / (MHz x 1e6), so the MHz term divides out and only
+   iterations and cycles remain. tools/bench_report.py computes the score
+   from dhrutv_final_iterations and dhrutv_final_total_cycles directly and
+   never uses this value. */
+#define EE_TICKS_PER_SEC           ((DHRUTV_ASSUMED_MHZ * 1000000UL) / TIMER_RES_DIVIDER)
 
 static CORETIMETYPE start_time_val, stop_time_val;
 

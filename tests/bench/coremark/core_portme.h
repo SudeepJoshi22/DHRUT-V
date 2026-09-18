@@ -45,7 +45,16 @@ UART; timing is read from the mcycle CSR (see core_portme.c).
 #endif
 #endif
 #ifndef COMPILER_FLAGS
+/* Upstream CoreMark expects the build system to pass -DFLAGS_STR="...".
+   Our build does not, so without a fallback core_main.c fails to compile on
+   an undeclared FLAGS_STR. The string is only ever handed to ee_printf,
+   which is a no-op stub here (no UART), so its content is cosmetic -- but it
+   has to exist. Define FLAGS_STR on the command line to override. */
+#ifdef FLAGS_STR
 #define COMPILER_FLAGS FLAGS_STR
+#else
+#define COMPILER_FLAGS "-O2 -march=rv32im_zicsr -mabi=ilp32 (see tools/simulate_c.sh)"
+#endif
 #endif
 #ifndef MEM_LOCATION
 #define MEM_LOCATION "STACK"
