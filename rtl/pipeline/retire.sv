@@ -13,6 +13,12 @@ module retire (
   input logic        i_lsu_valid,
   input uop_t        i_lsu_uop,
   input logic [31:0] i_lsu_load_data,
+  // RV32M result. Multi-cycle, so unlike the ALU and LSU it can become
+  // ready on a cycle the lane was otherwise busy -- cpu_core stalls ALU0
+  // on exactly that cycle to keep this port free. Tied off on lane 1.
+  input logic        i_mdu_valid,
+  input uop_t        i_mdu_uop,
+  input logic [31:0] i_mdu_result,
 
   // Flush from downstream (e.g. exception) or upstream (branch mispredict)
   input  logic        i_flush,
@@ -52,8 +58,20 @@ module retire (
       result_q  <= '0;
     end
     else if (!i_stall) begin
-      // In-order: only one should be valid
-      if (i_alu_valid) begin
+      // In-order: only one should be valid.
+      //
+      // The MDU is checked FIRST, and that ordering is load-bearing. Its
+      // result appears several cycles after dispatch, so it can land on a
+      // cycle when ALU0 also has one. cpu_core resolves that by stalling
+      // ALU0 whenever the MDU completes: ALU0's result is held in its own
+      // output register and retires the cycle after, which preserves
+      // program order because the multiply/divide was dispatched first.
+      if (i_mdu_valid) begin
+        valid_q   <= 1'b1;
+        uop_q     <= i_mdu_uop;
+        result_q  <= i_mdu_result;
+      end
+      else if (i_alu_valid) begin
         valid_q   <= 1'b1;
         uop_q     <= i_alu_uop;
         result_q  <= i_alu_result;

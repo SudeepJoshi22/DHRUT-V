@@ -32,6 +32,8 @@
 # issue_hazard.sv: dual-issue pairing rules, instantiated by issue.sv
 ../rtl/pipeline/issue_hazard.sv
 ../rtl/pipeline/lsu.sv
+# mdu.sv: RV32M multiply/divide, instantiated by cpu_core.sv
+../rtl/pipeline/mdu.sv
 # ras.sv: return address stack, instantiated by ifetch.sv
 ../rtl/pipeline/ras.sv
 ../rtl/pipeline/retire.sv

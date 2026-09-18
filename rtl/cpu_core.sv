@@ -233,6 +233,41 @@ module cpu_core (
   // ───────────────────────────────────────────────
   // Issue Stage (2-wide)
   // ───────────────────────────────────────────────
+  // ───────────────────────────────────────────────
+  // RV32M multiply / divide unit
+  // ───────────────────────────────────────────────
+  // Lane 0 only, like the LSU. Non-blocking: a divide runs for 32 cycles
+  // while Issue keeps dispatching independent work, and the scoreboard
+  // holds back anything that reads the pending destination. That is the
+  // case rtl/pipeline/scoreboard.sv was written for and, until now, the
+  // reason it never actually blocked.
+  logic        mdu_dispatch_valid, mdu_ready, mdu_result_valid;
+  uop_t        mdu_dispatch_uop;
+  logic [31:0] mdu_op1, mdu_op2, mdu_result;
+
+  // mdu.sv is deliberately uop-free so it can be formally verified on its
+  // own (fpga/formal/mdu_equiv.sby), so the uop is parked here for the
+  // duration instead of travelling through it. One in flight at a time,
+  // enforced by mdu_ready, so a single register suffices.
+  uop_t mdu_inflight_uop_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                 mdu_inflight_uop_q <= '0;
+    else if (mdu_dispatch_valid) mdu_inflight_uop_q <= mdu_dispatch_uop;
+  end
+
+  mdu MDU (
+    .clk      (clk),
+    .rst_n    (rst_n),
+    .i_flush  (mispredict),
+    .i_valid  (mdu_dispatch_valid),
+    .i_funct3 (mdu_dispatch_uop.funct3),
+    .i_op1    (mdu_op1),
+    .i_op2    (mdu_op2),
+    .o_ready  (mdu_ready),
+    .o_valid  (mdu_result_valid),
+    .o_result (mdu_result)
+  );
+
   issue_stage ISSUE (
     .clk                    (clk),
     .rst_n                  (rst_n),
@@ -273,7 +308,13 @@ module cpu_core (
     .o_instret_cnt          (issue_instret_cnt),
     .alu0_if                (alu0_if),
     .alu1_if                (alu1_if),
-    .lsu_if                 (lsu_if)
+    .lsu_if                 (lsu_if),
+    .o_mdu_valid            (mdu_dispatch_valid),
+    .o_mdu_uop              (mdu_dispatch_uop),
+    .o_mdu_op1              (mdu_op1),
+    .o_mdu_op2              (mdu_op2),
+    .i_mdu_ready            (mdu_ready),
+    .i_mdu_result_valid     (mdu_result_valid)
   );
 
   // BPU update/training port is driven from Issue's actual resolved outcome
@@ -292,7 +333,12 @@ module cpu_core (
     .clk             (clk),
     .rst_n           (rst_n),
     .issue_if        (alu0_if),
-    .i_stall         (lsu_if.s_stall_from_lsu),
+    // Held when the MDU is retiring this cycle: its result takes the
+    // lane-0 retire port (retire.sv checks i_mdu_valid first), so ALU0's
+    // result waits in its own output register and retires next cycle.
+    // Program order is preserved because the multiply/divide was
+    // dispatched earlier than whatever ALU0 is holding.
+    .i_stall         (lsu_if.s_stall_from_lsu || mdu_result_valid),
     .i_flush         (1'b0),
     .o_alu_fwd_writes_rd    (fwd_alu0_writes_rd),
     .o_alu_fwd_rd           (fwd_alu0_rd),
@@ -353,6 +399,9 @@ module cpu_core (
     .i_lsu_valid     (lsu_valid),
     .i_lsu_uop       (lsu_uop_forward),
     .i_lsu_load_data (lsu_load_data),
+    .i_mdu_valid     (mdu_result_valid),
+    .i_mdu_uop       (mdu_inflight_uop_q),
+    .i_mdu_result    (mdu_result),
     .i_flush         (1'b0),
     .i_stall         (1'b0),
     .o_retire_fwd_writes_rd (fwd_retire0_writes_rd),
@@ -378,6 +427,9 @@ module cpu_core (
     .i_lsu_valid     (1'b0),
     .i_lsu_uop       ('0),
     .i_lsu_load_data (32'b0),
+    .i_mdu_valid     (1'b0),      // MDU is lane 0 only
+    .i_mdu_uop       ('0),
+    .i_mdu_result    (32'b0),
     .i_flush         (1'b0),
     .i_stall         (1'b0),
     .o_retire_fwd_writes_rd (fwd_retire1_writes_rd),
@@ -395,6 +447,25 @@ module cpu_core (
     @(posedge clk) disable iff (!rst_n)
     !(alu0_retire_valid && lsu_valid)
   ) else $error("CORE ERROR: ALU0 and LSU both completed in the same cycle - a result is being dropped");
+
+  // The MDU is the exception to the rule above: because it is multi-cycle
+  // it CAN complete on a cycle ALU0 also has a result, and retire.sv gives
+  // it priority. That is only safe because ALU0 is stalled on the same
+  // cycle, so its result is held rather than dropped. Check exactly that:
+  // an ALU0 result coinciding with an MDU result must still be there next
+  // cycle.
+  assert_alu0_held_when_mdu_retires: assert property (
+    @(posedge clk) disable iff (!rst_n)
+    (alu0_retire_valid && mdu_result_valid) |=> alu0_retire_valid
+  ) else $error("CORE ERROR: ALU0 result dropped when the MDU took the retire slot");
+
+  // One in flight at a time. If the MDU were ever dispatched while busy,
+  // mdu_inflight_uop_q would be overwritten and the first result would
+  // write back to the wrong register.
+  assert_mdu_single_inflight: assert property (
+    @(posedge clk) disable iff (!rst_n)
+    mdu_dispatch_valid |-> mdu_ready
+  ) else $error("CORE ERROR: MDU dispatched while busy - in-flight uop overwritten");
 
   // Lane 1 never executes a memory op, so it can never be the source of a
   // dmem transaction.

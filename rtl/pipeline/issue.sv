@@ -86,7 +86,18 @@ module issue_stage (
   alu_issue_if.issuer alu0_if,
   alu_issue_if.issuer alu1_if,
   // Issued to LSU (with back-pressure) - lane 0 only
-  lsu_issue_if.issuer lsu_if
+  lsu_issue_if.issuer lsu_if,
+
+  // Issued to the RV32M unit - lane 0 only, like the LSU.
+  // Plain ports rather than an interface: mdu.sv is deliberately uop-free
+  // so it can be verified standalone, so the uop travels alongside rather
+  // than through it (cpu_core holds it for the duration).
+  output logic        o_mdu_valid,
+  output uop_t        o_mdu_uop,
+  output logic [31:0] o_mdu_op1,
+  output logic [31:0] o_mdu_op2,
+  input  logic        i_mdu_ready,        // MDU idle, can accept
+  input  logic        i_mdu_result_valid  // MDU completing THIS cycle
 );
 
   // ───────────────────────────────────────────────
@@ -107,7 +118,25 @@ module issue_stage (
 
   // Stall aggregation (scalable – add more units later)
   logic  downstream_stall;
-  assign downstream_stall = i_stall || lsu_if.s_stall_from_lsu;
+  // The MDU contributes two DIFFERENT one-cycle-ish stalls, and keeping
+  // them separate is what makes it non-blocking. A 32-cycle divide does
+  // NOT stall issue: independent work keeps dispatching and the
+  // scoreboard holds back anything that reads the pending destination.
+  //
+  //   mdu_struct_stall  - lane 0 wants the MDU and it is still busy.
+  //                       A genuine structural hazard; only fires when a
+  //                       second multiply/divide arrives too early.
+  //   i_mdu_result_valid- the MDU is finishing this cycle and needs the
+  //                       lane-0 retire slot. cpu_core stalls ALU0 on the
+  //                       same cycle, so issue must hold too or the
+  //                       dispatch would be dropped by the stalled ALU.
+  //                       Costs one bubble per M instruction, not 32.
+  logic lane0_wants_mdu, mdu_struct_stall;
+  assign lane0_wants_mdu  = buf_valid0_q && buf_uop0_q.is_mdu;
+  assign mdu_struct_stall = lane0_wants_mdu && !i_mdu_ready;
+
+  assign downstream_stall = i_stall || lsu_if.s_stall_from_lsu
+                            || mdu_struct_stall || i_mdu_result_valid;
   // FUTURE: || alu_stall || fpu_stall || vec_stall
 
   logic operands_ready;
@@ -156,7 +185,20 @@ module issue_stage (
   // DISPATCHED, AN INSTRUCTION ALWAYS COMPLETES. alu_stage's i_flush
   // stays tied off, and cpu_tracer.py's retirement model stays valid.
   logic issue_en1;
-  assign issue_en1 = buf_valid1_q && operands_ready && lane1_ops_ready && !o_mispredict;
+  // issue_en0 is a REQUIREMENT, not an optimisation: lane 1 is younger, so
+  // letting it go while lane 0 is held breaks program order outright.
+  //
+  // This was previously implicit. Lane 0 could only be held by
+  // lane0_ops_ready, and that never went low because the bypass network
+  // covered every cycle the scoreboard marked busy -- the situation
+  // scoreboard.sv's header describes. The MDU is the first unit whose
+  // result is NOT on the bypass network, so lane 0 can now genuinely wait
+  // on the scoreboard while lane 1's operands are ready, and the
+  // assert_lane1_needs_lane0 assertion below fires. It is a real
+  // violation, not a false alarm: making the dependency explicit is the
+  // fix.
+  assign issue_en1 = issue_en0 && buf_valid1_q && operands_ready
+                     && lane1_ops_ready && !o_mispredict;
 
   // Decode handshake: the single condition under which Issue takes a new
   // bundle. Used both to load the buffer and to report o_accept_cnt, so
@@ -290,9 +332,16 @@ module issue_stage (
   logic [31:0]     sb_busy;
 
   // Lane 0 dispatches to exactly one of ALU0/LSU; lane 1 only to ALU1.
+  // Lane 0 can dispatch to exactly one of ALU0, the LSU or the MDU, so
+  // these three terms are mutually exclusive. The MDU one is what finally
+  // gives the scoreboard something to do: its result is not on the bypass
+  // network, so a consumer of its rd stays blocked here until write-back.
   assign sb_set_en[0] = (alu0_if.m_valid && alu0_if.m_uop.writes_rd) ||
-                        (lsu_if.m_valid  && lsu_if.m_uop.writes_rd);
-  assign sb_set_rd[0] = lsu_if.m_valid ? lsu_if.m_uop.rd : alu0_if.m_uop.rd;
+                        (lsu_if.m_valid  && lsu_if.m_uop.writes_rd)  ||
+                        (o_mdu_valid     && o_mdu_uop.writes_rd);
+  assign sb_set_rd[0] = lsu_if.m_valid ? lsu_if.m_uop.rd
+                      : o_mdu_valid    ? o_mdu_uop.rd
+                                       : alu0_if.m_uop.rd;
   assign sb_set_en[1] = alu1_if.m_valid && alu1_if.m_uop.writes_rd;
   assign sb_set_rd[1] = alu1_if.m_uop.rd;
 
@@ -482,8 +531,12 @@ module issue_stage (
   always_comb begin
     alu0_if.m_valid = 1'b0;
     lsu_if.m_valid  = 1'b0;
+    o_mdu_valid     = 1'b0;
     alu0_if.m_uop   = '0;
     lsu_if.m_uop    = '0;
+    o_mdu_uop       = '0;
+    o_mdu_op1       = op1_0;
+    o_mdu_op2       = op2_0;
     alu0_if.m_pc    = buf_pc0_q;
     lsu_if.m_pc     = buf_pc0_q;
     alu0_if.m_op1   = op1_0;
@@ -513,6 +566,16 @@ module issue_stage (
           alu0_if.m_op1   = csr_rdata_now;
           alu0_if.m_op2   = 32'b0;
         end
+      end
+      else if (buf_uop0_q.is_mdu) begin
+        // RV32M. Checked BEFORE the generic ALU arm below, because these
+        // share opcode OP and would otherwise fall through to ALU0 and be
+        // executed as whatever funct3 happens to decode to. Accepting is
+        // safe here: downstream_stall already includes mdu_struct_stall,
+        // so dispatch_en cannot be high unless the MDU is idle.
+        o_mdu_valid     = 1'b1;
+        o_mdu_uop       = buf_uop0_q;
+        alu0_if.m_valid = 1'b0;
       end
       else begin
         // Normal ALU ops and Jumps (for write-back) go to ALU0

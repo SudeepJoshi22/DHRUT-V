@@ -108,6 +108,8 @@ module mdu #(
   logic [XLEN-1:0]   quot_q;       // shifted in LSB-first
   logic [XLEN-1:0]   divisor_q;
   logic [5:0]        iter_q;
+  // Width-matched so the comparisons below do not expand iter_q to 32 bits.
+  localparam logic [5:0] LAST_ITER = 6'(XLEN-1);
   logic              quot_neg_q, rem_neg_q, take_rem_q;
 
   // One iteration: shift the next dividend bit in, then subtract if it fits.
@@ -228,8 +230,8 @@ module mdu #(
           quot_q     <= {quot_q[XLEN-2:0], div_fits};
           dividend_q <= {dividend_q[XLEN-2:0], 1'b0};
 
-          if (iter_q == XLEN-1) state_q <= S_DONE;
-          else                  iter_q  <= iter_q + 6'd1;
+          if (iter_q == LAST_ITER) state_q <= S_DONE;
+          else                     iter_q  <= iter_q + 6'd1;
         end
 
         S_DONE: state_q <= S_IDLE;
@@ -245,15 +247,17 @@ module mdu #(
     o_valid |=> !o_valid
   ) else $error("MDU: o_valid held for more than one cycle");
 
-  // Accepting work while busy would silently drop an operation.
+  // o_ready must mean genuinely idle: if it ever went high mid-operation
+  // the issue stage would dispatch a second op and the first would be
+  // silently overwritten.
   assert property (@(posedge clk) disable iff (!rst_n)
-    (i_valid && !o_ready) |-> ##0 (state_q != S_IDLE)
-  ) else $error("MDU: accepted an operation while busy");
+    o_ready |-> (state_q == S_IDLE)
+  ) else $error("MDU: o_ready asserted while not idle");
 
   // The iteration count must be exact -- an off-by-one here produces a
   // quotient that is wrong by a factor of two and is easy to miss.
   assert property (@(posedge clk) disable iff (!rst_n)
-    (state_q == S_DIV && iter_q == XLEN-1) |=> (state_q == S_DONE)
+    (state_q == S_DIV && iter_q == LAST_ITER) |=> (state_q == S_DONE)
   ) else $error("MDU: divide did not finish on the last iteration");
 `endif
 

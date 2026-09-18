@@ -54,7 +54,7 @@ echo "▶ Building C test: $TEST_NAME"
 echo "  Sources: ${C_SOURCES[*]}"
 echo "  Output dir: $TEST_OUT_DIR"
 
-riscv-none-elf-gcc -march=rv32i_zicsr -mabi=ilp32 \
+riscv-none-elf-gcc -march=rv32im_zicsr -mabi=ilp32 \
     -O2 -ffreestanding -fno-stack-protector -fno-builtin \
     -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
     "${EXTRA_CFLAGS[@]}" \
@@ -76,7 +76,7 @@ echo "  DIS: $DIS"
 SPIKE_LOG=$TEST_OUT_DIR/$TEST_NAME.spike.log
 echo "▶ Verifying test logic with Spike (Detailed Log: $SPIKE_LOG)"
 
-spike -l --log-commits --isa=rv32i_zicsr -m0x80000000:0x10000 "$ELF" > "$SPIKE_LOG" 2>&1 || true
+spike -l --log-commits --isa=rv32im_zicsr -m0x80000000:0x10000 "$ELF" > "$SPIKE_LOG" 2>&1 || true
 
 # tohost's address moves depending on how big .text is (it's placed on
 # the first 0x1000 boundary after .text - see tests/linker_c.ld), so

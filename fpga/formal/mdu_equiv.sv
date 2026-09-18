@@ -7,8 +7,15 @@
 // not finish. Both algorithms are uniform in XLEN -- the multiply is one
 // expression and the divide is a loop whose body does not depend on the
 // width -- so a proof at 8 bits covers the structure, the sign handling and
-// every special case, all of which are width-parameterised. The 32-bit
-// instance is then covered by directed and random simulation.
+// every special case, all of which are width-parameterised.
+//
+// A 32-bit multiply-only variant was attempted and ABANDONED: z3 timed out
+// at 800s and bitwuzla ran 9 hours without converging. Proving that a 33x33
+// product's high half equals a 64x64 product's high half is multiplier
+// equivalence across different operand widths, which is among the hardest
+// things to ask an SMT solver. The 32-bit instance is covered instead by
+// tests/asm/mul_div.S and the riscof M compliance suite, which is the
+// authoritative gate for the real width.
 //
 // The reference relies on SV semantics that happen to match RISC-V exactly:
 // signed / truncates toward zero, and signed % takes the sign of the

@@ -43,7 +43,7 @@ echo "  Output dir: $TEST_OUT_DIR"
 #   EXTRA_CFLAGS=-DDELAY_SHIFT=4 ./tools/simulate.sh fpga_blink
 # which shrinks fpga_blink.S's delay loop from ~4.2M iterations (sized to be
 # watchable on hardware) down to something simulable in seconds.
-riscv-none-elf-gcc -march=rv32i_zicsr -mabi=ilp32 \
+riscv-none-elf-gcc -march=rv32im_zicsr -mabi=ilp32 \
     -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
     -T $TESTS_DIR/linker.ld \
     $EXTRA_CFLAGS \
@@ -76,7 +76,7 @@ echo "▶ Verifying test logic with Spike (Detailed Log: $SPIKE_LOG)"
 # -l: Generate execution log
 # --log-commits: Log register commits
 # 2>&1: Redirect all output to log file
-spike -l --log-commits --isa=rv32i_zicsr -m0x80000000:0x10000 "$ELF" > "$SPIKE_LOG" 2>&1 || true
+spike -l --log-commits --isa=rv32im_zicsr -m0x80000000:0x10000 "$ELF" > "$SPIKE_LOG" 2>&1 || true
 
 # Check for success in the generated log
 # We check if a write of '1' occurred to the tohost address (0x80001000)

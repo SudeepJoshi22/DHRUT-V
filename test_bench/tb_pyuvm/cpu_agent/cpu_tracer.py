@@ -99,9 +99,15 @@ STORE_NAMES = {0: "sb", 1: "sh", 2: "sw"}
 
 # Total width of uop_t, needed to slice a slot out of the packed 2-wide
 # decode bundle (idg_uop). Keep in sync with riscv_uop_pkg.sv.
-UOP_W = 146
+# TOTAL width of uop_t, used to index slots in the packed decode-group bus
+# (uop_bus >> UOP_W*slot). Unlike the UOP_BITS offsets below, this one DOES
+# have to change every time a field is added, even at the top of the struct:
+# get it wrong and slot 1 is read one bit off, which shows up as retired
+# instructions whose encoding is a bit-shifted version of the real one.
+# Currently: is_mdu 146 | way 145 | valid 144 | ... | instr_bits 31:0.
+UOP_W = 147
 
-# Bit positions of uop_t fields within the packed 146-bit struct, used as a
+# Bit positions of uop_t fields within the packed 147-bit struct, used as a
 # fallback when per-field handles aren't exposed by the simulator.
 # Derived from rtl/include/riscv_uop_pkg.sv - in a packed struct the FIRST
 # declared field occupies the MSBs. `way` was added at the very top
@@ -111,8 +117,13 @@ UOP_W = 146
 #   writes_rd 74 | is_immediate 73 | is_branch 72 | is_jump 71 | is_load 70
 #   is_store 69 | lsu_sign_extend 68 | lsu_access_size 67:66 | pred_taken 65
 #   pred_target 64:33 | is_illegal 32 | instr_bits 31:0
+# is_mdu is the newest field and sits ABOVE these at bit 146 (way 145,
+# valid 144), which is why every offset below is still correct -- new
+# fields go at the top of the packed struct precisely so this table does
+# not have to be renumbered.
 # Keep in sync with riscv_uop_pkg.sv if the struct changes.
 UOP_BITS = {
+    "is_mdu":       (146, 146),
     "valid":        (144, 144),
     "opcode":       (143, 137),
     "alu_op":       (136, 127),

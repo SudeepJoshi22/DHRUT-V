@@ -64,6 +64,13 @@ module issue_hazard (
   //   SYSTEM       -> the single CSR file (and traps must stay precise)
   //   FENCE        -> ordering op, keep it on the older lane
   //   illegal      -> traps, same reason as SYSTEM
+  //   RV32M        -> the single MDU, which lane 1 has no path to
+  //
+  // is_mdu is NOT implied by the opcode check below and must be excluded
+  // explicitly: RV32M shares opcode OP with the ALU ops, distinguished
+  // only by funct7. Without this it looks lane-1 capable, goes to ALU1,
+  // and is executed as whatever its funct3 decodes to -- REM (funct3 110)
+  // comes out as OR, so `rem x3, 100, 7` quietly returns 103 instead of 2.
   // Keeping lane 1 this narrow is what lets Phase 3 leave the LSU, the
   // CSR unit and the BPU completely untouched.
   logic lane1_alu_class;
@@ -79,6 +86,7 @@ module issue_hazard (
                         && !i_uop1.is_store
                         && !i_uop1.is_branch
                         && !i_uop1.is_jump
+                        && !i_uop1.is_mdu
                         && !i_uop1.is_illegal;
 
   // ───────────────────────────────────────────────

@@ -40,6 +40,12 @@ package riscv_uop_pkg;
   // which is why `way` goes here rather than next to the fields it relates
   // to. Anything inserted lower down must be mirrored in UOP_BITS.
   typedef struct packed {
+    // RV32M multiply/divide. One bit is enough: funct3 (already carried
+    // below) selects which of the eight operations it is, exactly as it
+    // does for loads and stores. Declared FIRST so it occupies the new
+    // high bit and every existing field keeps its offset -- see the note
+    // on this struct in CLAUDE.md and UOP_BITS in cpu_tracer.py.
+    logic        is_mdu;
     logic        way;             // decode/issue lane this uop came from (0 = older)
     logic        valid;           // valid decoded instruction
     riscv_opcode_t opcode;

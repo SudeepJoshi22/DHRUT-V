@@ -1,6 +1,9 @@
 hart_ids: [0]
 hart0:
-  ISA: RV32IZicsr
+  # M added here is what makes riscof pick up the multiply/divide
+  # compliance suite -- declaring the extension is the switch, per the
+  # note in CLAUDE.md about adding a new ISA extension.
+  ISA: RV32IMZicsr
   physical_addr_sz: 32
   User_Spec_Version: '2.3'
   supported_xlen: [32]

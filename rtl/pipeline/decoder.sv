@@ -169,6 +169,18 @@ module decoder (
           o_uop.uses_rs1     = 1'b1;
           o_uop.uses_rs2     = 1'b1;
           o_uop.writes_rd    = (rd != 5'd0);
+
+          // RV32M is the same opcode distinguished only by funct7: the
+          // whole extension is funct7 = 0000001, with funct3 selecting
+          // which of the eight operations. Issue routes on is_mdu and the
+          // MDU re-reads funct3, so alu_op above is simply unused for
+          // these -- no separate decode of the operation is needed here.
+          //
+          // funct7 values other than 0000000 and 0100000 (add/sub, srl/sra)
+          // and 0000001 are not defined for OP. They are left alone rather
+          // than flagged illegal, which is the behaviour that was already
+          // here before M existed.
+          o_uop.is_mdu = (funct7 == 7'b0000001);
         end
 
         OPCODE_LUI: begin
