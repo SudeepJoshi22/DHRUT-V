@@ -19,13 +19,26 @@ set -e
 cd "$(dirname "$0")"
 
 CONFIG="config.ini"
+# Where the riscv-arch-test suite lives.
+#
+# tools/riscof/riscv-arch-test is a gitlink with no .gitmodules entry, so a
+# fresh clone gets an EMPTY DIRECTORY and riscof cannot run at all. Point
+# ARCH_TEST at a checkout elsewhere instead:
+#
+#   ARCH_TEST=~/github/DHRUT-V/tools/riscof/riscv-arch-test ./run_subset.sh m
+#
+# Do NOT symlink a checkout in as tools/riscof/riscv-arch-test: `git add`
+# replaces the gitlink with a symlink and commits an absolute path that is
+# only valid on one machine. That happened once already.
+ARCH_TEST="${ARCH_TEST:-riscv-arch-test}"
+
 # The arch-test tree splits by extension: .../rv32i_m/I/src for the base
 # integer tests, .../rv32i_m/M/src for multiply/divide. SUITE is therefore
 # chosen per group below rather than fixed.
-SUITE_I="riscv-arch-test/riscv-test-suite/rv32i_m/I/src"
-SUITE_M="riscv-arch-test/riscv-test-suite/rv32i_m/M/src"
+SUITE_I="$ARCH_TEST/riscv-test-suite/rv32i_m/I/src"
+SUITE_M="$ARCH_TEST/riscv-test-suite/rv32i_m/M/src"
 SUITE="$SUITE_I"
-ENV="riscv-arch-test/riscv-test-suite/env"
+ENV="$ARCH_TEST/riscv-test-suite/env"
 WORK_DIR="riscof_work"
 TMP_YAML="subset_test.yaml"
 
@@ -72,6 +85,14 @@ if [ -f "../../venv/bin/activate" ]; then
     source "../../venv/bin/activate"
 else
     echo "❌ Error: Virtual environment not found at ../../venv/bin/activate"
+    exit 1
+fi
+
+if [ ! -d "$SUITE" ]; then
+    echo "❌ arch-test suite not found at: $SUITE"
+    echo "   tools/riscof/riscv-arch-test is an unconfigured gitlink (empty on a"
+    echo "   fresh clone). Point ARCH_TEST at a real checkout, e.g.:"
+    echo "     ARCH_TEST=~/github/DHRUT-V/tools/riscof/riscv-arch-test $0 $*"
     exit 1
 fi
 
