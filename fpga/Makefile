@@ -96,7 +96,12 @@ synth:
 # netlist still had the old port name while the .cst had the new one.
 SRCS = $(shell grep -v '^[[:space:]]*\#' $(FILELIST) 2>/dev/null | grep -v '^[[:space:]]*$$')
 
-$(JSON): $(FILELIST) $(SRCS)
+# Program contents are baked into the netlist; changing make mem must rebuild it.
+ifeq ($(TOP),cpu_top)
+MEMORY_IMAGES = imem_init.hex dmem_init_b0.hex dmem_init_b1.hex dmem_init_b2.hex dmem_init_b3.hex
+endif
+
+$(JSON): $(FILELIST) $(SRCS) $(MEMORY_IMAGES)
 	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS) -json $(JSON)"
 
 $(PACK_JSON): $(JSON) $(CST)

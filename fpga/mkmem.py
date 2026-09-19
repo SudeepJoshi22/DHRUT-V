@@ -16,7 +16,7 @@ Indices are computed exactly as bram_slave.sv computes them --
 
 Usage:
   ./mkmem.py <image.hex> [--elf <prog.elf>] [--outdir .]
-             [--imem-depth 1024] [--dmem-depth 2048]
+             [--imem-depth 4096] [--dmem-depth 8192]
 """
 
 import argparse
@@ -25,6 +25,24 @@ import subprocess
 import sys
 
 NOP = 0x00000013
+BASE = 0x80000000
+
+
+def validate_layout(byte_mem, imem_depth, dmem_depth, symbols=None):
+    """Reject wraparound, including ELF BSS/stack not present in objcopy hex."""
+    for name, depth in [("imem", imem_depth), ("dmem", dmem_depth)]:
+        if depth <= 0 or depth & (depth - 1):
+            raise ValueError(f"{name} depth must be a positive power of two")
+    limit = BASE + min(imem_depth * 8, dmem_depth * 4)
+    if not byte_mem or min(byte_mem) < BASE or max(byte_mem) >= limit:
+        raise ValueError(f"image must fit both memories in 0x{BASE:08x}..0x{limit-1:08x}")
+    # The LED snoop still occupies the top dmem word until UART/MMIO lands.
+    data_limit = BASE + dmem_depth * 4 - 4
+    if max(byte_mem) >= data_limit:
+        raise ValueError("image overlaps the reserved LED word at top of dmem")
+    for name in ("_ebss", "_stack_top", "_end"):
+        if symbols and name in symbols and not BASE <= symbols[name] <= data_limit:
+            raise ValueError(f"{name}=0x{symbols[name]:08x} exceeds usable dmem end 0x{data_limit:08x}")
 
 
 def load_verilog_hex(path):
@@ -81,20 +99,21 @@ def write_hex(path, arr, width_bytes):
             f.write(f"{v:0{digits}x}\n")
 
 
-def tohost_from_elf(elf):
-    """Read the .tohost symbol address; linker.ld floats it after .text."""
+def symbols_from_elf(elf):
+    """Read image bounds and tohost with the installed cross-toolchain."""
     for nm in ("riscv-none-elf-nm", "riscv64-unknown-elf-nm", "riscv32-unknown-elf-nm"):
         try:
             out = subprocess.check_output([nm, "-n", str(elf)], text=True,
                                           stderr=subprocess.DEVNULL)
         except (FileNotFoundError, subprocess.CalledProcessError):
             continue
+        symbols = {}
         for line in out.splitlines():
             parts = line.split()
-            if len(parts) == 3 and parts[2] == "tohost":
-                return int(parts[0], 16)
-        return None
-    return None
+            if len(parts) == 3:
+                symbols[parts[2]] = int(parts[0], 16)
+        return symbols
+    raise ValueError(f"cannot read {elf}: put a RISC-V nm on PATH and provide a valid ELF")
 
 
 def main():
@@ -102,13 +121,20 @@ def main():
     ap.add_argument("image", help="objcopy -O verilog hex (tests/build/<t>/<t>.hex)")
     ap.add_argument("--elf", help="matching ELF, to report the real tohost address")
     ap.add_argument("--outdir", default=".", type=pathlib.Path)
-    ap.add_argument("--imem-depth", type=int, default=1024)  # x 64-bit = 8 KB
-    ap.add_argument("--dmem-depth", type=int, default=2048)  # x 32-bit = 8 KB
+    ap.add_argument("--imem-depth", type=int, default=4096)  # x 64-bit = 32 KB
+    ap.add_argument("--dmem-depth", type=int, default=8192)  # x 32-bit = 32 KB
     args = ap.parse_args()
 
     byte_mem = load_verilog_hex(args.image)
     if not byte_mem:
         sys.exit(f"error: {args.image} contained no data")
+    try:
+        symbols = symbols_from_elf(args.elf) if args.elf else {}
+        validate_layout(byte_mem, args.imem_depth, args.dmem_depth, symbols)
+    except ValueError as error:
+        sys.exit(f"error: {error}")
+    if not args.elf:
+        print("note   : no ELF supplied; reserved stack/BSS bounds cannot be checked")
 
     lo, hi = min(byte_mem), max(byte_mem)
     print(f"image  : {args.image}")
@@ -153,7 +179,7 @@ def main():
           f"(byte lanes, {args.dmem_depth} x 8-bit each)")
 
     if args.elf:
-        th = tohost_from_elf(args.elf)
+        th = symbols.get("tohost")
         if th is None:
             print("tohost : not found (is the ELF built, and nm on PATH?)")
         else:

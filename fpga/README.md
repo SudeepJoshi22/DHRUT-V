@@ -187,6 +187,54 @@ Save the log when you care about the result --
 `make check ... 2>&1 | tee check.log`. Reconstructing a synthesis result from a
 168 MB netlist because no log was kept is not fun.
 
+## Stage 2 hardware benchmarking progress
+
+Instruction and data memory defaults are now **32 KB each**. `mkmem.py` checks
+the image against both capacities and checks ELF `_ebss`, `_end` and
+`_stack_top` when present. It rejects a lone out-of-range address even when no
+second address collides with its wrapped index. The top dmem word is reserved
+for the LED snoop until UART/MMIO integration replaces it. `make mem` changes
+now invalidate the synthesized CPU netlist.
+
+The one-iteration Dhrystone and CoreMark images fit, with stack tops
+`0x80007040` and `0x80005840` respectively. With the CoreMark image, flat Gowin
+synthesis (`-nowidelut`, 2026-09-19) uses:
+
+| Resource | Used | Device capacity |
+|---|---:|---:|
+| LUT4 | 15,049 | 20,736 |
+| ALU | 1,046 | 15,552 |
+| FF | 3,538 | 15,552 |
+| BSRAM | 31 | 46 |
+
+This is a synthesis estimate for the current read-only instruction memory,
+not a placed-and-routed UART/loader result. Recheck utilization and 27 MHz
+timing after adding the writable loader path.
+
+Fast checks from the repository root, with the usual venv/toolchain active:
+
+```bash
+python3 -m unittest discover -s fpga/tests -p 'test_mkmem.py' -v
+python3 fpga/check_bram.py dhrystone_edgefix --expected-cycles 758
+python3 fpga/check_bram.py coremark_edgefix --expected-cycles 383043
+python3 fpga/check_uart.py
+```
+
+The BRAM check consumes an existing `tests/build/<name>/<name>.elf`/`.hex`
+pair, sets `TOHOST_ADDR` from the ELF, and runs the actual `cpu_top` wrapper.
+It checks the completion LEDs and timed-result writes, using isolated build
+directories. Both benchmarks pass and match the fixed-mode Python model's
+cycle counts exactly. Native simulation avoids the expensive Python CPU
+tracing; it is still simulation, not evidence from a physical board.
+
+The standalone UART has 8N1 TX/RX, an eight-byte RX FIFO, the planned three
+MMIO registers, busy-write backpressure, sticky overrun/W1C, and loader-side
+ready/valid channels. Loopback, FIFO overflow/order, byte strobes, loader
+ownership, short start glitches and invalid stop bits pass. It is **not yet
+connected to `cpu_top` or included in the synthesis filelist**. The loader,
+bus splitter, host sender, top-level pins and benchmark UART reporting remain
+the next integration step; see [UART_PLAN.md](UART_PLAN.md).
+
 ## Reading the board
 
 Six LEDs, active-low, allocated 1+1+2+2 so they answer four different questions:
@@ -197,7 +245,7 @@ Six LEDs, active-low, allocated 1+1+2+2 so they answer four different questions:
 | `[1]` | **fetch activity** -- advances on every completed fetch. Blinks while running, **freezes on a hang**. No sticky flag can show this. |
 | `[2]` | `tohost` written (program finished) |
 | `[3]` | `tohost == 1` (program passed) |
-| `[5:4]` | **driven by software** -- a store to `LED_ADDR` (`0x8000_1FFC`) latches its low 2 bits |
+| `[5:4]` | **driven by software** -- a store to `LED_ADDR` (`0x8000_7FFC` for 32 KB dmem) latches its low 2 bits |
 
 The software LEDs are a **snoop on the dmem write bus**, not a peripheral -- no
 address decoder, no second bus slave. The store also lands in RAM, harmlessly.

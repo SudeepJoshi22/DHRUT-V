@@ -30,7 +30,7 @@
 #define DELAY_SHIFT 22
 #endif
 
-.equ LED_ADDR,  0x80001FFC   # top word of the 8 KB dmem; move if DMEM_DEPTH grows
+.equ LED_ADDR,  0x80007FFC   # top word of the 32 KB dmem; move if DMEM_DEPTH grows
 .equ LED_STEPS, 16           # full sweep; low 2 bits of each value reach LEDs
 
 .section .text

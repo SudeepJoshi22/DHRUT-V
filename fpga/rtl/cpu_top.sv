@@ -16,10 +16,10 @@
 // dmem_driver.py each load TEST_HEX into their own dict. Stores land only in
 // dmem; self-modifying code is unsupported here just as it is in simulation.
 module cpu_top #(
-  // 8 KB each. imem is 64 bits wide (one access returns the two instructions
+  // 32 KB each. imem is 64 bits wide (one access returns the two instructions
   // ifetch.sv expects in s_rdata[31:0] and s_rdata[63:32]), dmem is 32.
-  parameter int    IMEM_DEPTH  = 1024,              // x 64-bit = 8 KB
-  parameter int    DMEM_DEPTH  = 2048,              // x 32-bit = 8 KB
+  parameter int    IMEM_DEPTH  = 4096,              // x 64-bit = 32 KB
+  parameter int    DMEM_DEPTH  = 8192,              // x 32-bit = 32 KB
   parameter string IMEM_INIT   = "imem_init.hex",
   parameter string DMEM_INIT   = "dmem_init.hex",
   // Where the test program signals completion. tests/linker.ld places
@@ -28,7 +28,7 @@ module cpu_top #(
   parameter logic [31:0] TOHOST_ADDR = 32'h8000_1000,
   // Software-driven LEDs: a store to this address latches its low bits onto
   // led[5:4]. See the snoop below and tests/asm/fpga_blink.S.
-  parameter logic [31:0] LED_ADDR    = 32'h8000_1FFC,
+  parameter logic [31:0] LED_ADDR    = 32'h8000_0000 + DMEM_DEPTH * 4 - 4,
   parameter int    HEARTBEAT_BIT     = 23,          // 27 MHz >> 2^23 ~= 1.6 Hz
   parameter int    ACTIVITY_BIT      = 21,          // fetch-rate blink
   // External reset button (S1, pin 88).

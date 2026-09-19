@@ -1,8 +1,11 @@
 # UART + serial program loader — deferred design
 
-Status: **planned, not implemented.** Phase 1 (a program running on the board
-with LEDs as the only indicator) is deliberately ahead of this. This document
-records the design so it can be picked up without re-deriving it.
+Status: **Stage 2 started.** The FPGA hardware branch expands instruction and
+data memories to 32 KB each, validates image/BSS/stack capacity, and makes the
+synthesis netlist depend on the generated memory images. `rtl/uart.sv` is
+implemented and passes standalone loopback, FIFO, framing and loader-channel
+tests (`python3 fpga/check_uart.py`). The serial loader, bus decoder, host
+tool and top-level integration below are still to be implemented.
 
 ## Why this matters
 
@@ -121,7 +124,11 @@ attached still boots. Pressing reset re-enters the loader.
   loader/UART) and `core_rst_n = sys_rst_n && !loading`. Bump depths.
 - `fpga/cpu_top.cst` — add `uart_tx` / `uart_rx`. The onboard BL616 is a
   USB-serial bridge, so this enumerates as `/dev/ttyUSB*` with no extra wiring.
-  **Pin numbers need confirming against the board docs.**
+  Pin numbers are confirmed against [Sipeed's UART example at revision
+  e23949a](https://github.com/sipeed/TangNano-20K-example/blob/e23949a0a77381b94960cbc4e97a7c5e5ba8d222/uart/src/top.cst):
+  FPGA `uart_tx` = pin 69, `uart_rx` = pin 70, both LVCMOS33. These constraints
+  have not yet been added because the corresponding top-level ports do not
+  exist until UART integration.
 
 ## Sizing
 
@@ -129,12 +136,13 @@ attached still boots. Pressing reset re-enters the loader.
 let alone `.data`/`.bss`, so the C benchmarks need the bump. That is roughly 70%
 of the part's ~92 KB usable BSRAM; 16 + 16 is the fallback if PnR gets tight.
 
-`LED_ADDR` in `cpu_top.sv` is currently the top word of the 8 KB dmem
-(`0x8000_1FFC`) — **it must move when `DMEM_DEPTH` grows.**
+`LED_ADDR` now follows the top word of dmem (`0x8000_7FFC` at 32 KB).
+The blink test was updated and `mkmem.py` reserves this word. A future real
+LED MMIO register can remove that reservation.
 
 ## Baud
 
-27 MHz / 115200 = 234.375. A divisor of 234 is −0.16% error, well inside 8N1
+27 MHz / 115200 = 234.375. A divisor of 234 gives +0.16% baud error, well inside 8N1
 tolerance. No PLL needed.
 
 ## Verification
