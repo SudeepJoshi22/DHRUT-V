@@ -6,18 +6,17 @@ DHRUT-V has no UART, so benchmarks (tests/bench/dhrystone,
 tests/bench/coremark) can't print their own report - they stash results
 in a handful of global variables instead (dhrutv_final_* - see each
 benchmark's port.c/core_portme.c) and exit through the usual `tohost`
-pass/fail convention. This script reads those values back out of the
-ELF's final memory image via the cocotb-produced VCD, so a human/CI can
-still get a normal-looking report after an RTL run.
+pass/fail convention. This script reconstructs those values from DMEM writes
+in simulation.log and rejects incomplete/failed runs or missing measurements.
 
 Usage:
     tools/bench_report.py <test_name> [--kind dhrystone|coremark|generic]
 
-Reads tests/build/<test_name>/dump.vcd for the final value of the named
-global(s), matched against tests/build/<test_name>/<test_name>.elf's
-symbol table so it doesn't need to know their addresses ahead of time.
+Use --json for a machine-readable result including build.json conditions.
 """
 import argparse
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -79,17 +78,11 @@ def read_final_globals_from_trace(sim_log_path, elf_path, names):
     return results
 
 
-def to_signed32(v):
-    if v is None:
-        return None
-    v &= 0xFFFFFFFF
-    return v - 0x100000000 if v & 0x80000000 else v
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("test_name")
     ap.add_argument("--kind", choices=["dhrystone", "coremark", "generic"], default="generic")
+    ap.add_argument("--json", action="store_true", help="emit a result with saved build conditions")
     args = ap.parse_args()
 
     build_dir = ROOT / "tests" / "build" / args.test_name
@@ -100,6 +93,16 @@ def main():
         print(f"error: expected {elf} and {sim_log} - run tools/simulate_c.sh first", file=sys.stderr)
         sys.exit(1)
 
+    with sim_log.open("rb") as stream:
+        stream.seek(max(0, sim_log.stat().st_size - 262144))
+        ending = stream.read().decode(errors="replace")
+    if "PASS: tohost=0x00000001" not in ending or "FAIL: tohost=" in ending:
+        ap.error("simulation has no successful tohost completion")
+    metadata_path = build_dir / "build.json"
+    metadata = json.loads(metadata_path.read_text()) if metadata_path.exists() else None
+    if metadata and metadata["elf_sha256"] != hashlib.sha256(elf.read_bytes()).hexdigest():
+        ap.error("ELF does not match the recorded build")
+
     if args.kind == "dhrystone":
         names = [
             "dhrutv_final_dmips",
@@ -108,12 +111,34 @@ def main():
             "dhrutv_final_runs",
         ]
     elif args.kind == "coremark":
-        names = ["dhrutv_final_iterations", "dhrutv_final_total_cycles", "dhrutv_final_mhz"]
+        names = ["dhrutv_final_iterations", "dhrutv_final_total_cycles",
+                 "dhrutv_final_mhz", "dhrutv_final_errors"]
     else:
         names = ["dhrutv_final_cycles" if args.kind != "coremark" else "dhrutv_final_total_cycles"]
 
     vals = read_final_globals_from_trace(sim_log, elf, names)
-    vals = {k: to_signed32(v) for k, v in vals.items()}
+    if args.kind in ("coremark", "dhrystone"):
+        cycles = vals.get("dhrutv_final_total_cycles" if args.kind == "coremark"
+                          else "dhrutv_final_cycles")
+        iterations = vals.get("dhrutv_final_iterations" if args.kind == "coremark"
+                              else "dhrutv_final_runs")
+        if not cycles or not iterations:
+            ap.error("missing or zero cycle/iteration result; no score can be derived")
+        if args.kind == "coremark" and vals.get("dhrutv_final_errors") != 0:
+            ap.error("CoreMark error status is missing or nonzero")
+        score = iterations * 1_000_000 / cycles
+        if args.kind == "dhrystone":
+            score /= 1757
+        if args.json:
+            print(json.dumps({"test": args.test_name, "kind": args.kind,
+                              "status": "PASS", "cycles": cycles,
+                              "iterations": iterations, "cycles_per_iteration": cycles / iterations,
+                              "per_mhz": score, "measurement": "simulation flow validation",
+                              "conditions": metadata}, indent=2))
+            return
+    elif args.json:
+        print(json.dumps({"test": args.test_name, "values": vals, "conditions": metadata}, indent=2))
+        return
 
     print(f"# Benchmark report: {args.test_name} ({args.kind})")
     print()
@@ -148,7 +173,7 @@ def main():
             print("     using an assumed 100MHz clock that cancels out the same way)")
             print(f"    dhrutv_final_dmips = {vals.get('dhrutv_final_dmips')}"
                   f"  (== DMIPS/MHz x assumed_mhz = {dmips_per_mhz:.3f} x {assumed_mhz}"
-                  f" -> rounds to {round(dmips_per_mhz * assumed_mhz)})")
+                  f" -> truncates to {int(dmips_per_mhz * assumed_mhz)})")
 
     elif args.kind == "coremark":
         cycles = vals.get("dhrutv_final_total_cycles")

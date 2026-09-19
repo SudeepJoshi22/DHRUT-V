@@ -5,11 +5,18 @@ Original Author: Shay Gal-on
 
 [DHRUT-V]: port for the DHRUT-V RISC-V core. Timing comes from the
 mcycle CSR instead of a memory-mapped counter; there's no UART, so
-ee_printf is a no-op and results are read back from the
-dhrutv_final_* globals (see core_main.c) instead of printed text.
+ee_printf observes validation messages and results are read back from the
+dhrutv_final_* globals instead of printed text.
 */
 #include "coremark.h"
 #include "core_portme.h"
+
+#if !defined(ITERATIONS) || ITERATIONS <= 0
+#error "DHRUT-V result capture requires an explicit positive ITERATIONS"
+#endif
+#if MULTITHREAD != 1
+#error "DHRUT-V currently supports one CoreMark context"
+#endif
 
 #if VALIDATION_RUN
 volatile ee_s32 seed1_volatile = 0x3415;
@@ -33,6 +40,7 @@ volatile ee_s32 seed5_volatile = 0;
 #define DHRUTV_ASSUMED_MHZ 100 /* only used to normalize the CoreMark/MHz score */
 #endif
 
+long dhrutv_final_errors       = 0;
 long dhrutv_final_iterations   = 0;
 long dhrutv_final_total_cycles = 0;
 long dhrutv_final_mhz          = DHRUTV_ASSUMED_MHZ;
@@ -51,18 +59,7 @@ CORETIMETYPE barebones_clock(void) {
 #define MYTIMEDIFF(fin, ini)       ((fin) - (ini))
 #define TIMER_RES_DIVIDER          1
 #define SAMPLE_TIME_IMPLEMENTATION 1
-/* barebones_clock() returns the mcycle CSR, so a "tick" IS a core cycle and
-   ticks-per-second is simply the clock frequency. CLOCKS_PER_SEC comes from
-   <time.h>, which does not exist in this freestanding build (HAS_TIME_H 0),
-   so referencing it does not compile.
-
-   DHRUTV_ASSUMED_MHZ cancels out of the reported score the same way it does
-   for Dhrystone: CoreMark/MHz = iterations / (seconds x MHz), and
-   seconds = cycles / (MHz x 1e6), so the MHz term divides out and only
-   iterations and cycles remain. tools/bench_report.py computes the score
-   from dhrutv_final_iterations and dhrutv_final_total_cycles directly and
-   never uses this value. */
-#define EE_TICKS_PER_SEC           ((DHRUTV_ASSUMED_MHZ * 1000000UL) / TIMER_RES_DIVIDER)
+#define EE_TICKS_PER_SEC           (CLOCKS_PER_SEC / TIMER_RES_DIVIDER)
 
 static CORETIMETYPE start_time_val, stop_time_val;
 
@@ -86,17 +83,58 @@ secs_ret time_in_secs(CORE_TICKS ticks) {
 
 ee_u32 default_num_contexts = 1;
 
+static int validated;
+
+static int starts_with(const char *text, const char *prefix) {
+    while (*prefix) {
+        if (*text++ != *prefix++) return 0;
+    }
+    return 1;
+}
+
+/* Observe the unmodified benchmark's verdict, not its unconditional return
+   value. CRC messages begin with "[%u]ERROR!", datatype/time errors with
+   "ERROR", and unknown seeds produce "Cannot validate". Require the explicit
+   success message as well, so an unrecognized/incomplete run cannot pass. */
 int ee_printf(const char *fmt, ...) {
-    (void)fmt;
+    if (!fmt) return 0;
+    if (starts_with(fmt, "Correct operation validated.")) validated = 1;
+    if (starts_with(fmt, "Errors detected") || starts_with(fmt, "Cannot validate")) {
+        dhrutv_final_errors = 1;
+    }
+    for (const char *s = fmt; *s; ++s) {
+        if (starts_with(s, "ERROR")) dhrutv_final_errors = 1;
+    }
     return 0;
 }
 
 void portable_init(core_portable *p, int *argc, char *argv[]) {
     (void)argc;
     (void)argv;
+    validated = 0;
+    dhrutv_final_errors = 0;
     p->portable_id = 1;
 }
 
+/* Report once and halt: returning to crt0 would overwrite a failing verdict
+   with main's unconditional zero return before Spike polls tohost.
+   Convention: bit0 = done, bits[31:1] = exit code, 0 = pass. */
+extern volatile unsigned long long tohost;
+
 void portable_fini(core_portable *p) {
     p->portable_id = 0;
+
+    /* Score, for tools/bench_report.py to recover from the dmem write trace.
+       Cycles come from the timestamps this file already keeps; iterations
+       from the compile-time ITERATIONS, since results[].iterations lives in
+       core_main.c's scope. Auto-calibration (ITERATIONS unset) is therefore
+       not reportable -- always pass -DITERATIONS=<n>. */
+    dhrutv_final_iterations = (long)((ee_u32)default_num_contexts * (ee_u32)ITERATIONS);
+    dhrutv_final_total_cycles =
+        (long)(CORE_TICKS)(stop_time_val - start_time_val);
+
+    if (!validated) dhrutv_final_errors = 1;
+    __asm__ volatile("" ::: "memory");
+    tohost = ((unsigned long long)dhrutv_final_errors << 1) | 1ULL;
+    for (;;) __asm__ volatile("nop");
 }

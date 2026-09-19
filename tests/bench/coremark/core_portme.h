@@ -21,6 +21,8 @@ UART; timing is read from the mcycle CSR (see core_portme.c).
 #ifndef CORE_PORTME_H
 #define CORE_PORTME_H
 
+#include <stddef.h>
+
 #ifndef HAS_FLOAT
 #define HAS_FLOAT 0
 #endif
@@ -68,7 +70,6 @@ typedef unsigned char  ee_u8;
 typedef unsigned int   ee_u32;
 typedef ee_u32         ee_ptr_int;
 typedef size_t         ee_size_t;
-#define NULL ((void *)0)
 
 #define align_mem(x) (void *)(4 + (((ee_ptr_int)(x)-1) & ~3))
 
@@ -126,5 +127,6 @@ int ee_printf(const char *fmt, ...);
 extern long dhrutv_final_iterations;
 extern long dhrutv_final_total_cycles;
 extern long dhrutv_final_mhz;
+extern long dhrutv_final_errors;
 
 #endif /* CORE_PORTME_H */

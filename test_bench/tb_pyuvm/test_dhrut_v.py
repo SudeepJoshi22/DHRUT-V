@@ -39,7 +39,7 @@ class DhrutVTest(uvm_test):
             
             if not self.end_event.is_set():
                 self.logger.error("WATCHDOG TIMEOUT reached!")
-                self.end_event.set()
+                raise AssertionError(f"No tohost completion after {cycle_timeout} cycles")
 
         cocotb.start_soon(timeout_watcher())
 

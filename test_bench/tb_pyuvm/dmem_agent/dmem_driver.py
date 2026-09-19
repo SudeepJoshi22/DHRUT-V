@@ -27,8 +27,12 @@ class DMemDriver(uvm_driver):
         *intrinsic* IPC without synthetic memory latency dominating the
         result, e.g. when deciding where microarchitectural effort should
         go. Not a substitute for the random mode in functional regressions.
+
+        MEM_STALL_MODE=fixed uses run_bram_responder instead of this delay:
+        it models the FPGA's registered response and mandatory return to IDLE.
         """
-        if os.getenv("MEM_STALL_MODE", "random") == "zero":
+        mode = os.getenv("MEM_STALL_MODE", "random")
+        if mode == "zero":
             return 0
         return random.randint(1, 5)
 
@@ -92,6 +96,10 @@ class DMemDriver(uvm_driver):
             self.logger.info("DMEM initialized empty (no TEST_HEX)")
 
     async def run_phase(self):
+        if os.getenv("MEM_STALL_MODE", "random") == "fixed":
+            from ..bram_responder import run_bram_responder
+            await run_bram_responder(self.dmem_if, self.mem)
+            return
         # Default bus values
         self.dmem_if.s_ready.value = 0
         self.dmem_if.s_rdata.value = 0

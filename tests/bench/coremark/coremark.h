@@ -23,8 +23,6 @@ Original Author: Shay Gal-on
 /* Configuration: TOTAL_DATA_SIZE
         Define total size for data algorithms will operate on
 */
-#include <stddef.h>  //pqr5: size_t support
-
 #ifndef TOTAL_DATA_SIZE
 #define TOTAL_DATA_SIZE 2 * 1000
 #endif
@@ -154,7 +152,7 @@ typedef struct RESULTS_S
     ee_u16 crcmatrix;
     ee_u16 crcstate;
     ee_s16 err;
-    /* ultithread specific */
+    /* multithread specific */
     core_portable port;
 } core_results;
 

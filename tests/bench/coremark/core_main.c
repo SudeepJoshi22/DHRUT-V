@@ -61,8 +61,7 @@ iterate(void *pres)
     res->crcstate            = 0;
 
     for (i = 0; i < iterations; i++)
-    {   
-        //ee_printf("%0c", (char)(i+1)); //pqr5: debug msg - 0-255 for debug...
+    {
         crc      = core_bench_list(res, 1);
         res->crc = crcu16(crc, res->crc);
         crc      = core_bench_list(res, -1);
@@ -70,7 +69,6 @@ iterate(void *pres)
         if (i == 0)
             res->crclist = res->crc;
     }
-    //ee_printf("bye");  //pqr5: debug msg
     return NULL;
 }
 
@@ -112,7 +110,6 @@ main(void)
 {
     int   argc = 0;
     char *argv[1];
-
 #else
 MAIN_RETURN_TYPE
 main(int argc, char *argv[])
@@ -358,8 +355,8 @@ for (i = 0; i < MULTITHREAD; i++)
     }
     total_errors += check_data_types();
     /* and report results */
-    ee_printf("CoreMark Size    : %lu\n", (ee_u32)results[0].size);  //pqr5: changed "long unsigned" to ee_u32
-    ee_printf("Total ticks      : %lu\n", (ee_u32)total_time);       //pqr5: changed "long unsigned" to ee_u32
+    ee_printf("CoreMark Size    : %lu\n", (long unsigned)results[0].size);
+    ee_printf("Total ticks      : %lu\n", (long unsigned)total_time);
 #if HAS_FLOAT
     ee_printf("Total time (secs): %f\n", time_in_secs(total_time));
     if (time_in_secs(total_time) > 0)
@@ -381,7 +378,7 @@ for (i = 0; i < MULTITHREAD; i++)
     }
 
     ee_printf("Iterations       : %lu\n",
-              (ee_u32)default_num_contexts * results[0].iterations);  //pqr5: changed "long unsigned" to ee_u32 
+              (long unsigned)default_num_contexts * results[0].iterations);
     ee_printf("Compiler version : %s\n", COMPILER_VERSION);
     ee_printf("Compiler flags   : %s\n", COMPILER_FLAGS);
 #if (MULTITHREAD > 1)
@@ -441,12 +438,5 @@ for (i = 0; i < MULTITHREAD; i++)
     /* And last call any target specific code for finalizing */
     portable_fini(&(results[0].port));
 
-    /* [DHRUT-V]: stash the score for post-run inspection (there's no
-     * UART, so the ee_printf report above is a no-op) and propagate
-     * total_errors as the exit code instead of always returning 0 -
-     * tohost then reflects real pass/fail, not just "didn't crash". */
-    dhrutv_final_iterations   = (long)((ee_u32)default_num_contexts * results[0].iterations);
-    dhrutv_final_total_cycles = (long)(ee_u32)total_time;
-
-    return total_errors;
+    return MAIN_RETURN_VAL;
 }

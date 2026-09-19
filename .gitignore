@@ -8,6 +8,8 @@ obj_dir/
 **/*.elf
 **/*.fs
 **/*.json
+# Small, reviewed benchmark reports are part of the methodology disclosure.
+!tests/bench/results/*.json
 **/build
 venv
 venv.sh

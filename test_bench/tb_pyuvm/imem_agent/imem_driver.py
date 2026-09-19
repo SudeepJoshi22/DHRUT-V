@@ -7,6 +7,7 @@ import os
 
 from cocotb.triggers import RisingEdge
 from pyuvm import uvm_driver
+from ..bram_responder import run_bram_responder
 
 class IMemDriver(uvm_driver):
     """
@@ -63,6 +64,11 @@ class IMemDriver(uvm_driver):
 
     async def run_phase(self):
 
+        if os.getenv("MEM_STALL_MODE", "random") == "fixed":
+            await run_bram_responder(self.imem_if, self.mem, data_w=64,
+                                     writable=False, fill=0x00000013)
+            return
+
         # Default signal values
 
 
@@ -82,14 +88,11 @@ class IMemDriver(uvm_driver):
                 w1 = self.mem.get(block_addr + 4, 0x00000013)
                 instr = (w1 << 32) | w0
 
-                # MEM_STALL_MODE=zero disables injected fetch latency, to
-                # measure the core's intrinsic IPC without synthetic memory
-                # stalls dominating. Default (random) keeps the randomized
-                # timing that shakes out handshake/flush bugs.
+                # Preserve the existing zero/random regression models. Fixed
+                # mode uses the separate BRAM handshake model above.
                 stall_enabled = os.getenv("MEM_STALL_MODE", "random") != "zero"
-
                 if stall_enabled and random.random() < 0.4:
-                    stall_cycles = random.randint(1, 2)  # 1 or 2 cycles of stall
+                    stall_cycles = random.randint(1, 2)
                     self.logger.debug(f"IMem introducing {stall_cycles} stall cycle(s)")
 
                     self.imem_if.s_ready.value = 0
