@@ -154,8 +154,13 @@ CLOCK_HZ        ?= 27000000
 PORT            ?=
 TIMEOUT         ?= 120
 EXPECTED_ERRORS ?= 0
+INTERACTIVE     ?= 1
 BRAM_TEST       ?= dhrystone_edgefix
 EXPECTED_CYCLES ?=
+ELF             ?=
+PROGRAM_NAME    ?= hello_uart
+PROGRAM_SOURCES ?= examples/hello_uart.c
+PROGRAM_CFLAGS  ?=
 
 VALIDATION_ENABLED = $(filter 1 yes true,$(VALIDATION))
 VALIDATION_ARG     = $(if $(VALIDATION_ENABLED),--validation,)
@@ -164,7 +169,13 @@ BENCH_TEST         = $(BENCH)_hw_$(ITERATIONS)$(BENCH_SUFFIX)
 BENCH_DIR          = ../tests/build/$(BENCH_TEST)
 BENCH_ELF          = $(BENCH_DIR)/$(BENCH_TEST).elf
 BENCH_HEX          = $(BENCH_DIR)/$(BENCH_TEST).hex
-LOG                ?= $(BENCH_TEST).log
+LOG                ?=
+BENCH_LOG           = $(if $(LOG),$(LOG),$(BENCH_TEST).log)
+ELF_LOG             = $(if $(LOG),$(LOG),$(notdir $(basename $(ELF))).log)
+INTERACTIVE_ARG      = $(if $(filter 1 yes true,$(INTERACTIVE)),--interactive,)
+PROGRAM_DIR         = ../tests/build/$(PROGRAM_NAME)
+PROGRAM_ELF         = $(PROGRAM_DIR)/$(PROGRAM_NAME).elf
+PROGRAM_HEX         = $(PROGRAM_DIR)/$(PROGRAM_NAME).hex
 
 benchmark:
 	$(PYTHON) ./build_benchmark.py $(BENCH) --iterations $(ITERATIONS) \
@@ -187,7 +198,64 @@ benchmark-upload:
 	$(MAKE) benchmark BENCH=$(BENCH) ITERATIONS=$(ITERATIONS) \
 		VALIDATION=$(VALIDATION) CLOCK_HZ=$(CLOCK_HZ) PYTHON=$(PYTHON)
 	$(PYTHON) ./loadprog.py $(BENCH_ELF) --port "$(PORT)" \
-		--log "$(LOG)" --timeout $(TIMEOUT)
+		--log "$(BENCH_LOG)" --timeout $(TIMEOUT)
+
+# Upload any already-linked bare-metal ELF. This changes BRAM contents over
+# UART; it does not synthesize or reflash the FPGA.
+elf-upload:
+	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
+	@test -n "$(ELF)" || { echo "ELF=/path/to/program.elf is required" >&2; exit 2; }
+	@test -f "$(ELF)" || { echo "ELF not found: $(ELF)" >&2; exit 2; }
+	$(PYTHON) ./loadprog.py "$(ELF)" --port "$(PORT)" \
+		--log "$(ELF_LOG)" --timeout $(TIMEOUT) $(INTERACTIVE_ARG)
+
+# Compile one or more freestanding C files for the resident RV32IM CPU. The
+# public header supplies UART, cycle-counter and completion helpers.
+program-build:
+	@test -n "$(PROGRAM_NAME)" || { echo "PROGRAM_NAME is required" >&2; exit 2; }
+	@test -n "$(PROGRAM_SOURCES)" || { echo "PROGRAM_SOURCES is required" >&2; exit 2; }
+	@mkdir -p $(PROGRAM_DIR)
+	riscv-none-elf-gcc -march=rv32im_zicsr -mabi=ilp32 -O2 \
+		-ffreestanding -fno-stack-protector -fno-builtin -static \
+		-mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
+		-Iinclude $(PROGRAM_CFLAGS) -T ../tests/linker_c.ld \
+		../tests/crt0.S $(PROGRAM_SOURCES) -lgcc -o $(PROGRAM_ELF)
+	riscv-none-elf-objcopy -O verilog $(PROGRAM_ELF) $(PROGRAM_HEX)
+	riscv-none-elf-size $(PROGRAM_ELF)
+
+program-upload:
+	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
+	$(MAKE) program-build PROGRAM_NAME=$(PROGRAM_NAME) \
+		PROGRAM_SOURCES="$(PROGRAM_SOURCES)" PROGRAM_CFLAGS="$(PROGRAM_CFLAGS)"
+	$(MAKE) elf-upload ELF=$(PROGRAM_ELF) PORT="$(PORT)" \
+		LOG="$(if $(LOG),$(LOG),$(PROGRAM_NAME).log)" TIMEOUT=$(TIMEOUT) PYTHON=$(PYTHON)
+
+# Interactive laptop-side launcher. Iterations are compiled into a fresh
+# benchmark ELF for reproducibility, then that ELF is loaded over UART in
+# seconds; FPGA synthesis is not involved.
+console:
+	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
+	@set -eu; \
+	printf 'Program [dhrystone/coremark/elf]: '; read program; \
+	case "$$program" in \
+	  dhrystone|coremark) \
+	    printf 'Iterations: '; read iterations; \
+	    validation=0; \
+	    if test "$$program" = coremark; then \
+	      printf 'Validation seeds? [y/N]: '; read answer; \
+	      case "$$answer" in y|Y|yes|YES) validation=1;; esac; \
+	    fi; \
+	    $(MAKE) benchmark-upload BENCH="$$program" ITERATIONS="$$iterations" \
+	      VALIDATION="$$validation" PORT="$(PORT)" TIMEOUT="$(TIMEOUT)";; \
+	  elf) \
+	    printf 'ELF path: '; read elf; \
+	    $(MAKE) elf-upload ELF="$$elf" PORT="$(PORT)" TIMEOUT="$(TIMEOUT)";; \
+	  *) echo 'Expected dhrystone, coremark, or elf' >&2; exit 2;; \
+	esac
+
+terminal:
+	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
+	$(PYTHON) -m serial.tools.miniterm "$(PORT)" 115200
 
 verify-uart:
 	$(PYTHON) ./check_uart.py
@@ -246,4 +314,4 @@ clean-mem:
 .PHONY: check synth bitstream flash flash-nv clean clean-all clean-mem mem area \
 	benchmark benchmark-mem benchmark-bitstream benchmark-flash \
 	benchmark-flash-nv benchmark-upload verify-uart verify-loader verify-host \
-	verify-mem verify-bram
+	verify-mem verify-bram elf-upload program-build program-upload console terminal

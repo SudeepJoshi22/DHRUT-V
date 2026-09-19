@@ -29,6 +29,15 @@ Verilator and OSS CAD Suite on PATH. Host upload requires Python's `pyserial`.
 The Makefile is the operator interface; its Python helpers implement ELF
 construction and the wire protocol without launching the slow pyUVM simulation.
 
+There are two separate operations:
+
+1. **Configure the FPGA once.** `benchmark-flash` writes the CPU, UART and
+   hardware loader into FPGA configuration SRAM. A program is also baked into
+   BRAM as a recovery/default image because FPGA memories need initial contents.
+2. **Replace only the CPU program over UART.** Reset enters the loader, which
+   writes a new ELF image into instruction and data BRAM and releases the CPU.
+   This takes seconds and performs no synthesis or FPGA configuration.
+
 ```bash
 make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
 ```
@@ -51,6 +60,26 @@ It waits for `R`, uploads, checks `K`, then **keeps the same connection open** t
 print and save output. An adjacent acknowledgment and first text byte are not
 lost. It saves a JSON result beside the log, including ELF hash and available
 build metadata. Errors or a missing final result cause a nonzero host exit.
+
+For an interactive launcher that asks for the benchmark and iteration count:
+
+```bash
+make -C fpga console PORT=/dev/serial/by-id/ACTUAL_DEVICE
+```
+
+The selected iteration count is compiled into a small benchmark ELF and that
+ELF is uploaded over UART. It is deliberately part of the build metadata rather
+than an unrecorded runtime setting, so a saved result remains reproducible. This
+does not rebuild the FPGA bitstream.
+
+To upload an arbitrary existing ELF and attach an interactive terminal:
+
+```bash
+make -C fpga elf-upload ELF=/path/to/program.elf \
+  PORT=/dev/serial/by-id/ACTUAL_DEVICE
+```
+
+See [CUSTOM_PROGRAMS.md](CUSTOM_PROGRAMS.md) for the supported C interface.
 
 For CoreMark, build `coremark --iterations N`, optionally `--validation` for the
 validation seeds. Hardware builds enforce the real 27 MHz timebase: a one-iteration

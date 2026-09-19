@@ -75,12 +75,31 @@ def capture(port, log, timeout):
     raise TimeoutError('No complete benchmark result before capture timeout')
 
 
+def interactive_console(port):
+    from serial.tools.miniterm import Miniterm, key_description
+    terminal = Miniterm(port, echo=False, eol='crlf', filters=())
+    terminal.raw = True
+    terminal.set_rx_encoding('UTF-8')
+    terminal.set_tx_encoding('UTF-8')
+    print(f'Interactive UART started; quit with {key_description(terminal.exit_character)}',
+          file=sys.stderr)
+    terminal.start()
+    try:
+        terminal.join(True)
+    except KeyboardInterrupt:
+        pass
+    terminal.join()
+    terminal.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('elf', type=Path)
     ap.add_argument('--port', required=True, help='/dev/serial/by-id/... or COM port')
     ap.add_argument('--log', type=Path, default=Path('benchmark-uart.log'))
     ap.add_argument('--timeout', type=float, default=120)
+    ap.add_argument('--interactive', action='store_true',
+                    help='after upload, connect stdin/stdout instead of waiting for DHRUTV_RESULT')
     args = ap.parse_args()
     if args.timeout <= 0:
         ap.error('--timeout must be positive')
@@ -99,6 +118,9 @@ def main():
         port.reset_input_buffer()
         print('Press and release FPGA reset now; waiting for loader ready...', flush=True)
         upload(port, frame)
+        if args.interactive:
+            interactive_console(port)
+            return
         with args.log.open('wb') as log:
             result = capture(port, log, args.timeout)
     result['elf_sha256'] = elf_hash

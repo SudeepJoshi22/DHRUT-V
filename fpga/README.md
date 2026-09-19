@@ -34,6 +34,9 @@ make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 # Build a benchmark payload, then upload it over the UART used for output
 make benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
   PORT=/dev/serial/by-id/<board-port>
+
+# Or choose benchmark/iterations from an interactive prompt
+make console PORT=/dev/serial/by-id/<board-port>
 ```
 
 `make mem` must come first -- see *The program lives in the bitstream* below.
@@ -151,6 +154,9 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `VALIDATION` | `0` | set to `1` for CoreMark validation seeds |
 | `PORT` | empty | serial port required by `benchmark-upload` |
 | `LOG` | generated benchmark name | UART capture filename |
+| `ELF` | empty | arbitrary existing ELF for `elf-upload` |
+| `PROGRAM_NAME` | `hello_uart` | output name for a custom C program |
+| `PROGRAM_SOURCES` | `examples/hello_uart.c` | custom C source file(s) |
 
 A `.f` file lists one source per line, `#` for **whole-line** comments only --
 the Makefile strips `^\s*#` lines but not trailing comments, so a comment after
@@ -181,6 +187,17 @@ make flash-nv TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 # Build and upload a benchmark through the FPGA UART loader
 make benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
   PORT=/dev/serial/by-id/ACTUAL_DEVICE LOG=dhrystone-50000.log
+
+# Interactive benchmark/iteration selection
+make console PORT=/dev/serial/by-id/ACTUAL_DEVICE
+
+# Compile, upload and interact with a custom bare-metal C program
+make program-upload PROGRAM_NAME=my_app PROGRAM_SOURCES=../my_app.c \
+  PORT=/dev/serial/by-id/ACTUAL_DEVICE
+
+# Or upload any compatible ELF you built elsewhere
+make elf-upload ELF=/path/to/program.elf \
+  PORT=/dev/serial/by-id/ACTUAL_DEVICE
 
 # Bake a benchmark into a new SRAM or persistent bitstream
 make benchmark-flash BENCH=dhrystone ITERATIONS=1
@@ -309,8 +326,11 @@ Diagnosing a dark board:
 | `tangnano20k.cst` | pin constraints for the `blink` smoke test |
 | `blink.f` / `blink.v` | CPU-less LED blinker, for proving the board and flow |
 | `mkmem.py` | program image generator |
-| `build_benchmark.py` | build a hardware benchmark ELF and upload payload |
-| `loadprog.py` | serial upload, console capture and result JSON |
+| `build_benchmark.py` | internal helper that builds a hardware benchmark ELF |
+| `loadprog.py` | internal serial upload, result capture and interactive terminal helper |
+| `include/dhrutv_fpga.h` | public UART, cycle counter and completion API |
+| `examples/hello_uart.c` | minimal interactive custom program |
+| `CUSTOM_PROGRAMS.md` | build and memory-map guide for user programs |
 | `area_report.py` | per-module area report (`make area`) |
 | `formal/` | SymbiYosys equivalence proofs for the ALU and LSU rewrites |
 | `AREA_OPTIMIZATION.md` | how the design was made to fit, including what failed |
