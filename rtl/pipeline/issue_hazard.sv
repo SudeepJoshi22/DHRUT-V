@@ -119,6 +119,7 @@ module issue_hazard (
   // `!o_mispredict` gate in issue.sv.
   assign o_pair_ok = i_valid0 && i_valid1
                   && o_lane1_capable
+                  && !i_uop0.is_mdu
                   && !o_raw_hazard
                   && !o_waw_hazard;
 

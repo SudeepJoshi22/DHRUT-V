@@ -1,165 +1,132 @@
-# UART + serial program loader — deferred design
+# UART and serial program loading
 
-Status: **Stage 2 started.** The FPGA hardware branch expands instruction and
-data memories to 32 KB each, validates image/BSS/stack capacity, and makes the
-synthesis netlist depend on the generated memory images. `rtl/uart.sv` is
-implemented and passes standalone loopback, FIFO, framing and loader-channel
-tests (`python3 fpga/check_uart.py`). The serial loader, bus decoder, host
-tool and top-level integration below are still to be implemented.
+Stage 2 implementation: 32 KB instruction RAM + 32 KB data RAM, UART MMIO,
+hardware loader, benchmark printing, and laptop upload/capture. Board validation
+and iteration sweeps remain separate from simulation results.
 
-## Why this matters
-
-Two problems that LEDs cannot solve:
-
-1. **No output.** `ee_printf` / `uart_init` already exist as no-op stubs in
-   `tests/bench/dhrystone/port.c` and `tests/bench/coremark/core_portme.c`,
-   annotated *"no UART on this core (yet)"*. Filling them in is what makes
-   Dhrystone and CoreMark print real numbers on hardware.
-2. **Changing the program costs a full rebuild.** `$readmemh` is evaluated at
-   *synthesis* time and BSRAM `INIT` is bitstream data, so the program is part
-   of the bitstream. A one-instruction edit currently costs Yosys + nextpnr +
-   `gowin_pack` + flash — minutes. A serial loader cuts that to seconds.
-
-## Key finding: this must be a hardware loader, not a boot ROM
-
-A conventional software bootloader — a boot ROM at the reset vector that
-receives a program and writes it into RAM — **cannot be built here without a new
-datapath.**
-
-- `rtl/cpu_core.sv:98` wires `imem_if` only to `if_stage`.
-- `rtl/pipeline/lsu.sv:11` gives the LSU only `dmem_if`.
-
-**The CPU has no path to write instruction memory.** A boot ROM would require
-building that bridge first, plus target firmware.
-
-The alternative is a **loader FSM in the fabric** that owns the memory ports
-while the core is held in reset, then releases it. Better here on three counts:
-
-- No target firmware, no reset-vector change.
-- **It works even if the core is broken** — decisive during bringup, since you
-  can load and verify memory before trusting the pipeline.
-- Instruction memory stays read-only from the CPU's side.
-
-Because the core is in reset whenever the loader is active, the two never
-contend, so they can share the memory's **single** port through an input mux —
-preserving single-port BSRAM inference rather than forcing true dual-port.
-
-## Architecture
+## How output reaches the laptop
 
 ```
-cpu_top
-├── CORE      cpu_core          core_rst_n = sys_rst_n && !loading
-├── LOADER    prog_loader       owns memory + UART while loading
-├── IMEM      bram_slave        4096 x 64-bit = 32 KB
-├── DMEM      bram_slave        8192 x 32-bit = 32 KB
-├── DBUS      dmem_splitter     decodes m_addr[31]
-└── UART      uart              loader while loading, CPU after
+benchmark port -> UART MMIO -> FPGA TX pin 69 -> onboard BL616 -> USB -> laptop
 ```
 
-## Address map
+RX is pin 70. Both pins use LVCMOS33. The bridge and pin assignment follow
+[Sipeed's example](https://github.com/sipeed/TangNano-20K-example/blob/e23949a0a77381b94960cbc4e97a7c5e5ba8d222/uart/src/top.cst).
+The onboard bridge provides USB serial without an external adapter. Its default
+FPGA communication mode is UART; the bridge console's `choose uart` restores
+that mode if changed. See [Sipeed's board guide](https://wiki.sipeed.com/hardware/en/tang/tang-nano-20k/example/unbox.html).
 
-| Range | Target | Notes |
-|---|---|---|
-| `0x8000_0000` + | dmem BRAM | `m_addr[31] == 1` |
-| `0x1000_0000` | UART TXDATA | W: `[7:0]` byte. R: `[31]` tx_busy |
-| `0x1000_0004` | UART RXDATA | R: `[31]` rx_empty, `[7:0]` data; read pops |
-| `0x1000_0008` | UART STATUS | R: `[0]` tx_busy, `[1]` rx_valid, `[2]` overrun |
+Use **115200 baud, 8 data bits, no parity, one stop bit, no flow control**.
+The FPGA uses 27 MHz / 234 = 115384.6 baud (0.16% error). Discover the actual
+Linux device under `/dev/serial/by-id/` or with `python3 -m serial.tools.list_ports`;
+it may be ttyUSB or ttyACM. Windows uses a COM port. Only one application should
+open the port at a time.
 
-`bram_slave` currently **aliases on purpose** — it ignores upper address bits so
-`0x8000_0000` lands at index 0 with no decoder. That must stop for dmem once a
-second slave exists. A one-bit decode on `m_addr[31]` suffices, since RAM is at
-`0x8xxx_xxxx` and MMIO at `0x1xxx_xxxx`.
+## Build and run
 
-Note Phase 1's LED control is a **snoop**, not MMIO — `cpu_top` watches dmem
-writes to `LED_ADDR` and the store also lands in RAM. When this decoder lands,
-consider moving the LEDs to a real MMIO register and retiring the snoop.
+Commands below run from the repository root. Put the RISC-V GCC toolchain,
+Verilator and OSS CAD Suite on PATH. Host upload requires Python's `pyserial`.
+The build scripts do not launch the slow pyUVM simulation.
 
-## Wire protocol
-
-Mirrors the existing memory model, in which `fpga/mkmem.py` writes both images
-from one input and the two cocotb drivers each load `TEST_HEX` into their own
-dict: the loader writes the **same byte stream into both imem and dmem** at the
-same offset.
-
-```
-'D' 'H' 'R' 'V'      magic
-len[31:0]            little-endian byte count
-payload[len]         raw image bytes, from offset 0
-sum[31:0]            32-bit sum of payload
+```bash
+python3 fpga/build_benchmark.py dhrystone --iterations 1
+python3 fpga/mkmem.py tests/build/dhrystone_hw_1/dhrystone_hw_1.hex \
+  --elf tests/build/dhrystone_hw_1/dhrystone_hw_1.elf --outdir fpga
+make -C fpga bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+make -C fpga flash TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 ```
 
-Loader replies one byte on TX: `'K'` accepted, `'E'` checksum mismatch.
+This SRAM flash lasts until power-off. `flash-nv` writes persistent flash.
+To see the baked-in benchmark, open a serial terminal at the settings above,
+then press and release reset. An initial `R` is the loader greeting; without
+an upload, the program starts after 500 ms. Opening the terminal before reset
+prevents losing a short benchmark's output.
 
-**Timeout fallback:** if no magic arrives within ~500 ms of reset, release the
-core anyway and run whatever `$readmemh` baked into BRAM. This keeps
-`make mem` + `make bitstream` working standalone, so a board with no host
-attached still boots. Pressing reset re-enters the loader.
+Once this hardware is installed, new programs need no synthesis:
 
-## Implementation notes
+```bash
+python3 fpga/build_benchmark.py dhrystone --iterations 50000
+python3 fpga/loadprog.py tests/build/dhrystone_hw_50000/dhrystone_hw_50000.elf \
+  --port /dev/serial/by-id/ACTUAL_DEVICE --log dhrystone-50000.log
+```
 
-**New**
-- `fpga/rtl/uart.sv` — 8N1 TX and RX, parameterised divisor. Small RX FIFO
-  (depth 8) so a byte is not lost between polls. Must honour the same handshake
-  as `bram_slave`: **`s_rdata` valid on the same cycle as `s_ready`**, required
-  by `rtl/pipeline/lsu.sv:142-148`.
-- `fpga/rtl/dmem_splitter.sv` — routes the CPU's `mem_if` to RAM or UART on
-  `m_addr[31]`, muxing `s_ready`/`s_rdata` back. **Unmapped addresses must still
-  answer**, or the LSU stalls forever (`internal_stall`, `lsu.sv:136`).
-- `fpga/rtl/prog_loader.sv` — receive FSM, checksum, memory write port, core
-  reset release, timeout counter.
-- `fpga/loadprog.py` — host tool: frame an image, send it over `/dev/ttyUSB*`,
-  wait for the ack. Host tooling alongside `mkmem.py`, not target firmware.
+The tool opens the port and asks you to press and release the FPGA reset button.
+It waits for `R`, uploads, checks `K`, then **keeps the same connection open** to
+print and save output. An adjacent acknowledgment and first text byte are not
+lost. It saves a JSON result beside the log, including ELF hash and available
+build metadata. Errors or a missing final result cause a nonzero host exit.
 
-**Modified**
-- `fpga/rtl/bram_slave.sv` — add a loader write port muxed into the *existing*
-  single port:
-  ```systemverilog
-  wire p_en  = loading ? ld_en  : (state_q == S_IDLE && accept);
-  wire p_idx = loading ? ld_idx : idx;
-  wire p_we  = loading ? {BYTES{ld_we}} : (is_write ? bus.m_wstrb : '0);
-  ```
-  Keeping read and write in one `always_ff` with no array reset is what
-  preserves BSRAM inference — see the comment block in that file.
-- `fpga/rtl/cpu_top.sv` — split reset into `sys_rst_n` (POR + button, drives
-  loader/UART) and `core_rst_n = sys_rst_n && !loading`. Bump depths.
-- `fpga/cpu_top.cst` — add `uart_tx` / `uart_rx`. The onboard BL616 is a
-  USB-serial bridge, so this enumerates as `/dev/ttyUSB*` with no extra wiring.
-  Pin numbers are confirmed against [Sipeed's UART example at revision
-  e23949a](https://github.com/sipeed/TangNano-20K-example/blob/e23949a0a77381b94960cbc4e97a7c5e5ba8d222/uart/src/top.cst):
-  FPGA `uart_tx` = pin 69, `uart_rx` = pin 70, both LVCMOS33. These constraints
-  have not yet been added because the corresponding top-level ports do not
-  exist until UART integration.
+For CoreMark, build `coremark --iterations N`, optionally `--validation` for the
+validation seeds. Hardware builds enforce the real 27 MHz timebase: a one-iteration
+CoreMark run is expected to fail its ten-second rule even when all CRCs pass.
+Increase iterations until the actual timed interval is at least ten seconds.
+Both required seed sets must pass before publishing a rule-valid result.
+These remain self-measured results, not EEMBC-certified scores.
 
-## Sizing
+## Software interface
 
-32 KB + 32 KB. 8 KB of dmem cannot hold `tests/linker_c.ld`'s 8 KB stack alone,
-let alone `.data`/`.bss`, so the C benchmarks need the bump. That is roughly 70%
-of the part's ~92 KB usable BSRAM; 16 + 16 is the fallback if PnR gets tight.
+| Address | Behavior |
+|---|---|
+| `0x80000000` + | RAM; existing high-bit aliases retained |
+| `0x10000000` | TXDATA: write byte in lane 0; read bit 31 = busy |
+| `0x10000004` | RXDATA: read pops byte; bit 31 = empty |
+| `0x10000008` | STATUS: bit 0 busy, bit 1 RX valid, bit 2 overrun; write-one-clear bit 2 |
+| `0x1000000c` | Completion LED snoop: write `(errors << 1) | 1`; reads zero |
 
-`LED_ADDR` now follows the top word of dmem (`0x8000_7FFC` at 32 KB).
-The blink test was updated and `mkmem.py` reserves this word. A future real
-LED MMIO register can remove that reservation.
+Other low addresses respond with zero rather than hanging the CPU. A busy TX
+write waits for capacity. UART has an eight-byte RX FIFO. The original RAM LED
+snoop remains at `0x80007ffc`. The completion MMIO address avoids changing the
+bitstream when an uploaded ELF places `tohost` at a different address.
 
-## Baud
+Both benchmark ports print a final machine-readable line:
 
-27 MHz / 115200 = 234.375. A divisor of 234 gives +0.16% baud error, well inside 8N1
-tolerance. No PLL needed.
+```
+DHRUTV_RESULT dhrystone iterations=50000 cycles=... clock_hz=27000000 errors=0
+```
+
+All serial printing is outside the measured interval. Output drains before
+completion is signaled. CoreMark's protected algorithm sources are unchanged;
+UART support is in `core_portme*`. The formatter supports the integer/string
+formats used with `HAS_FLOAT=0`; it is not a general libc printf.
+The host derives `iterations * 1e6 / cycles`, divided by 1757 for DMIPS/MHz.
+The current timer is 32-bit: keep each timed interval below 2^32 cycles
+(about 159 seconds at 27 MHz). Do not interpret a wrapped interval as a score.
+
+## Loader contract and recovery
+
+On reset the CPU is held stopped while the loader owns UART and both RAM ports.
+It transmits `R`, then waits 500 ms for this frame:
+
+```
+DHRV | LE32 payload_length | payload | LE32 sum(payload)
+```
+
+The ELF must start at `0x80000000`. The host checks initialized data, BSS and
+stack against the 32 KB memories, reserving the last data word for LEDs. Holes
+in the transmitted image are zero-filled. Payload bytes are written identically
+into both memories through multiplexed single ports. CPU writes to IMEM remain
+unsupported. The checksum detects accidental transfer errors; it is not authentication.
+
+Length must be 1..32764 bytes. `K` means accepted; the CPU starts only after the
+acknowledgment's stop bit. `E` means rejection. After a recognized header,
+one second without a byte also rejects the transfer. Failure holds the CPU
+stopped until reset. A partial overwrite invalidates memory **across button
+resets**, so a later timeout cannot execute a corrupt image. Upload a complete
+replacement or reconfigure the FPGA to recover. A successful upload makes that
+image the fallback on subsequent resets; reset does not restore baked RAM.
 
 ## Verification
 
-The loader and UART are testable in simulation and should be — a bad loader is
-invisible on the board.
+- `python3 fpga/check_uart.py`: standalone UART framing, FIFO and MMIO.
+- `python3 fpga/tests/test_loadprog.py`: host transfer/capture over a pseudo-terminal,
+  including ACK immediately followed by output, rejection and missing greeting.
+- `python3 fpga/check_loader.py`: real CPU, UART and writable BRAM; baked fallback,
+  invalid lengths, interrupted payload, checksum failure, reset recovery and
+  successful serial-loaded benchmark output.
+- `python3 fpga/check_loader.py coremark_hw_1 --expected-errors 1`: CoreMark UART reporting with
+  its expected short-run time-gate failure preserved as `errors=1`.
+- `python3 fpga/check_bram.py TEST`: targeted existing CPU tests using the RAM/bus
+  wrapper, with loading disabled for speed.
 
-1. **UART loopback:** tie `uart_tx` to `uart_rx`, write bytes via the MMIO
-   address, confirm they return through RXDATA.
-2. **Loader:** drive a framed image into `uart_rx`, check imem/dmem contents and
-   that `core_rst_n` releases. Include a bad-checksum case (expect `'E'`, core
-   stays in reset) and the timeout path (no magic → core runs the baked image).
-3. **Regression:** the dmem decoder sits in the CPU's load/store path, so re-run
-   `lsu`, `lsu_forward`, `memtest` and diff retired traces against Spike per
-   CLAUDE.md.
-
-## Deferred within this
-
-`ee_printf` stays a no-op until a follow-up pass; item 1 above tests the
-peripheral instead.
+Board acceptance still requires actual USB capture, iteration convergence,
+CoreMark duration/validation, and a hardware/simulation cycle cross-check.

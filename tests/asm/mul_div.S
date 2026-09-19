@@ -11,8 +11,8 @@
 # Also exercises the pipeline behaviour, not just the arithmetic:
 #   * back-to-back dependent M ops (the scoreboard must hold the consumer
 #     back -- the MDU is not on the bypass network)
-#   * an M op immediately followed by independent ALU work, which must
-#     issue WHILE the divide is still running rather than waiting for it
+#   * independent ALU work immediately after an M op, checking that the
+#     serialized MDU boundary resumes cleanly
 #   * a divide whose result is consumed many instructions later
 
 .section .text
@@ -143,10 +143,9 @@ _start:
     li   x4, 15625
     bne  x5, x4, fail
 
-    # ── Pipeline: independent work alongside a long divide ───────
-    # These adds do not touch x7 and should issue while the divide is
-    # still iterating. Correctness does not prove they overlapped, but a
-    # regression here would mean the interleaving broke something.
+    # ── Pipeline: independent work after a long divide ────────────
+    # The core serializes issue across the MDU because it has no reorder
+    # buffer. These adds check that issue resumes cleanly afterward.
     li   x1, 123456
     li   x2, 3
     div  x7, x1, x2          # 41152, ~32 cycles
@@ -165,7 +164,7 @@ _start:
     li   x2, 9
     addi x11, x0, 5
     mul  x12, x1, x2         # 81
-    addi x11, x11, 5         # independent, may retire around the multiply
+    addi x11, x11, 5         # independent, retires after the multiply
     li   x4, 81
     bne  x12, x4, fail
     li   x4, 10

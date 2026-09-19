@@ -13,18 +13,22 @@
 //
 // Memory model matches the testbench: imem and dmem are SEPARATE arrays both
 // initialised from the same program image, exactly as imem_driver.py and
-// dmem_driver.py each load TEST_HEX into their own dict. Stores land only in
-// dmem; self-modifying code is unsupported here just as it is in simulation.
+// dmem_driver.py each load TEST_HEX into their own dict. The loader writes both
+// arrays before releasing reset; CPU stores land only in dmem, so
+// self-modifying code remains unsupported just as it is in simulation.
 module cpu_top #(
   // 32 KB each. imem is 64 bits wide (one access returns the two instructions
   // ifetch.sv expects in s_rdata[31:0] and s_rdata[63:32]), dmem is 32.
+  parameter bit ENABLE_LOADER = 1'b1,
+  parameter int UART_DIVISOR = 234,
+  parameter int BOOT_CYCLES = 13500000,
+  parameter int TIMEOUT_CYCLES = 27000000,
   parameter int    IMEM_DEPTH  = 4096,              // x 64-bit = 32 KB
   parameter int    DMEM_DEPTH  = 8192,              // x 32-bit = 32 KB
   parameter string IMEM_INIT   = "imem_init.hex",
   parameter string DMEM_INIT   = "dmem_init.hex",
-  // Where the test program signals completion. tests/linker.ld places
-  // .tohost at the first 0x1000 boundary after .text, so this varies per
-  // program -- fpga/mkmem.py prints the real value out of the ELF.
+  // Legacy baked-image completion address. Uploaded benchmarks use fixed MMIO
+  // 0x1000_000c, so a moving ELF .tohost no longer requires re-synthesis.
   parameter logic [31:0] TOHOST_ADDR = 32'h8000_1000,
   // Software-driven LEDs: a store to this address latches its low bits onto
   // led[5:4]. See the snoop below and tests/asm/fpga_blink.S.
@@ -50,6 +54,8 @@ module cpu_top #(
   // suggest -- on this board pressing drives it HIGH. RST_BTN_ACTIVE_LOW
   // above normalises whichever way it is wired.
   input  logic       rst_btn,
+  input logic uart_rx,
+  output logic uart_tx,
   output logic [5:0] led       // onboard LEDs, active low
 );
 
@@ -82,13 +88,45 @@ module cpu_top #(
   end
 
   logic rst_n;
-  assign rst_n = rst_sync_q[2];
+  logic sys_rst_n, loading, accepted, image_valid = 1'b1;
+  logic ld_en;
+  logic [31:0] ld_addr;
+  logic [7:0] ld_data, rx_data, tx_data;
+  logic rx_valid, rx_ready, tx_valid, tx_ready;
+  assign sys_rst_n = rst_sync_q[2];
+  assign rst_n = sys_rst_n && !loading;
+  // A button reset cannot restore the baked image after a partial upload.
+  // Preserve validity until reconfiguration or a successful replacement.
+  always_ff @(posedge clk) begin
+    if (ld_en) image_valid <= 0;
+    if (accepted) image_valid <= 1;
+  end
+  generate if (ENABLE_LOADER) begin : g_loader
+    prog_loader #(.CAPACITY((IMEM_DEPTH*8 < DMEM_DEPTH*4-4) ? IMEM_DEPTH*8 : DMEM_DEPTH*4-4),
+                  .BOOT_CYCLES(BOOT_CYCLES), .TIMEOUT_CYCLES(TIMEOUT_CYCLES)) LOADER (
+      .clk(clk), .rst_n(sys_rst_n), .image_valid(image_valid), .loading(loading), .accepted(accepted),
+      .rx_valid(rx_valid), .rx_data(rx_data), .rx_ready(rx_ready),
+      .tx_valid(tx_valid), .tx_data(tx_data), .tx_ready(tx_ready),
+      .ld_en(ld_en), .ld_addr(ld_addr), .ld_data(ld_data));
+  end else begin : g_no_loader
+    assign loading = 0; assign accepted = 0; assign ld_en = 0;
+    assign ld_addr = 0; assign ld_data = 0;
+    assign rx_ready = 0; assign tx_valid = 0; assign tx_data = 0;
+  end endgenerate
 
   // ───────────────────────────────────────────────
   // Buses + core
   // ───────────────────────────────────────────────
   mem_if #(.DATA_W(64)) imem_if (.clk(clk), .rst_n(rst_n));
   mem_if #(.DATA_W(32)) dmem_if (.clk(clk), .rst_n(rst_n));
+
+  mem_if #(.DATA_W(32)) ram_if (.clk(clk), .rst_n(rst_n));
+  mem_if #(.DATA_W(32)) uart_if (.clk(clk), .rst_n(sys_rst_n));
+  dmem_splitter DBUS (.cpu(dmem_if.slave), .ram(ram_if.master), .uart(uart_if.master));
+  uart #(.DIVISOR(UART_DIVISOR)) UART (
+    .clk(clk), .rst_n(sys_rst_n), .uart_rx(uart_rx), .uart_tx(uart_tx), .bus(uart_if.slave),
+    .loader_active(loading), .ld_tx_valid(tx_valid), .ld_tx_data(tx_data), .ld_tx_ready(tx_ready),
+    .ld_rx_valid(rx_valid), .ld_rx_data(rx_data), .ld_rx_ready(rx_ready));
 
   cpu_core CORE (
     .clk     (clk),
@@ -100,23 +138,27 @@ module cpu_top #(
   bram_slave #(
     .DATA_W    (64),
     .DEPTH     (IMEM_DEPTH),
+    .LOADABLE  (ENABLE_LOADER),
     .WRITABLE  (1'b0),
     .INIT_FILE (IMEM_INIT)
   ) IMEM (
     .clk   (clk),
     .rst_n (rst_n),
+    .loading(loading), .ld_en(ld_en), .ld_addr(ld_addr), .ld_data(ld_data),
     .bus   (imem_if.slave)
   );
 
   bram_slave #(
     .DATA_W    (32),
     .DEPTH     (DMEM_DEPTH),
+    .LOADABLE  (ENABLE_LOADER),
     .WRITABLE  (1'b1),
     .INIT_FILE (DMEM_INIT)
   ) DMEM (
     .clk   (clk),
     .rst_n (rst_n),
-    .bus   (dmem_if.slave)
+    .loading(loading), .ld_en(ld_en), .ld_addr(ld_addr), .ld_data(ld_data),
+    .bus   (ram_if.slave)
   );
 
   // ───────────────────────────────────────────────
@@ -151,7 +193,8 @@ module cpu_top #(
   assign dmem_fire    = dmem_if.m_valid && dmem_if.s_ready;
   assign dmem_wr_fire = dmem_fire && (dmem_if.m_wstrb != 4'b0000);
   assign tohost_hit   = dmem_wr_fire
-                        && ({dmem_if.m_addr[31:2], 2'b00} == TOHOST_ADDR);
+                        && (({dmem_if.m_addr[31:2], 2'b00} == TOHOST_ADDR)
+                            || dmem_if.m_addr == 32'h1000_000c);
   assign led_hit      = dmem_wr_fire
                         && ({dmem_if.m_addr[31:2], 2'b00} == LED_ADDR);
 
@@ -164,11 +207,9 @@ module cpu_top #(
     else if (fetch_fire) act_cnt_q <= act_cnt_q + 1'b1;
   end
 
-  // Software-driven LEDs. This is deliberately a SNOOP on the existing dmem
-  // write, not a peripheral: no address decoder, no second bus slave, no
-  // change to bram_slave. The store also lands in RAM, harmlessly. Real MMIO
-  // (and the decoder it needs) belongs with the UART work -- see
-  // fpga/UART_PLAN.md.
+  // Software-driven LEDs remain a snoop on the RAM write. The store lands in
+  // RAM harmlessly; UART and completion signaling use decoded low-address
+  // MMIO through dmem_splitter.
   logic [1:0] user_led_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n)      user_led_q <= 2'b00;

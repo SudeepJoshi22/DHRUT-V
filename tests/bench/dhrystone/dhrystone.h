@@ -388,7 +388,11 @@ extern clock_t	clock();
                 /* (instead of the usual "run for >=200ms") since RTL      */
                 /* simulation is far too slow to run Dhrystone long enough */
                 /* to hit that bar - any nonzero measured run is accepted. */
+#ifdef DHRUTV_CLOCK_HZ
+#define HZ DHRUTV_CLOCK_HZ
+#else
 #define HZ 100000000
+#endif
 #define MHZ (HZ/1000000)
 #define Too_Small_Time 1
 #define CLOCK_TYPE "DHRUT-V mcycle CSR"

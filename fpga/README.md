@@ -30,6 +30,11 @@ cd fpga
 make mem TEST=fpga_blink                                        # program -> memory images
 make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+
+# Build a benchmark payload, then upload it over the UART used for output
+python3 fpga/build_benchmark.py dhrystone --iterations 50000
+python3 fpga/loadprog.py tests/build/dhrystone_hw_50000/dhrystone_hw_50000.elf \
+  --port /dev/serial/by-id/<board-port>
 ```
 
 `make mem` must come first -- see *The program lives in the bitstream* below.
@@ -49,8 +54,9 @@ top-level module 'cpu_core' has unconnected interface port 'imem_if'
 
 `rtl/cpu_top.sv` is that parent. It instantiates the two `mem_if` instances at
 the right widths (imem 64-bit -- two instructions per fetch; dmem 32-bit), wires
-`cpu_core` onto them, terminates both in on-chip memory, and exposes only
-`clk`, `rst_n_btn` and `led[5:0]` -- which a `.cst` *can* constrain.
+`cpu_core` onto them, terminates both in on-chip memory, and exposes flat
+`clk`, `rst_n_btn`, `uart_rx`, `uart_tx` and `led[5:0]` ports -- which a `.cst`
+*can* constrain.
 
 ### The memories
 
@@ -59,34 +65,34 @@ in **one wait state**, because Gowin BSRAM cannot read combinationally, while
 honouring the `mem_if` contract: `s_rdata` valid on the same cycle as
 `s_ready`, and no answer to a request the master has withdrawn.
 
-It has two shapes, and the difference matters:
-
-- **ROM path** (imem, `WRITABLE=0`) -- one array. The write branch folds away
-  and it infers as BSRAM cleanly.
-- **RAM path** (dmem, `WRITABLE=1`) -- split into byte-wide arrays, each
-  written *whole* under its own strobe. Yosys' Gowin rules have no mapping for
-  a read combined with a byte-masked **partial** write, so written the obvious
-  way the entire array lands in fabric instead of BSRAM.
+Both imem and dmem are writable by the serial loader. Each is split into
+byte-wide arrays whose lanes are written whole under their own strobes. Yosys'
+Gowin rules have no mapping for a read combined with a byte-masked **partial**
+write, so written the obvious way the entire array lands in fabric instead of
+BSRAM. Instruction fetch still assembles a 64-bit response from eight lanes;
+normal CPU stores use the four dmem lanes.
 
 Neither array has a reset, and both are read and written from a single
 `always_ff`. Both are load-bearing for inference: **if it fails, yosys silently
 builds flip-flops instead of erroring**, and 16 KB of flip-flops does not fit
 anything. Check `stat` for BSRAM primitives rather than trusting a clean exit.
 
-### The program lives in the bitstream
+### Baked fallback and serial loading
 
 `$readmemh` is evaluated at **synthesis time** and BSRAM `INIT` is bitstream
-data, so the program is baked into the `.fs` file. Changing the program means a
-full re-synthesis. `fpga/mkmem.py` produces the images:
+data, so the `.fs` file contains a fallback program. The UART loader can replace
+that image after configuration without re-synthesis. `fpga/mkmem.py` produces
+the fallback images:
 
 ```bash
 make mem TEST=fpga_blink     # reads ../tests/build/fpga_blink/*.hex + .elf
 ```
 
-It emits `imem_init.hex` (64-bit/line), `dmem_init.hex` (32-bit/line) and
-`dmem_init_b0..b3.hex` (the per-byte-lane images the RAM path reads), replicates
-`bram_slave`'s index arithmetic, NOP-fills imem, and fails loudly on address
-aliasing. It also prints the program's real `.tohost` address --
+It emits the aggregate `imem_init.hex` / `dmem_init.hex` files plus
+`imem_init_b0..b7.hex` and `dmem_init_b0..b3.hex`, the byte-lane images the
+writable memories read. It replicates `bram_slave`'s index arithmetic,
+NOP-fills imem, and fails loudly on address aliasing. It also prints the
+program's real `.tohost` address --
 `tests/linker.ld` floats that after `.text`, so it moves per program. If it is
 not `0x8000_1000`, pass it through as `TOHOST_ADDR` or the PASS LED can never
 light.
@@ -123,7 +129,7 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `bitstream` | synth -> nextpnr -> gowin_pack -> `<TOP>.fs` | yes |
 | `flash` | build, then load to **SRAM** (volatile, gone on power cycle) | yes |
 | `flash-nv` | build, then write to **onboard flash** (persists) | yes |
-| `mem` | program image -> `imem_init.hex` / `dmem_init*.hex` | no |
+| `mem` | fallback program -> aggregate and byte-lane memory images | no |
 | `area` | per-module LUT/FF ranking + budget verdict | no |
 | `clean` | remove `<TOP>`'s `.json` / `.pack.json` / `.fs` | no |
 | `clean-all` | remove **everything** generated here -- all tops, all logs, formal work dirs, area baselines (tens of MB) | no |
@@ -139,6 +145,7 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `TEST` | `add` | which `tests/build/<name>/` to turn into memory images |
 | `SYNTH_OPTS` | `-nowidelut` | extra `synth_gowin` flags |
 | `FREQ_MHZ` | `27` | nextpnr timing target |
+| `PNR_OPTS` | empty | extra nextpnr options, such as `--seed 2 --report timing.json` |
 | `AREA_FILELIST` | `cpu_top_filelist.f` | filelist for `make area` only |
 
 A `.f` file lists one source per line, `#` for **whole-line** comments only --
@@ -192,32 +199,42 @@ Save the log when you care about the result --
 Instruction and data memory defaults are now **32 KB each**. `mkmem.py` checks
 the image against both capacities and checks ELF `_ebss`, `_end` and
 `_stack_top` when present. It rejects a lone out-of-range address even when no
-second address collides with its wrapped index. The top dmem word is reserved
-for the LED snoop until UART/MMIO integration replaces it. `make mem` changes
-now invalidate the synthesized CPU netlist.
+second address collides with its wrapped index. `make mem` changes now
+invalidate the synthesized CPU netlist.
+
+The CPU dmem bus splits RAM and MMIO requests. The UART occupies `0x1000_0000`
+through `0x1000_0008`, and software reports completion at `0x1000_000c`. The
+hardware loader holds the CPU in reset, accepts a checked binary into both
+memories, and then starts the CPU. A 500 ms timeout runs the baked fallback
+image; a partial or invalid upload cannot execute.
 
 The one-iteration Dhrystone and CoreMark images fit, with stack tops
-`0x80007040` and `0x80005840` respectively. With the CoreMark image, flat Gowin
-synthesis (`-nowidelut`, 2026-09-19) uses:
+`0x80007040` and `0x80005840` respectively. With the CoreMark image, integrated
+Gowin synthesis (`-nowidelut`, 2026-09-19) uses:
 
 | Resource | Used | Device capacity |
 |---|---:|---:|
-| LUT4 | 15,049 | 20,736 |
-| ALU | 1,046 | 15,552 |
-| FF | 3,538 | 15,552 |
-| BSRAM | 31 | 46 |
+| LUT4 | 17,054 | 20,736 |
+| ALU | 1,472 | 15,552 |
+| FF | 3,929 | 15,552 |
+| RAM16SDP4 | 17 | 648 |
+| BSRAM | 32 | 46 |
 
-This is a synthesis estimate for the current read-only instruction memory,
-not a placed-and-routed UART/loader result. Recheck utilization and 27 MHz
-timing after adding the writable loader path.
+The fully routed build reaches **28.33 MHz Fmax and passes the 27 MHz board
+constraint**. The placer estimate was only 25.75 MHz; the final routed timing
+report is authoritative. Do not flash a build whose final report says
+`FAIL at 27.00 MHz`.
 
 Fast checks from the repository root, with the usual venv/toolchain active:
 
 ```bash
 python3 -m unittest discover -s fpga/tests -p 'test_mkmem.py' -v
-python3 fpga/check_bram.py dhrystone_edgefix --expected-cycles 758
+python3 fpga/check_bram.py dhrystone_edgefix --expected-cycles 759
 python3 fpga/check_bram.py coremark_edgefix --expected-cycles 383043
 python3 fpga/check_uart.py
+python3 fpga/check_loader.py dhrystone_hw_1
+python3 fpga/check_loader.py coremark_hw_1 --expected-errors 1
+python3 fpga/tests/test_loadprog.py
 ```
 
 The BRAM check consumes an existing `tests/build/<name>/<name>.elf`/`.hex`
@@ -227,13 +244,12 @@ directories. Both benchmarks pass and match the fixed-mode Python model's
 cycle counts exactly. Native simulation avoids the expensive Python CPU
 tracing; it is still simulation, not evidence from a physical board.
 
-The standalone UART has 8N1 TX/RX, an eight-byte RX FIFO, the planned three
-MMIO registers, busy-write backpressure, sticky overrun/W1C, and loader-side
-ready/valid channels. Loopback, FIFO overflow/order, byte strobes, loader
-ownership, short start glitches and invalid stop bits pass. It is **not yet
-connected to `cpu_top` or included in the synthesis filelist**. The loader,
-bus splitter, host sender, top-level pins and benchmark UART reporting remain
-the next integration step; see [UART_PLAN.md](UART_PLAN.md).
+The integrated UART uses 115200 baud, 8N1, with no flow control. On reset it
+sends `R`; `loadprog.py` then sends a `DHRV` header, payload length, binary and
+additive checksum. `K` accepts the image and starts the CPU; `E` rejects it.
+The same open serial connection prints benchmark output and a final
+`DHRUTV_RESULT` line, which the host tool saves as JSON. The exact protocol,
+terminal setup and recovery behavior are in [UART_PLAN.md](UART_PLAN.md).
 
 ## Reading the board
 
@@ -245,11 +261,11 @@ Six LEDs, active-low, allocated 1+1+2+2 so they answer four different questions:
 | `[1]` | **fetch activity** -- advances on every completed fetch. Blinks while running, **freezes on a hang**. No sticky flag can show this. |
 | `[2]` | `tohost` written (program finished) |
 | `[3]` | `tohost == 1` (program passed) |
-| `[5:4]` | **driven by software** -- a store to `LED_ADDR` (`0x8000_7FFC` for 32 KB dmem) latches its low 2 bits |
+| `[5:4]` | **driven by software** -- a store to `LED_ADDR` (`0x8000_7ffc` for 32 KB dmem) latches its low 2 bits |
 
-The software LEDs are a **snoop on the dmem write bus**, not a peripheral -- no
-address decoder, no second bus slave. The store also lands in RAM, harmlessly.
-Real MMIO belongs with the UART work ([UART_PLAN.md](UART_PLAN.md)).
+The software LEDs remain a snoop on the RAM write bus. The completion register
+and UART are selected by `dmem_splitter`; RAM addresses continue to the BSRAM
+slave.
 
 Diagnosing a dark board:
 
@@ -264,28 +280,30 @@ Diagnosing a dark board:
 
 | | |
 |---|---|
-| `rtl/cpu_top.sv` | synthesis top: wrapper, reset sync, LED panel |
+| `rtl/cpu_top.sv` | synthesis top: CPU, memories, loader, UART and LED panel |
 | `rtl/bram_slave.sv` | `mem_if` slave backed by BSRAM |
+| `rtl/dmem_splitter.sv` | CPU data-bus RAM/MMIO decoder |
+| `rtl/prog_loader.sv` | checked UART-to-memory program loader |
 | `cpu_top_filelist.f` | sources for the full CPU build |
 | `cpu_filelist.f` | CPU sources without the FPGA wrapper (not a synthesis target -- see above) |
 | `cpu_top.cst` | pin constraints for `cpu_top` |
 | `tangnano20k.cst` | pin constraints for the `blink` smoke test |
 | `blink.f` / `blink.v` | CPU-less LED blinker, for proving the board and flow |
 | `mkmem.py` | program image generator |
+| `build_benchmark.py` | build a hardware benchmark ELF and upload payload |
+| `loadprog.py` | serial upload, console capture and result JSON |
 | `area_report.py` | per-module area report (`make area`) |
 | `formal/` | SymbiYosys equivalence proofs for the ALU and LSU rewrites |
 | `AREA_OPTIMIZATION.md` | how the design was made to fit, including what failed |
-| `UART_PLAN.md` | deferred UART + serial loader design |
+| `UART_PLAN.md` | implemented UART/loader protocol and operator guide |
 
 ## Known rough edges
 
-- **The pin numbers in `cpu_top.cst` are unverified.** `led[1..5]` and
-  `rst_n_btn` were extrapolated from a known-good `led0 = 15`. Wrong pins show
-  up as dark LEDs, not as any kind of build error. Check them against the board
-  documentation before trusting a dark board.
-- **Timing margin is thinner than area margin.** 74% LUT4 and 22% FF, but Fmax
-  is 33 MHz against a 27 MHz requirement. A change that lengthens a
-  combinational path costs margin that is scarcer than the LUTs.
-- **Changing the program requires a full re-synthesis** (~3 minutes plus PnR),
-  because `$readmemh` runs at synthesis time. This is exactly what the serial
-  loader in `UART_PLAN.md` is meant to fix.
+- **The auxiliary LED/button pin numbers in `cpu_top.cst` are unverified.**
+  `led[1..5]` and `rst_n_btn` were extrapolated from a known-good `led0 = 15`.
+  UART TX/RX use the board's documented pins 69/70. Wrong auxiliary pins show
+  up as dark LEDs or a dead button, not as a build error.
+- **The serial hardware path still needs a physical-board acceptance run.**
+  No `/dev/ttyUSB*`, `/dev/ttyACM*` or `/dev/serial/by-id/*` device was attached
+  during implementation, so loopback and full RTL simulation validate the
+  protocol while actual USB serial upload remains the final hardware check.

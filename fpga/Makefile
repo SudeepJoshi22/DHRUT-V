@@ -50,6 +50,7 @@ FAMILY     = GW2A-18C
 # rather than a met constraint. Set it so timing is genuinely verified, and so
 # the placer optimises for the real target.
 FREQ_MHZ   = 27
+PNR_OPTS   ?=
 
 # Defaults — override any of these on the command line, e.g.:
 #   make check TOP=cpu_core FILELIST=cpu_core.f
@@ -98,7 +99,7 @@ SRCS = $(shell grep -v '^[[:space:]]*\#' $(FILELIST) 2>/dev/null | grep -v '^[[:
 
 # Program contents are baked into the netlist; changing make mem must rebuild it.
 ifeq ($(TOP),cpu_top)
-MEMORY_IMAGES = imem_init.hex dmem_init_b0.hex dmem_init_b1.hex dmem_init_b2.hex dmem_init_b3.hex
+MEMORY_IMAGES = $(foreach b,0 1 2 3 4 5 6 7,imem_init_b$(b).hex) imem_init.hex dmem_init_b0.hex dmem_init_b1.hex dmem_init_b2.hex dmem_init_b3.hex
 endif
 
 $(JSON): $(FILELIST) $(SRCS) $(MEMORY_IMAGES)
@@ -110,6 +111,7 @@ $(PACK_JSON): $(JSON) $(CST)
 		--write $(PACK_JSON) \
 		--device $(DEVICE) \
 		--freq $(FREQ_MHZ) \
+		$(PNR_OPTS) \
 		--vopt family=$(FAMILY) \
 		--vopt cst=$(CST)
 
@@ -172,6 +174,6 @@ area:
 	./area_report.py --filelist $(AREA_FILELIST) $(ARGS)
 
 clean-mem:
-	rm -f imem_init.hex dmem_init.hex dmem_init_b*.hex
+	rm -f imem_init.hex dmem_init.hex dmem_init_b*.hex imem_init_b*.hex
 
 .PHONY: check synth bitstream flash flash-nv clean clean-all clean-mem mem area

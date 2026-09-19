@@ -310,6 +310,10 @@ int main (int argc, char** argv)
     if (Int_3_Loc != 7)                                        fail |= (1 << 13);
     if (Enum_Loc != 1)                                         fail |= (1 << 14);
 
+#ifdef DHRUTV_UART
+    extern void dhrutv_report(int, unsigned long, unsigned long);
+    dhrutv_report(fail, Number_Of_Runs, User_Time);
+#endif
     return fail;
   }
 }

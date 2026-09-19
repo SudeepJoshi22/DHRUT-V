@@ -4,12 +4,15 @@ Licensed under the Apache License, Version 2.0 - see NOTICE.md.
 Original Author: Shay Gal-on
 
 [DHRUT-V]: port for the DHRUT-V RISC-V core. Timing comes from the
-mcycle CSR instead of a memory-mapped counter; there's no UART, so
-ee_printf observes validation messages and results are read back from the
-dhrutv_final_* globals instead of printed text.
+mcycle CSR instead of a memory-mapped counter. ee_printf observes validation
+messages and optionally prints via UART for hardware builds. Simulation
+recovers the dhrutv_final_* globals.
 */
 #include "coremark.h"
 #include "core_portme.h"
+#ifdef DHRUTV_UART
+#include "core_portme_uart.h"
+#endif
 
 #if !defined(ITERATIONS) || ITERATIONS <= 0
 #error "DHRUT-V result capture requires an explicit positive ITERATIONS"
@@ -98,6 +101,13 @@ static int starts_with(const char *text, const char *prefix) {
    success message as well, so an unrecognized/incomplete run cannot pass. */
 int ee_printf(const char *fmt, ...) {
     if (!fmt) return 0;
+#ifdef DHRUTV_UART
+    va_list args;
+    va_start(args, fmt);
+    uart_vprintf(fmt, args);
+    va_end(args);
+    uart_drain();
+#endif
     if (starts_with(fmt, "Correct operation validated.")) validated = 1;
     if (starts_with(fmt, "Errors detected") || starts_with(fmt, "Cannot validate")) {
         dhrutv_final_errors = 1;
@@ -134,6 +144,13 @@ void portable_fini(core_portable *p) {
         (long)(CORE_TICKS)(stop_time_val - start_time_val);
 
     if (!validated) dhrutv_final_errors = 1;
+#ifdef DHRUTV_UART
+    uart_printf("DHRUTV_RESULT coremark iterations=%lu cycles=%lu clock_hz=%lu errors=%lu\n",
+                (unsigned long)dhrutv_final_iterations,
+                (unsigned long)dhrutv_final_total_cycles,
+                (unsigned long)DHRUTV_CLOCK_HZ, (unsigned long)dhrutv_final_errors);
+    *(volatile unsigned *)0x1000000cu = ((unsigned)dhrutv_final_errors << 1) | 1u;
+#endif
     __asm__ volatile("" ::: "memory");
     tohost = ((unsigned long long)dhrutv_final_errors << 1) | 1ULL;
     for (;;) __asm__ volatile("nop");

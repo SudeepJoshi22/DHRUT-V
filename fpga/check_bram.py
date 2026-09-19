@@ -2,7 +2,7 @@
 """Run an existing ELF/hex pair through cpu_top's actual BRAM wrapper.
 
 Uses an isolated Verilator binary testbench, not the shared pyUVM build.
-Example: python3 fpga/check_bram.py coremark_fixed --expected-cycles 355050
+Example: python3 fpga/check_bram.py coremark_fixed --expected-cycles 383043
 """
 import argparse
 from pathlib import Path
@@ -37,7 +37,7 @@ module bram_check;
   logic clk = 0;
   always #5 clk = ~clk;
   wire [5:0] led;
-  cpu_top #(.TOHOST_ADDR(32'h{tohost:08x})) dut(.clk(clk), .rst_btn(1'b0), .led(led));
+  cpu_top #(.ENABLE_LOADER(0), .TOHOST_ADDR(32'h{tohost:08x})) dut(.clk(clk), .rst_btn(1'b0), .uart_rx(1'b1), .uart_tx(), .led(led));
   integer elapsed = 0;
   logic [31:0] measured = 0;
   always @(posedge clk) begin

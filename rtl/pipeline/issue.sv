@@ -118,25 +118,17 @@ module issue_stage (
 
   // Stall aggregation (scalable – add more units later)
   logic  downstream_stall;
-  // The MDU contributes two DIFFERENT one-cycle-ish stalls, and keeping
-  // them separate is what makes it non-blocking. A 32-cycle divide does
-  // NOT stall issue: independent work keeps dispatching and the
-  // scoreboard holds back anything that reads the pending destination.
-  //
-  //   mdu_struct_stall  - lane 0 wants the MDU and it is still busy.
-  //                       A genuine structural hazard; only fires when a
-  //                       second multiply/divide arrives too early.
-  //   i_mdu_result_valid- the MDU is finishing this cycle and needs the
-  //                       lane-0 retire slot. cpu_core stalls ALU0 on the
-  //                       same cycle, so issue must hold too or the
-  //                       dispatch would be dropped by the stalled ALU.
-  //                       Costs one bubble per M instruction, not 32.
+  // The pipeline has no reorder buffer. Serialize younger issue while the
+  // MDU is active so its delayed write-back cannot be overtaken by ALU/LSU
+  // results or hidden by a younger forwarding entry. issue_hazard also
+  // prevents an MDU operation pairing with lane 1 at dispatch.
   logic lane0_wants_mdu, mdu_struct_stall;
   assign lane0_wants_mdu  = buf_valid0_q && buf_uop0_q.is_mdu;
   assign mdu_struct_stall = lane0_wants_mdu && !i_mdu_ready;
 
   assign downstream_stall = i_stall || lsu_if.s_stall_from_lsu
-                            || mdu_struct_stall || i_mdu_result_valid;
+                            || !i_mdu_ready || mdu_struct_stall
+                            || i_mdu_result_valid;
   // FUTURE: || alu_stall || fpu_stall || vec_stall
 
   logic operands_ready;
@@ -369,11 +361,8 @@ module issue_stage (
 
   // An operand is ready if it is not needed, is x0, has no write in
   // flight, or has one that the bypass network can supply RIGHT NOW.
-  // With today's units the last term is always true whenever the third
-  // is false, so this never stalls - the trace gate proves it. It starts
-  // biting as soon as a unit exists whose result is not on the bypass
-  // network every cycle between dispatch and write-back (a multi-cycle
-  // MDU, or a non-blocking load queue).
+  // The serialized MDU still uses this bookkeeping to hold its destination
+  // until write-back. A future non-blocking unit can use the same mechanism.
   function automatic logic op_ready(input logic uses, input logic busy, input logic hit);
     return !uses || !busy || hit;
   endfunction
@@ -401,6 +390,7 @@ module issue_stage (
   // One MDU operation is in flight at a time (enforced by
   // mdu_struct_stall and asserted in cpu_core.sv), so a single rd plus a
   // valid bit is the whole of the state needed.
+  // A younger branch redirect must not clear this older pending result.
   logic       mdu_pending_q;
   logic [4:0] mdu_pending_rd_q;
 
@@ -408,9 +398,6 @@ module issue_stage (
     if (!rst_n) begin
       mdu_pending_q    <= 1'b0;
       mdu_pending_rd_q <= 5'd0;
-    end
-    else if (i_flush) begin
-      mdu_pending_q <= 1'b0;
     end
     else if (o_mdu_valid && o_mdu_uop.writes_rd) begin
       mdu_pending_q    <= 1'b1;
@@ -424,15 +411,18 @@ module issue_stage (
     end
   end
 
+  // Also prevent a younger writer from retiring ahead of an older MDU write.
   function automatic logic blocked_by_mdu(input logic uses, input logic [4:0] rs);
     return uses && mdu_pending_q && (rs == mdu_pending_rd_q) && (rs != 5'd0);
   endfunction
 
-  assign lane0_ops_ready = op_ready(buf_uop0_q.uses_rs1, sb_query_busy[0], fwd_hit_rs1_0) &&
+  assign lane0_ops_ready = !blocked_by_mdu(buf_uop0_q.writes_rd, buf_uop0_q.rd) &&
+                           op_ready(buf_uop0_q.uses_rs1, sb_query_busy[0], fwd_hit_rs1_0) &&
                            op_ready(buf_uop0_q.uses_rs2, sb_query_busy[1], fwd_hit_rs2_0) &&
                            !blocked_by_mdu(buf_uop0_q.uses_rs1, buf_uop0_q.rs1)           &&
                            !blocked_by_mdu(buf_uop0_q.uses_rs2, buf_uop0_q.rs2);
-  assign lane1_ops_ready = op_ready(buf_uop1_q.uses_rs1, sb_query_busy[2], fwd_hit_rs1_1) &&
+  assign lane1_ops_ready = !blocked_by_mdu(buf_uop1_q.writes_rd, buf_uop1_q.rd) &&
+                           op_ready(buf_uop1_q.uses_rs1, sb_query_busy[2], fwd_hit_rs1_1) &&
                            op_ready(buf_uop1_q.uses_rs2, sb_query_busy[3], fwd_hit_rs2_1) &&
                            !blocked_by_mdu(buf_uop1_q.uses_rs1, buf_uop1_q.rs1)           &&
                            !blocked_by_mdu(buf_uop1_q.uses_rs2, buf_uop1_q.rs2);

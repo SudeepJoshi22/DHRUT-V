@@ -108,12 +108,13 @@ CoreMark/MHz        = iterations * 1,000,000 / timed_cycles
 Clock frequency cancels in these per-MHz expressions. The timing port uses a
 32-bit difference: the interval must be shorter than 2^32 cycles.
 
-Measured on 2026-09-19, based on `df43eaa` plus the request-sampling fix,
-with `fixed`, `CPU_TRACE=0`, `WAVES=0`:
+Measured on 2026-09-19 with `fixed`, `CPU_TRACE=0`, `WAVES=0`. Dhrystone was
+re-run after the Stage 2 MDU ordering correction; CoreMark was cross-checked
+in native `cpu_top` simulation and retained the same timed count:
 
 | Benchmark | Iterations | Timed cycles | Derived value | DUT result |
 |---|---:|---:|---:|---|
-| Dhrystone | 1 | 758 | 0.751 DMIPS/MHz | PASS |
+| Dhrystone | 1 | 759 | 0.750 DMIPS/MHz | PASS |
 | CoreMark, performance seeds | 1 | 383,043 | 2.611 CoreMark/MHz | PASS |
 
 These are **flow-validation figures only**. The report JSONs in

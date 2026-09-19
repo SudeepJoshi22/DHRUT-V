@@ -258,7 +258,10 @@ module cpu_core (
   mdu MDU (
     .clk      (clk),
     .rst_n    (rst_n),
-    .i_flush  (mispredict),
+    // Issue resolves branches before dispatching younger instructions.
+    // An in-flight MDU operation therefore precedes any redirect and must
+    // complete, just like the ALU/LSU; flushing it strands its scoreboard rd.
+    .i_flush  (1'b0),
     .i_valid  (mdu_dispatch_valid),
     .i_funct3 (mdu_dispatch_uop.funct3),
     .i_op1    (mdu_op1),
@@ -462,6 +465,11 @@ module cpu_core (
   // One in flight at a time. If the MDU were ever dispatched while busy,
   // mdu_inflight_uop_q would be overwritten and the first result would
   // write back to the wrong register.
+  assert_mdu_lsu_exclusive: assert property (
+    @(posedge clk) disable iff (!rst_n)
+    !(mdu_result_valid && lsu_valid)
+  ) else $error("CORE ERROR: MDU and LSU collide at retire");
+
   assert_mdu_single_inflight: assert property (
     @(posedge clk) disable iff (!rst_n)
     mdu_dispatch_valid |-> mdu_ready

@@ -168,13 +168,16 @@ def main():
     # its own file because splitting a word-wide $readmemh inside an initial
     # block does not elaborate. dmem_init.hex above is kept for reference and
     # for any consumer that still wants the word-wide view.
-    for b in range(4):
-        lane = [(w >> (8 * b)) & 0xFF for w in dmem]
-        write_hex(args.outdir / f"dmem_init_b{b}.hex", lane, 1)
+    for name, words, lanes in (("imem", imem, 8), ("dmem", dmem, 4)):
+        for b in range(lanes):
+            lane = [(w >> (8 * b)) & 0xFF for w in words]
+            write_hex(args.outdir / f"{name}_init_b{b}.hex", lane, 1)
     print(f"wrote  : {ipath} ({args.imem_depth} x 64-bit, "
           f"{args.imem_depth * 8 // 1024} KB)")
     print(f"wrote  : {dpath} ({args.dmem_depth} x 32-bit, "
           f"{args.dmem_depth * 4 // 1024} KB)")
+    print(f"wrote  : {args.outdir}/imem_init_b0..b7.hex "
+          f"(byte lanes, {args.imem_depth} x 8-bit each)")
     print(f"wrote  : {args.outdir}/dmem_init_b0..b3.hex "
           f"(byte lanes, {args.dmem_depth} x 8-bit each)")
 

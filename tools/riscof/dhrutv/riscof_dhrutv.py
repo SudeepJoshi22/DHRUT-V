@@ -127,7 +127,7 @@ class dhrutv(pluginTemplate):
                 logger.info(f"  TEST_HEX:          {os.path.join(test_dir, hexfile)}")
                 logger.info(f"  CYCLE_TIMEOUT:     {timeout}")
                 logger.info(f"  SIGNATURE_FILE:    {sig_file}")
-                logger.info(f"  COCOTB_LOG_LEVEL:  INFO")
+                logger.info(f"  COCOTB_LOG_LEVEL:  WARNING")
                 logger.info(f"  PYTHONPATH:        {repo_root}/test_bench:$PYTHONPATH")
 
                 simcmd = (
@@ -138,9 +138,10 @@ class dhrutv(pluginTemplate):
                     f"export TEST_HEX={shlex.quote(os.path.join(test_dir, hexfile))}; "
                     f"export CYCLE_TIMEOUT={timeout}; "
                     f"export SIGNATURE_FILE={shlex.quote(sig_file)}; "
-                    f"export COCOTB_LOG_LEVEL=INFO; "
+                    f"export COCOTB_LOG_LEVEL=WARNING; "
+                    f"export WAVES=0; export CPU_TRACE=0; "
                     f"export PYTHONPATH={repo_root}/test_bench:$$PYTHONPATH; "
-                    f"make -f {shlex.quote(pyuvm_makefile)} SIM=verilator LOG_LEVEL=DEBUG COCOTB_TEST_MODULES=run_test"
+                    f"make -f {shlex.quote(pyuvm_makefile)} SIM=verilator LOG_LEVEL=WARNING COCOTB_TEST_MODULES=run_test"
                 )
             else:
                 simcmd = 'echo "NO RUN"'

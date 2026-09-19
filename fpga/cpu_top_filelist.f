@@ -41,4 +41,7 @@
 ../rtl/pipeline/scoreboard.sv
 ../rtl/cpu_core.sv
 rtl/bram_slave.sv
+rtl/uart.sv
+rtl/prog_loader.sv
+rtl/dmem_splitter.sv
 rtl/cpu_top.sv

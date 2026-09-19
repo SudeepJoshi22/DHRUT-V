@@ -16,7 +16,7 @@ limitations under the License.
 Original Author: Shay Gal-on
 
 [DHRUT-V]: port for the DHRUT-V RISC-V core - no float, no stdio, no
-UART; timing is read from the mcycle CSR (see core_portme.c).
+stdio; optional hardware UART output and timing from the mcycle CSR (see core_portme.c).
 */
 #ifndef CORE_PORTME_H
 #define CORE_PORTME_H
@@ -50,8 +50,8 @@ UART; timing is read from the mcycle CSR (see core_portme.c).
 /* Upstream CoreMark expects the build system to pass -DFLAGS_STR="...".
    Our build does not, so without a fallback core_main.c fails to compile on
    an undeclared FLAGS_STR. The string is only ever handed to ee_printf,
-   which is a no-op stub here (no UART), so its content is cosmetic -- but it
-   has to exist. Define FLAGS_STR on the command line to override. */
+   which prints on UART in hardware builds. Hardware build scripts supply
+   the full flags; this fallback describes the simulation defaults. */
 #ifdef FLAGS_STR
 #define COMPILER_FLAGS FLAGS_STR
 #else

@@ -33,12 +33,16 @@
 module bram_slave #(
   parameter int    DATA_W    = 32,     // 64 for imem (2 instr/access), 32 for dmem
   parameter int    DEPTH     = 2048,   // entries, must be a power of two
-  parameter bit    WRITABLE  = 1'b1,   // 0 makes this a ROM (imem)
+  parameter bit    LOADABLE  = 1'b0,
+  parameter bit    WRITABLE  = 1'b1,   // CPU writes; loader writes use LOADABLE
   parameter string INIT_FILE = ""      // $readmemh image, one entry per line
 ) (
   input  logic clk,
   input  logic rst_n,
-  mem_if.slave bus
+  mem_if.slave bus,
+  input logic loading, ld_en,
+  input logic [31:0] ld_addr,
+  input logic [7:0] ld_data
 );
 
   // INIT_FILE minus a trailing ".hex", for building the per-lane filenames
@@ -91,16 +95,15 @@ module bram_slave #(
   // Splitting it into byte-wide arrays, each written as a WHOLE word under
   // its own strobe, is the form the rules do match.
   //
-  // The ROM case keeps the original single-array shape: WRITABLE=0 folds the
-  // write branch away, and it already infers cleanly (that is why imem got
-  // BSRAM while dmem did not).
+  // A non-loadable ROM keeps the single-array shape. Loadable IMEM uses
+  // byte lanes too, so a received byte writes through the same single port.
   //
   // Both paths preserve what inference depends on -- synchronous read, and
   // NO reset anywhere on the array -- and both keep the original timing: a
   // store commits at capture time, which is safe because lsu.sv has no flush
   // input and so never withdraws a store.
   generate
-    if (WRITABLE) begin : g_ram
+    if (WRITABLE || LOADABLE) begin : g_ram
       // Each lane loads its OWN image. Splitting a word-wide $readmemh into
       // lanes in an initial block does not elaborate ("evaluation does not
       // resolve to a constant in design initialization"), so fpga/mkmem.py
@@ -116,12 +119,15 @@ module bram_slave #(
             $readmemh($sformatf("%s_b%0d.hex", INIT_STEM, b), mem_b);
         end
 
+        wire port_en = (LOADABLE && loading) ? ld_en : (state_q == S_IDLE && accept);
+        wire [IDX_W-1:0] port_idx = (LOADABLE && loading) ? ld_addr[BYTE_SHIFT +: IDX_W] : idx;
+        wire port_we = (LOADABLE && loading) ? (ld_addr[BYTE_SHIFT-1:0] == BYTE_SHIFT'(b))
+                                             : (is_write && bus.m_wstrb[b]);
+        wire [7:0] port_data = (LOADABLE && loading) ? ld_data : bus.m_wdata[b*8 +: 8];
         always_ff @(posedge clk) begin
-          if (state_q == S_IDLE && accept) begin
-            // Read-first, exactly as before: the non-blocking read samples
-            // the pre-write value even on a lane being written this cycle.
-            rd_q <= mem_b[idx];
-            if (is_write && bus.m_wstrb[b]) mem_b[idx] <= bus.m_wdata[b*8 +: 8];
+          if (port_en) begin
+            rd_q <= mem_b[port_idx];
+            if (port_we) mem_b[port_idx] <= port_data;
           end
         end
 
