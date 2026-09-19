@@ -38,6 +38,11 @@
 #   make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 #   make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 #
+# Hardware benchmarks use the same Makefile entry point:
+#   make benchmark BENCH=dhrystone ITERATIONS=50000
+#   make benchmark-upload BENCH=dhrystone ITERATIONS=50000 PORT=/dev/serial/by-id/...
+#   make benchmark-flash BENCH=coremark ITERATIONS=1000
+#
 # Run `make mem` FIRST: cpu_top's $readmemh reads imem_init.hex/dmem_init.hex
 # from this directory at elaboration time, so synthesis needs them present.
 
@@ -138,6 +143,68 @@ TEST_DIR = ../tests/build/$(TEST)
 mem:
 	./mkmem.py $(TEST_DIR)/$(TEST).hex --elf $(TEST_DIR)/$(TEST).elf --outdir .
 
+# ---- Hardware benchmark build, bake, flash and UART run -------------------
+# Python implements ELF construction and the serial protocol, while make is
+# the operator-facing workflow and owns composition with synthesis/flash.
+PYTHON          ?= python3
+BENCH           ?= dhrystone
+ITERATIONS      ?= 1
+VALIDATION      ?= 0
+CLOCK_HZ        ?= 27000000
+PORT            ?=
+TIMEOUT         ?= 120
+EXPECTED_ERRORS ?= 0
+BRAM_TEST       ?= dhrystone_edgefix
+EXPECTED_CYCLES ?=
+
+VALIDATION_ENABLED = $(filter 1 yes true,$(VALIDATION))
+VALIDATION_ARG     = $(if $(VALIDATION_ENABLED),--validation,)
+BENCH_SUFFIX       = $(if $(VALIDATION_ENABLED),_validation,)
+BENCH_TEST         = $(BENCH)_hw_$(ITERATIONS)$(BENCH_SUFFIX)
+BENCH_DIR          = ../tests/build/$(BENCH_TEST)
+BENCH_ELF          = $(BENCH_DIR)/$(BENCH_TEST).elf
+BENCH_HEX          = $(BENCH_DIR)/$(BENCH_TEST).hex
+LOG                ?= $(BENCH_TEST).log
+
+benchmark:
+	$(PYTHON) ./build_benchmark.py $(BENCH) --iterations $(ITERATIONS) \
+		--clock-hz $(CLOCK_HZ) $(VALIDATION_ARG)
+
+benchmark-mem: benchmark
+	./mkmem.py $(BENCH_HEX) --elf $(BENCH_ELF) --outdir .
+
+benchmark-bitstream: benchmark-mem
+	$(MAKE) bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+
+benchmark-flash: benchmark-mem
+	$(MAKE) flash TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+
+benchmark-flash-nv: benchmark-mem
+	$(MAKE) flash-nv TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+
+benchmark-upload:
+	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
+	$(MAKE) benchmark BENCH=$(BENCH) ITERATIONS=$(ITERATIONS) \
+		VALIDATION=$(VALIDATION) CLOCK_HZ=$(CLOCK_HZ) PYTHON=$(PYTHON)
+	$(PYTHON) ./loadprog.py $(BENCH_ELF) --port "$(PORT)" \
+		--log "$(LOG)" --timeout $(TIMEOUT)
+
+verify-uart:
+	$(PYTHON) ./check_uart.py
+
+verify-loader: benchmark
+	$(PYTHON) ./check_loader.py $(BENCH_TEST) --expected-errors $(EXPECTED_ERRORS)
+
+verify-host:
+	$(PYTHON) ./tests/test_loadprog.py
+
+verify-mem:
+	$(PYTHON) -m unittest discover -s tests -p 'test_mkmem.py' -v
+
+verify-bram:
+	$(PYTHON) ./check_bram.py $(BRAM_TEST) \
+		$(if $(EXPECTED_CYCLES),--expected-cycles $(EXPECTED_CYCLES),)
+
 # ---- Cleaning ---------------------------------------------------------------
 # clean      -- just $(TOP)'s outputs, so other tops' bitstreams survive
 # clean-mem  -- the generated program images
@@ -176,4 +243,7 @@ area:
 clean-mem:
 	rm -f imem_init.hex dmem_init.hex dmem_init_b*.hex imem_init_b*.hex
 
-.PHONY: check synth bitstream flash flash-nv clean clean-all clean-mem mem area
+.PHONY: check synth bitstream flash flash-nv clean clean-all clean-mem mem area \
+	benchmark benchmark-mem benchmark-bitstream benchmark-flash \
+	benchmark-flash-nv benchmark-upload verify-uart verify-loader verify-host \
+	verify-mem verify-bram

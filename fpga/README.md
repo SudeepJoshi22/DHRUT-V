@@ -32,9 +32,8 @@ make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 
 # Build a benchmark payload, then upload it over the UART used for output
-python3 fpga/build_benchmark.py dhrystone --iterations 50000
-python3 fpga/loadprog.py tests/build/dhrystone_hw_50000/dhrystone_hw_50000.elf \
-  --port /dev/serial/by-id/<board-port>
+make benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
+  PORT=/dev/serial/by-id/<board-port>
 ```
 
 `make mem` must come first -- see *The program lives in the bitstream* below.
@@ -147,6 +146,11 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `FREQ_MHZ` | `27` | nextpnr timing target |
 | `PNR_OPTS` | empty | extra nextpnr options, such as `--seed 2 --report timing.json` |
 | `AREA_FILELIST` | `cpu_top_filelist.f` | filelist for `make area` only |
+| `BENCH` | `dhrystone` | `dhrystone` or `coremark` |
+| `ITERATIONS` | `1` | hardware benchmark iteration count |
+| `VALIDATION` | `0` | set to `1` for CoreMark validation seeds |
+| `PORT` | empty | serial port required by `benchmark-upload` |
+| `LOG` | generated benchmark name | UART capture filename |
 
 A `.f` file lists one source per line, `#` for **whole-line** comments only --
 the Makefile strips `^\s*#` lines but not trailing comments, so a comment after
@@ -173,6 +177,21 @@ make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 
 # Make it survive a power cycle
 make flash-nv TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+
+# Build and upload a benchmark through the FPGA UART loader
+make benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
+  PORT=/dev/serial/by-id/ACTUAL_DEVICE LOG=dhrystone-50000.log
+
+# Bake a benchmark into a new SRAM or persistent bitstream
+make benchmark-flash BENCH=dhrystone ITERATIONS=1
+make benchmark-flash-nv BENCH=coremark ITERATIONS=1000
+
+# Targeted UART, loader and host-protocol verification
+make verify-uart
+make verify-loader BENCH=dhrystone ITERATIONS=1
+make verify-host
+make verify-mem
+make verify-bram BRAM_TEST=dhrystone_edgefix EXPECTED_CYCLES=759
 
 # Sanity-check the toolchain on something trivial before blaming the CPU
 make bitstream TOP=blink FILELIST=blink.f CST=tangnano20k.cst
@@ -228,13 +247,13 @@ report is authoritative. Do not flash a build whose final report says
 Fast checks from the repository root, with the usual venv/toolchain active:
 
 ```bash
-python3 -m unittest discover -s fpga/tests -p 'test_mkmem.py' -v
-python3 fpga/check_bram.py dhrystone_edgefix --expected-cycles 759
-python3 fpga/check_bram.py coremark_edgefix --expected-cycles 383043
-python3 fpga/check_uart.py
-python3 fpga/check_loader.py dhrystone_hw_1
-python3 fpga/check_loader.py coremark_hw_1 --expected-errors 1
-python3 fpga/tests/test_loadprog.py
+make -C fpga verify-mem
+make -C fpga verify-bram BRAM_TEST=dhrystone_edgefix EXPECTED_CYCLES=759
+make -C fpga verify-bram BRAM_TEST=coremark_edgefix EXPECTED_CYCLES=383043
+make -C fpga verify-uart
+make -C fpga verify-loader BENCH=dhrystone ITERATIONS=1
+make -C fpga verify-loader BENCH=coremark ITERATIONS=1 EXPECTED_ERRORS=1
+make -C fpga verify-host
 ```
 
 The BRAM check consumes an existing `tests/build/<name>/<name>.elf`/`.hex`

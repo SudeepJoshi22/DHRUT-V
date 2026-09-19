@@ -198,7 +198,7 @@ source "$VENV_DIR/bin/activate"
 echo -e "${YELLOW}Installing/updating Python packages...${NC}"
 export COCOTB_IGNORE_PYTHON_REQUIRES=1
 pip install --upgrade pip setuptools wheel
-pip install cocotb==2.0.1 pyuvm==4.0.1 find_libpython==0.5.0 PyYAML==6.0.3
+pip install cocotb==2.0.1 pyuvm==4.0.1 find_libpython==0.5.0 PyYAML==6.0.3 pyserial==3.5
 pip install git+https://github.com/riscv/riscof.git@d38859f
 deactivate
 

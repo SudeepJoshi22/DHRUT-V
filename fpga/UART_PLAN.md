@@ -26,14 +26,11 @@ open the port at a time.
 
 Commands below run from the repository root. Put the RISC-V GCC toolchain,
 Verilator and OSS CAD Suite on PATH. Host upload requires Python's `pyserial`.
-The build scripts do not launch the slow pyUVM simulation.
+The Makefile is the operator interface; its Python helpers implement ELF
+construction and the wire protocol without launching the slow pyUVM simulation.
 
 ```bash
-python3 fpga/build_benchmark.py dhrystone --iterations 1
-python3 fpga/mkmem.py tests/build/dhrystone_hw_1/dhrystone_hw_1.hex \
-  --elf tests/build/dhrystone_hw_1/dhrystone_hw_1.elf --outdir fpga
-make -C fpga bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
-make -C fpga flash TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
 ```
 
 This SRAM flash lasts until power-off. `flash-nv` writes persistent flash.
@@ -45,9 +42,8 @@ prevents losing a short benchmark's output.
 Once this hardware is installed, new programs need no synthesis:
 
 ```bash
-python3 fpga/build_benchmark.py dhrystone --iterations 50000
-python3 fpga/loadprog.py tests/build/dhrystone_hw_50000/dhrystone_hw_50000.elf \
-  --port /dev/serial/by-id/ACTUAL_DEVICE --log dhrystone-50000.log
+make -C fpga benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
+  PORT=/dev/serial/by-id/ACTUAL_DEVICE LOG=dhrystone-50000.log
 ```
 
 The tool opens the port and asks you to press and release the FPGA reset button.
@@ -117,15 +113,15 @@ image the fallback on subsequent resets; reset does not restore baked RAM.
 
 ## Verification
 
-- `python3 fpga/check_uart.py`: standalone UART framing, FIFO and MMIO.
-- `python3 fpga/tests/test_loadprog.py`: host transfer/capture over a pseudo-terminal,
+- `make -C fpga verify-uart`: standalone UART framing, FIFO and MMIO.
+- `make -C fpga verify-host`: host transfer/capture over a pseudo-terminal,
   including ACK immediately followed by output, rejection and missing greeting.
-- `python3 fpga/check_loader.py`: real CPU, UART and writable BRAM; baked fallback,
+- `make -C fpga verify-loader BENCH=dhrystone ITERATIONS=1`: real CPU, UART and writable BRAM; baked fallback,
   invalid lengths, interrupted payload, checksum failure, reset recovery and
   successful serial-loaded benchmark output.
-- `python3 fpga/check_loader.py coremark_hw_1 --expected-errors 1`: CoreMark UART reporting with
+- `make -C fpga verify-loader BENCH=coremark ITERATIONS=1 EXPECTED_ERRORS=1`: CoreMark UART reporting with
   its expected short-run time-gate failure preserved as `errors=1`.
-- `python3 fpga/check_bram.py TEST`: targeted existing CPU tests using the RAM/bus
+- `make -C fpga verify-bram BRAM_TEST=TEST`: targeted existing CPU tests using the RAM/bus
   wrapper, with loading disabled for speed.
 
 Board acceptance still requires actual USB capture, iteration convergence,
