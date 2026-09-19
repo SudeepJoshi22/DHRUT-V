@@ -22,7 +22,9 @@ async def bram_contract(dut):
     dut.rst_n.value = 0
     cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
     for cls, bus, attr in [(IMemDriver, dut.imem_if, "imem_if"),
-                           (DMemDriver, dut.dmem_if, "dmem_if")]:
+                           (DMemDriver, dut.dmem_if, "dmem_if"),
+                           (IMemDriver, dut.edge_i, "imem_if"),
+                           (DMemDriver, dut.edge_d, "dmem_if")]:
         # Only the responder is under test; the UVM environment is unnecessary.
         driver = object.__new__(cls)
         driver.logger = logging.getLogger(cls.__name__)
@@ -31,7 +33,8 @@ async def bram_contract(dut):
         cocotb.start_soon(driver.run_phase())
 
     def compare():
-        for model, reference in pairs:
+        for model, reference in [*pairs, (dut.edge_i, dut.edge_ref_i),
+                                 (dut.edge_d, dut.edge_ref_d)]:
             assert int(model.s_ready.value) == int(reference.s_ready.value)
             if reference.s_ready.value:
                 assert int(model.s_rdata.value) == int(reference.s_rdata.value)

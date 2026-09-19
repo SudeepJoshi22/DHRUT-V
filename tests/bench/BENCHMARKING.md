@@ -80,7 +80,9 @@ Dhrystone run-rule compliance. The reference is Spike with
 `await RisingEdge`. The latter added an extra cycle in Claude's unfinished
 implementation. The revised driver is checked against the actual
 `fpga/rtl/bram_slave.sv` for both clock phases, held/back-to-back requests,
-redirects, flushes, resets, data and byte-write strobes:
+redirects, flushes, resets, data and byte-write strobes. Clocked RTL masters
+also check simulator scheduling: the Python driver samples the preceding
+half-cycle so it cannot accept a newly launched CPU request one edge early:
 
 ```bash
 python3 tools/check_memory_timing.py
@@ -106,18 +108,23 @@ CoreMark/MHz        = iterations * 1,000,000 / timed_cycles
 Clock frequency cancels in these per-MHz expressions. The timing port uses a
 32-bit difference: the interval must be shorter than 2^32 cycles.
 
-Measured on 2026-09-18, on `benchmark-methodology` based on `ef6f6fa` plus
-the working changes in this branch, with `fixed`, `CPU_TRACE=0`, `WAVES=0`:
+Measured on 2026-09-19, based on `df43eaa` plus the request-sampling fix,
+with `fixed`, `CPU_TRACE=0`, `WAVES=0`:
 
 | Benchmark | Iterations | Timed cycles | Derived value | DUT result |
 |---|---:|---:|---:|---|
-| Dhrystone | 1 | 724 | 0.786 DMIPS/MHz | PASS |
-| CoreMark, performance seeds | 1 | 355,050 | 2.817 CoreMark/MHz | PASS |
+| Dhrystone | 1 | 758 | 0.751 DMIPS/MHz | PASS |
+| CoreMark, performance seeds | 1 | 383,043 | 2.611 CoreMark/MHz | PASS |
 
 These are **flow-validation figures only**. The report JSONs in
 [`results/`](results/) retain ELF hashes, commands and available build metadata.
-CoreMark started before automatic metadata capture was added; its conditions
-were reconstructed from the recorded invocation and are marked accordingly.
+Both records include automatically captured build conditions. These replace
+the earlier 724 / 355,050-cycle figures: clocked-master testing found that
+Verilator delivered Python rising-edge callbacks after the CPU updated its
+requests. Sampling those new requests made the model one edge too early.
+The corrected figures agree exactly with native Verilator runs of `cpu_top`
+and actual BRAM in the Stage 2 hardware branch (32 KB per memory). This is
+still an RTL comparison, not a measurement of the physical board.
 Both CoreMark seed configurations also passed Spike; the validation-seed
 configuration has not been rerun on the DUT in this stage.
 

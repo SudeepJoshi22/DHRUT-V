@@ -6,7 +6,7 @@ registered response is already the FPGA's one wait state. Address capacity
 remains the Python backing store's responsibility.
 """
 import cocotb
-from cocotb.triggers import RisingEdge, ValueChange, First, Event
+from cocotb.triggers import RisingEdge, FallingEdge, ReadOnly, ValueChange, First, Event
 
 
 async def run_bram_responder(bus, mem, *, data_w=32, writable=True, fill=0):
@@ -34,18 +34,27 @@ async def run_bram_responder(bus, mem, *, data_w=32, writable=True, fill=0):
     gate = cocotb.start_soon(drive_response())
     try:
         while True:
+            # Verilator can deliver RisingEdge to Python after clocked RTL has
+            # updated the master's outputs. Snapshot the stable request in the
+            # preceding half-cycle, so a request launched at this edge is not
+            # incorrectly accepted one cycle earlier than a real BRAM would.
+            await FallingEdge(bus.clk)
+            await ReadOnly()
+            valid = bool(bus.m_valid.value)
+            flush = bool(bus.m_flush.value)
+            address = int(bus.m_addr.value)
+            wdata, strobes = int(bus.m_wdata.value), int(bus.m_wstrb.value)
             await RisingEdge(bus.clk)
             if not bus.rst_n.value:
                 response = False
             elif response:
                 response = False
-            elif bus.m_valid.value and not bus.m_flush.value:
-                req_addr = int(bus.m_addr.value)
+            elif valid and not flush:
+                req_addr = address
                 base = req_addr & ~((data_w // 8) - 1)
                 rdata = sum(mem.get(base + off, fill) << (off * 8)
                             for off in range(0, data_w // 8, 4))
                 if writable:
-                    wdata, strobes = int(bus.m_wdata.value), int(bus.m_wstrb.value)
                     for byte in range(data_w // 8):
                         if strobes & (1 << byte):
                             addr = base + (byte & ~3)

@@ -1,11 +1,11 @@
 {
-  "test": "dhrystone_fixed",
+  "test": "dhrystone_edgefix",
   "kind": "dhrystone",
   "status": "PASS",
-  "cycles": 724,
+  "cycles": 758,
   "iterations": 1,
-  "cycles_per_iteration": 724.0,
-  "per_mhz": 0.7861214966495502,
+  "cycles_per_iteration": 758.0,
+  "per_mhz": 0.7508601102562986,
   "measurement": "simulation flow validation",
   "conditions": {
     "compiler": "riscv-none-elf-gcc (xPack GNU RISC-V Embedded GCC x86_64) 15.2.0",
@@ -33,14 +33,14 @@
       "tests/bench/dhrystone/port.c",
       "-lgcc",
       "-o",
-      "/home/sudeep/github/DHRUT-V-FPGA/tests/build/dhrystone_fixed/dhrystone_fixed.elf"
+      "/home/sudeep/github/DHRUT-V-FPGA/tests/build/dhrystone_edgefix/dhrystone_edgefix.elf"
     ],
-    "revision": "ef6f6fab43490b19c34d20d26b53f8428a84598e",
+    "revision": "df43eaadbdd0f06442ba69e2c2bd3cfb5d5aa549",
     "dirty": true,
     "memory_mode": "fixed",
     "cpu_trace": "0",
     "waves": "0",
-    "elf_sha256": "1dfb026072b6d1db0bc58af3613deb32b6743ba22bd2325af4e035f8f97b5fbf",
+    "elf_sha256": "8ef7e6819320ec3720e56cfda4c18e1abbc21e26df175e40c5f4b67ccca3d77a",
     "source_sha256": {
       "rtl/cpu_core.sv": "386062d4f375beddfd15dabb9326fd89ee5603e890f06761f6b87587a15cfe8d",
       "rtl/csr/generated/csr_regfile_gen.sv": "744752ce8cfea2ce45e6e68fd34e94f22773440a8a58b713dd083cc77f730099",
@@ -70,9 +70,9 @@
       "test_bench/legacy/Fetch_axi/fetch_rom_test.py": "4608df628923fec23225bc4f125b4f2d6fd3bca1df60cac28fab5cfce05d6659",
       "test_bench/legacy/Fetch_axi/test_fetch_rom.py": "902d28463d1c7d00c4008865b9e113cb2d6dc0a5de3dd9671778296e2850b266",
       "test_bench/memory_timing/memory_timing.sv": "2392cea61857fa6d29d739846552accc126a136f024986f734f992d7156dfca1",
-      "test_bench/memory_timing/test_memory_timing.py": "4a2976489c2d1f2e5346d51f18b82fb08f671d92afb2a69cf467a9175f963a55",
+      "test_bench/memory_timing/test_memory_timing.py": "5ad2ea5ceee5891d6b3c1f11c9522ce272019746f0e311c5592da41bd174b3fd",
       "test_bench/run_test.py": "547e1bc6c6824d94ef1e267d4b6974d92e745258cb1134b995daffc167aaacdd",
-      "test_bench/tb_pyuvm/bram_responder.py": "28b513b8be29034b54b19b11170cf3a3081514ff95849fae681d8f4e86963f46",
+      "test_bench/tb_pyuvm/bram_responder.py": "9acf4bbadcde1d32220c8e06258d1b9bd7be0024f2c998d5fdc1f5873c41e6c2",
       "test_bench/tb_pyuvm/cpu_agent/cpu_agent.py": "9834256ebbd890a6102a1f5e9a715c4fc10511cd91e0011e91fd9dc936a4517b",
       "test_bench/tb_pyuvm/cpu_agent/cpu_monitor.py": "f786d146846371e080b914f2da7581e06b4a12ce8abf26f3b3be1bbf03df555b",
       "test_bench/tb_pyuvm/cpu_agent/cpu_tracer.py": "5c5c3bb1c399013dbc1de110d7eadb9f1d0fa9073f22abe439c1012f09a09e6c",
@@ -104,7 +104,7 @@
       "tests/crt0.S": "1cb83a6dbea4747420ca1d0ed16a27228469ffe6f77c9ae0868859119ab54e96",
       "tests/linker_c.ld": "1268b791458050e90154ef4631951c0fd4c678d55ef3f1377c0eec6fe43787c7",
       "tools/pyUVM/Makefile": "0d8dec88aef89c91bbc96b58560b0e0328b8479d26143877786ed2e0cc2802ef",
-      "tools/simulate_c.sh": "ace04b7c936240980cac8453aec22ba35990bee8109cdf1dfca27ec4808d0478"
+      "tools/simulate_c.sh": "fca3a76f32282b35f3a3c5212bdd86a6f844644032457f96f3243fad13b730c5"
     }
   }
 }
