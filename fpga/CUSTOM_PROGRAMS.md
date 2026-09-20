@@ -5,6 +5,10 @@ The FPGA bitstream contains the DHRUT-V CPU, UART, hardware program loader and
 is then an ordinary RV32IM bare-metal ELF uploaded into BRAM over UART; changing
 the application does not run synthesis or reconfigure the FPGA.
 
+Complete the configuration and serial-port steps in
+[QUICKSTART.md](QUICKSTART.md), then activate `venv/bin/activate` before the
+commands below.
+
 ## Smallest example
 
 ```c

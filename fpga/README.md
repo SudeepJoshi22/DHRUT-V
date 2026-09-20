@@ -8,38 +8,38 @@ Target part: **GW2AR-LV18QN88C8/I7** (GW2A-18C family) -- 20,736 LUT4,
 15,552 FF, 46 BSRAM blocks, 648 RAM16SDP4 distributed-RAM blocks, 27 MHz
 oscillator.
 
+For the shortest fresh-clone board procedure, follow
+**[FPGA + UART quick start](QUICKSTART.md)**. The rest of this file explains the
+implementation and the lower-level targets.
+
 ## First: get the tools
 
 The FPGA toolchain is a separate install from the simulation toolchain, because
 it is a ~1.5 GB download most work on this repo does not need:
 
 ```bash
-./tools/install.sh fpga-tools          # from the repo root
-source tools/oss-cad-suite/environment
+./tools/install.sh all                 # from the repo root
 ```
 
 **Activate one environment at a time.** OSS CAD Suite ships its own Verilator
 and Python; if `venv/bin/activate` and `oss-cad-suite/environment` are both on
 PATH, the wrong Verilator wins and cocotb runs break in confusing ways. Use the
-venv for simulation, the OSS CAD environment for everything in this directory.
+venv for simulation/upload, and the OSS CAD environment for synthesis and
+flashing. The Makefile finds the repository RISC-V compiler while OSS CAD is
+active. [QUICKSTART.md](QUICKSTART.md) shows where to switch environments.
 
 ## The 60-second version
 
 ```bash
-cd fpga
-make mem TEST=fpga_blink                                        # program -> memory images
-make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
-make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+# Shell 1: configure the FPGA once
+source tools/oss-cad-suite/environment
+make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
+deactivate
 
-# Build a benchmark payload, then upload it over the UART used for output
-make benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
-  PORT=/dev/serial/by-id/<board-port>
-
-# Or choose benchmark/iterations from an interactive prompt
-make console PORT=/dev/serial/by-id/<board-port>
+# Shell 2: select and UART-load programs without re-synthesis
+source venv/bin/activate
+make -C fpga console PORT=/dev/serial/by-id/<board-port>
 ```
-
-`make mem` must come first -- see *The program lives in the bitstream* below.
 
 ## How the CPU gets synthesised
 
@@ -57,7 +57,7 @@ top-level module 'cpu_core' has unconnected interface port 'imem_if'
 `rtl/cpu_top.sv` is that parent. It instantiates the two `mem_if` instances at
 the right widths (imem 64-bit -- two instructions per fetch; dmem 32-bit), wires
 `cpu_core` onto them, terminates both in on-chip memory, and exposes flat
-`clk`, `rst_n_btn`, `uart_rx`, `uart_tx` and `led[5:0]` ports -- which a `.cst`
+`clk`, `rst_btn`, `uart_rx`, `uart_tx` and `led[5:0]` ports -- which a `.cst`
 *can* constrain.
 
 ### The memories
@@ -136,6 +136,14 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `clean` | remove `<TOP>`'s `.json` / `.pack.json` / `.fs` | no |
 | `clean-all` | remove **everything** generated here -- all tops, all logs, formal work dirs, area baselines (tens of MB) | no |
 | `clean-mem` | remove the generated memory images | no |
+| `benchmark` | build a Dhrystone/CoreMark hardware ELF | no |
+| `benchmark-flash` | bake a fallback, build the CPU bitstream, and configure volatile SRAM | yes |
+| `benchmark-flash-nv` | same flow, writing persistent onboard flash | yes |
+| `benchmark-upload` | build and UART-load a benchmark without synthesis | no |
+| `console` | prompt for benchmark, iterations and validation mode, then upload | no |
+| `program-upload` | compile custom C, UART-load it, and attach a terminal | no |
+| `elf-upload` | UART-load an existing compatible ELF and attach a terminal | no |
+| `terminal` | open a plain 115200-baud serial terminal | no |
 
 ### Variables
 
@@ -166,6 +174,10 @@ list must track additions to `rtl/pipeline/` or elaboration fails on an
 unresolved instance.
 
 ## Commonly used commands
+
+The commands in this section run from the `fpga/` directory (`cd fpga`). The
+quick start uses the equivalent `make -C fpga ...` form from the repository
+root.
 
 ```bash
 # Resource check without PnR -- the fast inner loop
@@ -339,7 +351,7 @@ Diagnosing a dark board:
 ## Known rough edges
 
 - **The auxiliary LED/button pin numbers in `cpu_top.cst` are unverified.**
-  `led[1..5]` and `rst_n_btn` were extrapolated from a known-good `led0 = 15`.
+  `led[1..5]` and `rst_btn` were extrapolated from a known-good `led0 = 15`.
   UART TX/RX use the board's documented pins 69/70. Wrong auxiliary pins show
   up as dark LEDs or a dead button, not as a build error.
 - **The serial hardware path still needs a physical-board acceptance run.**

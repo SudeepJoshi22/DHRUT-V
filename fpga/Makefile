@@ -49,6 +49,15 @@
 DEVICE     = GW2AR-LV18QN88C8/I7
 FAMILY     = GW2A-18C
 
+# Locate the repository-installed cross compiler even when OSS CAD Suite is
+# the active environment. This lets benchmark-flash compose firmware building
+# and FPGA synthesis without asking users to mix the simulation venv into the
+# OSS CAD PATH. Fall back to the caller's PATH for a system installation.
+# The second pattern supports this repository's documented two-clone setup,
+# where the stable DHRUT-V clone owns the shared simulation toolchain.
+RISCV_BIN  := $(firstword $(wildcard ../tools/toolchain/xpack-riscv-none-elf-gcc-*/bin ../../DHRUT-V/tools/toolchain/xpack-riscv-none-elf-gcc-*/bin))
+RISCV_PATH := $(if $(RISCV_BIN),$(abspath $(RISCV_BIN)):,)
+
 # The Tang Nano 20K's oscillator. WITHOUT this nextpnr assumes 12 MHz, reports
 # "PASS at 12.00 MHz", and never checks the design against the clock it will
 # actually run at -- the Fmax it prints is then an informational by-product
@@ -141,7 +150,7 @@ TEST ?= add
 TEST_DIR = ../tests/build/$(TEST)
 
 mem:
-	./mkmem.py $(TEST_DIR)/$(TEST).hex --elf $(TEST_DIR)/$(TEST).elf --outdir .
+	PATH="$(RISCV_PATH)$$PATH" ./mkmem.py $(TEST_DIR)/$(TEST).hex --elf $(TEST_DIR)/$(TEST).elf --outdir .
 
 # ---- Hardware benchmark build, bake, flash and UART run -------------------
 # Python implements ELF construction and the serial protocol, while make is
@@ -178,11 +187,11 @@ PROGRAM_ELF         = $(PROGRAM_DIR)/$(PROGRAM_NAME).elf
 PROGRAM_HEX         = $(PROGRAM_DIR)/$(PROGRAM_NAME).hex
 
 benchmark:
-	$(PYTHON) ./build_benchmark.py $(BENCH) --iterations $(ITERATIONS) \
+	PATH="$(RISCV_PATH)$$PATH" $(PYTHON) ./build_benchmark.py $(BENCH) --iterations $(ITERATIONS) \
 		--clock-hz $(CLOCK_HZ) $(VALIDATION_ARG)
 
 benchmark-mem: benchmark
-	./mkmem.py $(BENCH_HEX) --elf $(BENCH_ELF) --outdir .
+	PATH="$(RISCV_PATH)$$PATH" ./mkmem.py $(BENCH_HEX) --elf $(BENCH_ELF) --outdir .
 
 benchmark-bitstream: benchmark-mem
 	$(MAKE) bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
@@ -197,7 +206,7 @@ benchmark-upload:
 	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
 	$(MAKE) benchmark BENCH=$(BENCH) ITERATIONS=$(ITERATIONS) \
 		VALIDATION=$(VALIDATION) CLOCK_HZ=$(CLOCK_HZ) PYTHON=$(PYTHON)
-	$(PYTHON) ./loadprog.py $(BENCH_ELF) --port "$(PORT)" \
+	PATH="$(RISCV_PATH)$$PATH" $(PYTHON) ./loadprog.py $(BENCH_ELF) --port "$(PORT)" \
 		--log "$(BENCH_LOG)" --timeout $(TIMEOUT)
 
 # Upload any already-linked bare-metal ELF. This changes BRAM contents over
@@ -206,7 +215,7 @@ elf-upload:
 	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
 	@test -n "$(ELF)" || { echo "ELF=/path/to/program.elf is required" >&2; exit 2; }
 	@test -f "$(ELF)" || { echo "ELF not found: $(ELF)" >&2; exit 2; }
-	$(PYTHON) ./loadprog.py "$(ELF)" --port "$(PORT)" \
+	PATH="$(RISCV_PATH)$$PATH" $(PYTHON) ./loadprog.py "$(ELF)" --port "$(PORT)" \
 		--log "$(ELF_LOG)" --timeout $(TIMEOUT) $(INTERACTIVE_ARG)
 
 # Compile one or more freestanding C files for the resident RV32IM CPU. The
@@ -215,13 +224,13 @@ program-build:
 	@test -n "$(PROGRAM_NAME)" || { echo "PROGRAM_NAME is required" >&2; exit 2; }
 	@test -n "$(PROGRAM_SOURCES)" || { echo "PROGRAM_SOURCES is required" >&2; exit 2; }
 	@mkdir -p $(PROGRAM_DIR)
-	riscv-none-elf-gcc -march=rv32im_zicsr -mabi=ilp32 -O2 \
+	PATH="$(RISCV_PATH)$$PATH" riscv-none-elf-gcc -march=rv32im_zicsr -mabi=ilp32 -O2 \
 		-ffreestanding -fno-stack-protector -fno-builtin -static \
 		-mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
 		-Iinclude $(PROGRAM_CFLAGS) -T ../tests/linker_c.ld \
 		../tests/crt0.S $(PROGRAM_SOURCES) -lgcc -o $(PROGRAM_ELF)
-	riscv-none-elf-objcopy -O verilog $(PROGRAM_ELF) $(PROGRAM_HEX)
-	riscv-none-elf-size $(PROGRAM_ELF)
+	PATH="$(RISCV_PATH)$$PATH" riscv-none-elf-objcopy -O verilog $(PROGRAM_ELF) $(PROGRAM_HEX)
+	PATH="$(RISCV_PATH)$$PATH" riscv-none-elf-size $(PROGRAM_ELF)
 
 program-upload:
 	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
@@ -261,7 +270,7 @@ verify-uart:
 	$(PYTHON) ./check_uart.py
 
 verify-loader: benchmark
-	$(PYTHON) ./check_loader.py $(BENCH_TEST) --expected-errors $(EXPECTED_ERRORS)
+	PATH="$(RISCV_PATH)$$PATH" $(PYTHON) ./check_loader.py $(BENCH_TEST) --expected-errors $(EXPECTED_ERRORS)
 
 verify-host:
 	$(PYTHON) ./tests/test_loadprog.py
@@ -270,7 +279,7 @@ verify-mem:
 	$(PYTHON) -m unittest discover -s tests -p 'test_mkmem.py' -v
 
 verify-bram:
-	$(PYTHON) ./check_bram.py $(BRAM_TEST) \
+	PATH="$(RISCV_PATH)$$PATH" $(PYTHON) ./check_bram.py $(BRAM_TEST) \
 		$(if $(EXPECTED_CYCLES),--expected-cycles $(EXPECTED_CYCLES),)
 
 # ---- Cleaning ---------------------------------------------------------------

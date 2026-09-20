@@ -4,6 +4,9 @@ Stage 2 implementation: 32 KB instruction RAM + 32 KB data RAM, UART MMIO,
 hardware loader, benchmark printing, and laptop upload/capture. Board validation
 and iteration sweeps remain separate from simulation results.
 
+For a fresh-clone, command-by-command board procedure, start with
+[QUICKSTART.md](QUICKSTART.md). This file is the protocol and design reference.
+
 ## How output reaches the laptop
 
 ```
@@ -24,8 +27,9 @@ open the port at a time.
 
 ## Build and run
 
-Commands below run from the repository root. Put the RISC-V GCC toolchain,
-Verilator and OSS CAD Suite on PATH. Host upload requires Python's `pyserial`.
+Commands below run from the repository root. Use OSS CAD Suite while building
+or flashing a bitstream, then switch to the repository venv for UART uploads.
+The Makefile locates the repository-installed RISC-V compiler in either case.
 The Makefile is the operator interface; its Python helpers implement ELF
 construction and the wire protocol without launching the slow pyUVM simulation.
 
@@ -39,7 +43,9 @@ There are two separate operations:
    This takes seconds and performs no synthesis or FPGA configuration.
 
 ```bash
+source tools/oss-cad-suite/environment
 make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
+deactivate
 ```
 
 This SRAM flash lasts until power-off. `flash-nv` writes persistent flash.
@@ -51,6 +57,7 @@ prevents losing a short benchmark's output.
 Once this hardware is installed, new programs need no synthesis:
 
 ```bash
+source venv/bin/activate
 make -C fpga benchmark-upload BENCH=dhrystone ITERATIONS=50000 \
   PORT=/dev/serial/by-id/ACTUAL_DEVICE LOG=dhrystone-50000.log
 ```
