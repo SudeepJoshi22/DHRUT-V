@@ -1,5 +1,6 @@
 """Exercise upload+capture over a real pseudo-terminal, with adjacent ACK/text."""
 import io
+import errno
 import os
 from pathlib import Path
 import pty
@@ -10,11 +11,35 @@ import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from loadprog import upload, capture
+from loadprog import open_uart, upload, capture
 import serial
 
 
 class HostSerialTest(unittest.TestCase):
+    def test_open_uart_ignores_only_bridge_modem_eio(self):
+        class FtdiBridge:
+            class Serial:
+                def __init__(self, *args, **kwargs):
+                    self._update_dtr_state()
+                    self._update_rts_state()
+
+                def _update_dtr_state(self):
+                    raise OSError(errno.EIO, 'unsupported DTR')
+
+                def _update_rts_state(self):
+                    raise OSError(errno.EIO, 'unsupported RTS')
+
+        self.assertIsInstance(open_uart(FtdiBridge, '/dev/ttyUSB1'), FtdiBridge.Serial)
+
+        class BrokenBridge(FtdiBridge):
+            class Serial(FtdiBridge.Serial):
+                def _update_rts_state(self):
+                    raise OSError(errno.EPERM, 'real serial error')
+
+        with self.assertRaises(OSError) as caught:
+            open_uart(BrokenBridge, '/dev/ttyUSB1')
+        self.assertEqual(caught.exception.errno, errno.EPERM)
+
     def test_ack_and_first_output_share_read_buffer(self):
         master, slave = pty.openpty()
         errors = []

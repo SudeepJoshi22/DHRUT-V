@@ -3,6 +3,7 @@
 Open the port first, then press and release reset when prompted.
 """
 import argparse
+import errno
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,35 @@ import sys
 import tempfile
 import time
 from mkmem import BASE, load_verilog_hex, symbols_from_elf, validate_layout
+
+
+def open_uart(serial_module, device):
+    """Open the board UART without requiring unsupported modem-control ioctls.
+
+    The Tang Nano 20K's BL616 USB bridge identifies as an FTDI-compatible
+    dual UART.  Its UART function accepts normal serial traffic, but rejects
+    the Linux TIOCMBIS/TIOCMBIC DTR/RTS ioctls with EIO.  pyserial performs
+    those ioctls while opening a port even when hardware flow control is off.
+    Ignore only that bridge-specific failure; all other serial errors still
+    propagate normally.
+    """
+    class BridgeSerial(serial_module.Serial):
+        def _update_dtr_state(self):
+            try:
+                super()._update_dtr_state()
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+
+        def _update_rts_state(self):
+            try:
+                super()._update_rts_state()
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+
+    return BridgeSerial(device, 115200, timeout=0.1, write_timeout=10,
+                        rtscts=False, dsrdtr=False, xonxoff=False)
 
 
 def frame_from_elf(elf):
@@ -114,8 +144,7 @@ def main():
     except ImportError as error:
         raise RuntimeError('pyserial is required: install it with python3 -m pip install pyserial') from error
     try:
-        with serial.Serial(args.port, 115200, timeout=0.1, write_timeout=10,
-                           rtscts=False, dsrdtr=False, xonxoff=False) as port:
+        with open_uart(serial, args.port) as port:
             port.reset_input_buffer()
             print('Press and release FPGA reset now; waiting for loader ready...', flush=True)
             upload(port, frame)
@@ -124,12 +153,18 @@ def main():
                 return
             with args.log.open('wb') as log:
                 result = capture(port, log, args.timeout)
-    except serial.SerialException as error:
+    except (serial.SerialException, OSError) as error:
         if getattr(error, 'errno', None) == 13:
             raise RuntimeError(
                 f'Permission denied opening {args.port}. Add your user to the '
                 'dialout group with `sudo usermod -aG dialout "$USER"`, then '
                 'log out and back in (or run `newgrp dialout` for a new shell).'
+            ) from error
+        if getattr(error, 'errno', None) == errno.EIO:
+            raise RuntimeError(
+                f'The USB bridge rejected serial control on {args.port}. '
+                'Close any terminal using the port, unplug and reconnect the '
+                'board, then retry with the FPGA UART interface (normally if01).'
             ) from error
         raise RuntimeError(f'Cannot open serial port {args.port}: {error}') from error
     result['elf_sha256'] = elf_hash
