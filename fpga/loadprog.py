@@ -124,21 +124,31 @@ def interactive_console(port):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('elf', type=Path)
+    ap.add_argument('elf', type=Path, nargs='?',
+                    help='bare-metal ELF to upload (omit with --monitor)')
     ap.add_argument('--port', required=True, help='/dev/serial/by-id/... or COM port')
     ap.add_argument('--log', type=Path, default=Path('benchmark-uart.log'))
     ap.add_argument('--timeout', type=float, default=120)
     ap.add_argument('--interactive', action='store_true',
                     help='after upload, connect stdin/stdout instead of waiting for DHRUTV_RESULT')
+    ap.add_argument('--monitor', action='store_true',
+                    help='open an interactive UART terminal; do not upload an ELF')
     args = ap.parse_args()
     if args.timeout <= 0:
         ap.error('--timeout must be positive')
-    frame = frame_from_elf(args.elf)
-    elf_hash = hashlib.sha256(args.elf.read_bytes()).hexdigest()
-    metadata = args.elf.with_suffix('.json')
-    build_metadata = json.loads(metadata.read_text()) if metadata.exists() else None
-    if build_metadata and build_metadata.get('elf_sha256') != elf_hash:
-        raise RuntimeError('Build metadata does not match uploaded ELF')
+    if args.monitor and args.elf:
+        ap.error('--monitor does not take an ELF')
+    if not args.monitor and not args.elf:
+        ap.error('an ELF is required unless --monitor is used')
+
+    frame = elf_hash = build_metadata = None
+    if not args.monitor:
+        frame = frame_from_elf(args.elf)
+        elf_hash = hashlib.sha256(args.elf.read_bytes()).hexdigest()
+        metadata = args.elf.with_suffix('.json')
+        build_metadata = json.loads(metadata.read_text()) if metadata.exists() else None
+        if build_metadata and build_metadata.get('elf_sha256') != elf_hash:
+            raise RuntimeError('Build metadata does not match uploaded ELF')
     try:
         import serial
     except ImportError as error:
@@ -146,6 +156,9 @@ def main():
     try:
         with open_uart(serial, args.port) as port:
             port.reset_input_buffer()
+            if args.monitor:
+                interactive_console(port)
+                return
             print('Press and release FPGA reset now; waiting for loader ready...', flush=True)
             upload(port, frame)
             if args.interactive:

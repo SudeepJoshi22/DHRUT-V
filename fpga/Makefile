@@ -276,7 +276,7 @@ console:
 
 terminal:
 	@test -n "$(PORT)" || { echo "PORT is required (prefer /dev/serial/by-id/...)" >&2; exit 2; }
-	$(PYTHON) -m serial.tools.miniterm "$(PORT)" 115200
+	$(PYTHON) ./loadprog.py --monitor --port "$(PORT)"
 
 verify-uart:
 	$(PYTHON) ./check_uart.py

@@ -13,14 +13,31 @@ This installs the repository RISC-V cross compiler and Python environment plus
 OSS CAD Suite. The Makefile locates the repository compiler automatically, so
 do not activate the simulation venv while synthesizing.
 
-## 2. Configure the FPGA once
+## 2. Prove the board can be configured (no CPU or UART yet)
+
+Start with the minimal LED blinker. It is deliberately independent of the CPU,
+BRAM and USB serial path, so it isolates the board configuration step:
+
+```bash
+source tools/oss-cad-suite/environment
+make -C fpga flash TOP=blink FILELIST=blink.f CST=tangnano20k.cst
+```
+
+`openFPGALoader` must end with `DONE`, then LED0 must blink about once per
+second. The reset button does nothing useful in this design. If this test does
+not work, stop here: fix the USB/JTAG cable, board selection or FPGA flash
+path before testing the CPU.
+
+## 3. Configure the CPU/UART bitstream
+
+The next step replaces the blinker with the CPU, UART and resident UART loader.
+It is the only point at which a benchmark image is baked into FPGA BRAM:
 
 Connect the board over USB, then start a clean shell:
 
 ```bash
 source tools/oss-cad-suite/environment
 make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
-deactivate
 ```
 
 This builds firmware, synthesizes and routes the CPU/UART/loader, checks the
@@ -35,14 +52,13 @@ anything, use:
 ```bash
 source tools/oss-cad-suite/environment
 make -C fpga flash-cpu
-deactivate
 ```
 
 The one-iteration Dhrystone image is only the baked recovery program. Once the
 bitstream is installed, changing CPU software does not repeat synthesis or
 flashing; use `console`, `benchmark-upload`, `program-upload`, or `elf-upload`.
 
-## 3. Find the USB UART
+## 4. Find and open the USB UART
 
 Start a new shell with the repository Python environment:
 
@@ -67,7 +83,20 @@ Only one terminal/uploader may have the port open. If no serial port appears,
 check the USB cable and restore the onboard BL616 bridge to UART mode with its
 `choose uart` command.
 
-## 4. Prove bidirectional UART with the example
+The Tang Nano exposes two USB serial interfaces. Use the stable by-id name and
+test one interface at a time. The FPGA UART is normally `if01`:
+
+```bash
+make -C fpga terminal \
+  PORT=/dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if01-port0
+```
+
+This opens a read-only/write-capable UART monitor; it does not upload anything.
+Press and release **S1 / Reset** once while it is open. A working loader prints
+one `R` character. An otherwise blank terminal is expected until a program
+writes UART data. Exit the monitor with Ctrl-].
+
+## 5. Prove bidirectional UART with the example
 
 ```bash
 make -C fpga program-upload \
@@ -87,7 +116,7 @@ Quit the interactive terminal with Ctrl-]. This single test proves reset,
 laptop-to-FPGA RX, checked program loading, CPU execution, and FPGA-to-laptop
 TX.
 
-## 5. Select and run a benchmark
+## 6. Select and run a benchmark
 
 ```bash
 make -C fpga console PORT=/dev/serial/by-id/ACTUAL_DEVICE
@@ -123,7 +152,7 @@ make -C fpga benchmark-upload \
   LOG=coremark-1000.log
 ```
 
-## 6. Load your own program
+## 7. Load your own program
 
 Follow [CUSTOM_PROGRAMS.md](CUSTOM_PROGRAMS.md). The shortest form compiles the
 provided example; replace `PROGRAM_SOURCES` with your own C file:
