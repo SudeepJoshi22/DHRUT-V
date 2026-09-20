@@ -113,16 +113,25 @@ def main():
         import serial
     except ImportError as error:
         raise RuntimeError('pyserial is required: install it with python3 -m pip install pyserial') from error
-    with serial.Serial(args.port, 115200, timeout=0.1, write_timeout=10,
-                       rtscts=False, dsrdtr=False, xonxoff=False) as port:
-        port.reset_input_buffer()
-        print('Press and release FPGA reset now; waiting for loader ready...', flush=True)
-        upload(port, frame)
-        if args.interactive:
-            interactive_console(port)
-            return
-        with args.log.open('wb') as log:
-            result = capture(port, log, args.timeout)
+    try:
+        with serial.Serial(args.port, 115200, timeout=0.1, write_timeout=10,
+                           rtscts=False, dsrdtr=False, xonxoff=False) as port:
+            port.reset_input_buffer()
+            print('Press and release FPGA reset now; waiting for loader ready...', flush=True)
+            upload(port, frame)
+            if args.interactive:
+                interactive_console(port)
+                return
+            with args.log.open('wb') as log:
+                result = capture(port, log, args.timeout)
+    except serial.SerialException as error:
+        if getattr(error, 'errno', None) == 13:
+            raise RuntimeError(
+                f'Permission denied opening {args.port}. Add your user to the '
+                'dialout group with `sudo usermod -aG dialout "$USER"`, then '
+                'log out and back in (or run `newgrp dialout` for a new shell).'
+            ) from error
+        raise RuntimeError(f'Cannot open serial port {args.port}: {error}') from error
     result['elf_sha256'] = elf_hash
     if build_metadata:
         result['build'] = build_metadata

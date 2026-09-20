@@ -48,6 +48,8 @@ your account to `dialout`, then log out and back in:
 
 ```bash
 sudo usermod -aG dialout "$USER"
+# Then log out and back in, or start a new shell immediately:
+newgrp dialout
 ```
 
 UART is 115200 baud, 8 data bits, no parity, one stop bit, no flow control.
