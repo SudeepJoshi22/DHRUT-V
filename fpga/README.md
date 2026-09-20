@@ -131,6 +131,8 @@ the Fmax it prints is an informational by-product rather than a met constraint.
 | `bitstream` | synth -> nextpnr -> gowin_pack -> `<TOP>.fs` | yes |
 | `flash` | build, then load to **SRAM** (volatile, gone on power cycle) | yes |
 | `flash-nv` | build, then write to **onboard flash** (persists) | yes |
+| `flash-cpu` | load the existing `cpu_top.fs` to SRAM; no synthesis or PnR | yes |
+| `flash-cpu-nv` | write the existing `cpu_top.fs` to onboard flash; no synthesis or PnR | yes |
 | `mem` | fallback program -> aggregate and byte-lane memory images | no |
 | `area` | per-module LUT/FF ranking + budget verdict | no |
 | `clean` | remove `<TOP>`'s `.json` / `.pack.json` / `.fs` | no |
@@ -192,6 +194,9 @@ make area ARGS="--compare base.json"
 make mem TEST=fpga_blink
 make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
 make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
+
+# Re-load an already-built CPU bitstream without rebuilding it
+make flash-cpu
 
 # Make it survive a power cycle
 make flash-nv TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst

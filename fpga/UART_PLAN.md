@@ -49,6 +49,8 @@ deactivate
 ```
 
 This SRAM flash lasts until power-off. `flash-nv` writes persistent flash.
+`flash-cpu` re-loads an existing `cpu_top.fs` without re-running synthesis or
+place-and-route. See [QUICKSTART.md](QUICKSTART.md) for the exact commands.
 To see the baked-in benchmark, open a serial terminal at the settings above,
 then press and release reset. An initial `R` is the loader greeting; without
 an upload, the program starts after 500 ms. Opening the terminal before reset

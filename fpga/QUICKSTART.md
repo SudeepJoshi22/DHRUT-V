@@ -29,8 +29,18 @@ Expect the first build to take several minutes. SRAM configuration disappears
 at power-off; use `benchmark-flash-nv` instead if the configuration should
 survive power cycling.
 
+To load that already-built `cpu_top.fs` again later, without rebuilding
+anything, use:
+
+```bash
+source tools/oss-cad-suite/environment
+make -C fpga flash-cpu
+deactivate
+```
+
 The one-iteration Dhrystone image is only the baked recovery program. Once the
-bitstream is installed, changing CPU software does not repeat synthesis.
+bitstream is installed, changing CPU software does not repeat synthesis or
+flashing; use `console`, `benchmark-upload`, `program-upload`, or `elf-upload`.
 
 ## 3. Find the USB UART
 

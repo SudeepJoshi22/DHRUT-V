@@ -134,11 +134,23 @@ $(BITSTREAM): $(PACK_JSON)
 
 bitstream: $(BITSTREAM)
 
+# These targets deliberately rebuild first. Use flash-cpu / flash-cpu-nv to
+# load an already-existing CPU bitstream without running yosys or nextpnr.
 flash: $(BITSTREAM)
 	openFPGALoader -b tangnano20k $(BITSTREAM)
 
 flash-nv: $(BITSTREAM)
 	openFPGALoader -b tangnano20k -f $(BITSTREAM)
+
+CPU_BITSTREAM ?= cpu_top.fs
+
+flash-cpu:
+	@test -f "$(CPU_BITSTREAM)" || { echo "CPU bitstream not found: $(CPU_BITSTREAM). Run benchmark-flash once first." >&2; exit 2; }
+	openFPGALoader -b tangnano20k "$(CPU_BITSTREAM)"
+
+flash-cpu-nv:
+	@test -f "$(CPU_BITSTREAM)" || { echo "CPU bitstream not found: $(CPU_BITSTREAM). Run benchmark-flash once first." >&2; exit 2; }
+	openFPGALoader -b tangnano20k -f "$(CPU_BITSTREAM)"
 
 # ---- Program image for cpu_top's BSRAMs ------------------------------------
 # Converts a test built by tools/simulate.sh into the two $readmemh files
@@ -320,7 +332,7 @@ area:
 clean-mem:
 	rm -f imem_init.hex dmem_init.hex dmem_init_b*.hex imem_init_b*.hex
 
-.PHONY: check synth bitstream flash flash-nv clean clean-all clean-mem mem area \
+.PHONY: check synth bitstream flash flash-nv flash-cpu flash-cpu-nv clean clean-all clean-mem mem area \
 	benchmark benchmark-mem benchmark-bitstream benchmark-flash \
 	benchmark-flash-nv benchmark-upload verify-uart verify-loader verify-host \
 	verify-mem verify-bram elf-upload program-build program-upload console terminal
