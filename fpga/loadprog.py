@@ -17,15 +17,7 @@ from mkmem import BASE, load_verilog_hex, symbols_from_elf, validate_layout
 
 
 def open_uart(serial_module, device):
-    """Open the board UART without requiring unsupported modem-control ioctls.
-
-    The Tang Nano 20K's BL616 USB bridge identifies as an FTDI-compatible
-    dual UART.  Its UART function accepts normal serial traffic, but rejects
-    the Linux TIOCMBIS/TIOCMBIC DTR/RTS ioctls with EIO.  pyserial performs
-    those ioctls while opening a port even when hardware flow control is off.
-    Ignore only that bridge-specific failure; all other serial errors still
-    propagate normally.
-    """
+    """Open the BL616 bridge while ignoring its unsupported DTR/RTS ioctls."""
     class BridgeSerial(serial_module.Serial):
         def _update_dtr_state(self):
             try:
@@ -66,15 +58,28 @@ def upload(port, frame, timeout=15):
             break
     else:
         raise TimeoutError('No loader ready greeting; press reset and check the serial port')
-    port.write(frame)
-    port.flush()
+    # Small flushed writes avoid dropped bytes on the BL616 USB bridge.
+    for offset in range(0, len(frame), 32):
+        chunk = frame[offset:offset + 32]
+        written = port.write(chunk)
+        if written != len(chunk):
+            raise RuntimeError(
+                f'Short serial write at frame byte {offset}: '
+                f'wrote {written} of {len(chunk)} bytes')
+        port.flush()
+        time.sleep(0.001)
+
+    ack_started = time.monotonic()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         ack = port.read(1)  # Never consume the first program-output byte.
         if ack == b'K':
             return
         if ack == b'E':
-            raise RuntimeError('FPGA rejected upload; hold reset and retry')
+            elapsed = time.monotonic() - ack_started
+            raise RuntimeError(
+                f'FPGA rejected upload {elapsed:.3f}s after transfer; reload '
+                'cpu_top.fs to restore the baked image, then retry')
     raise TimeoutError('No loader acknowledgment; check port, reset timing and bridge UART mode')
 
 

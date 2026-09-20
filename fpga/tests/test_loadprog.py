@@ -1,6 +1,6 @@
-"""Exercise upload+capture over a real pseudo-terminal, with adjacent ACK/text."""
-import io
+"""Exercise upload and capture over pseudo-terminals and bridge-like ports."""
 import errno
+import io
 import os
 from pathlib import Path
 import pty
@@ -72,12 +72,20 @@ class HostSerialTest(unittest.TestCase):
 
     def test_rejected_and_silent_loader(self):
         class Port:
-            def __init__(self, data): self.data = iter(data)
+            def __init__(self, data):
+                self.data = iter(data)
+                self.writes = []
             def read(self, count): return next(self.data, b'')
-            def write(self, data): pass
+            def write(self, data):
+                self.writes.append(data)
+                return len(data)
             def flush(self): pass
+
+        rejected = Port([b'R', b'E'])
         with self.assertRaises(RuntimeError):
-            upload(Port([b'R', b'E']), b'image', timeout=0.01)
+            upload(rejected, b'x' * 100, timeout=0.01)
+        self.assertEqual([len(chunk) for chunk in rejected.writes], [32, 32, 32, 4])
+
         with self.assertRaises(TimeoutError):
             upload(Port([]), b'image', timeout=0.01)
 
