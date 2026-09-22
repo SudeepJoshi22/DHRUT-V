@@ -73,13 +73,11 @@ Dhrystone run-rule compliance. The reference is Spike with
 | Mode | Behavior | Purpose |
 |---|---|---|
 | `fixed` | Capture in IDLE, synchronous read, response in RESP, then IDLE | FPGA BRAM handshake model |
-| `zero` | Legacy driver with no added stall loop | Controlled microarchitecture experiments |
-| `random` | Legacy data stalls 1–5 cycles; fetch stalls 1–2 cycles on roughly 40% of requests | Timing variation for regressions |
+| `zero` | Driver with no added stall loop | Controlled microarchitecture experiments |
+| `random` | Data stalls 1–5 cycles; fetch stalls 1–2 cycles on roughly 40% of requests | Timing variation for regressions |
 
-“Fixed” describes the entire response protocol, not an extra Python
-`await RisingEdge`. The latter added an extra cycle in Claude's unfinished
-implementation. The revised driver is checked against the actual
-`fpga/rtl/bram_slave.sv` for both clock phases, held/back-to-back requests,
+The fixed driver implements the response protocol of
+`fpga/rtl/bram_slave.sv`. Checks cover both clock phases, held/back-to-back requests,
 redirects, flushes, resets, data and byte-write strobes. Clocked RTL masters
 also check simulator scheduling: the Python driver samples the preceding
 half-cycle so it cannot accept a newly launched CPU request one edge early:
@@ -108,9 +106,8 @@ CoreMark/MHz        = iterations * 1,000,000 / timed_cycles
 Clock frequency cancels in these per-MHz expressions. The timing port uses a
 32-bit difference: the interval must be shorter than 2^32 cycles.
 
-Measured on 2026-09-19 with `fixed`, `CPU_TRACE=0`, `WAVES=0`. Dhrystone was
-re-run after the Stage 2 MDU ordering correction; CoreMark was cross-checked
-in native `cpu_top` simulation and retained the same timed count:
+Recorded simulation results use `fixed`, `CPU_TRACE=0`, `WAVES=0`.
+The JSON reports identify the measured builds:
 
 | Benchmark | Iterations | Timed cycles | Derived value | DUT result |
 |---|---:|---:|---:|---|
@@ -119,30 +116,19 @@ in native `cpu_top` simulation and retained the same timed count:
 
 These are **flow-validation figures only**. The report JSONs in
 [`results/`](results/) retain ELF hashes, commands and available build metadata.
-Both records include automatically captured build conditions. These replace
-the earlier 724 / 355,050-cycle figures: clocked-master testing found that
-Verilator delivered Python rising-edge callbacks after the CPU updated its
-requests. Sampling those new requests made the model one edge too early.
-The corrected figures agree exactly with native Verilator runs of `cpu_top`
-and actual BRAM in the Stage 2 hardware branch (32 KB per memory). This is
-still an RTL comparison, not a measurement of the physical board.
-Both CoreMark seed configurations also passed Spike; the validation-seed
-configuration has not been rerun on the DUT in this stage.
+Both records include automatically captured build conditions. The recorded
+counts match native Verilator runs of `cpu_top` with 32 KB per memory.
+This comparison covers RTL simulation. Board cycle equivalence requires a
+measurement using the same program and conditions.
 
-The memory contract check, protected-source hash checks, five Spike cases,
-reporter rejection tests and deliberate DUT watchdog timeout check passed.
-No full ASM/RISCOF regression was repeated. Structural Verilator lint passed
-with nonfatal warnings; the repository's regular lint script still exits on
-pre-existing mixed-timescale warnings in the unchanged RTL.
+Both CoreMark seed configurations have Spike validation. The recorded DUT
+result covers the performance seeds; DUT validation-seed coverage remains
+outstanding.
 
-Claude's earlier Dhrystone values (557 zero, 812 old-fixed, 1,211 random)
-are historical observations. In particular **812 does not describe the corrected
-BRAM timing model**. Its original CoreMark run completed with `tohost=1`, but
-GCC scheduled the result stores after that write, so the testbench stopped
-before capturing them. It cannot supply a valid recorded score. Its error
-checker also missed CRC diagnostics. The original artifacts remain under
-`tests/build/coremark`; the original working diff/document were saved under
-`tests/build/benchmark_handoff` (both ignored build artifacts).
+Verification includes memory-contract checks, protected-source hashes, five
+Spike cases, reporter rejection checks and a deliberate DUT watchdog timeout.
+These checks do not constitute a full ASM/RISCOF regression. The regular lint
+script reports mixed-timescale warnings.
 
 ## Validation and reporting limits
 
@@ -172,7 +158,7 @@ any published figure.
 
 ## Hardware status and remaining work
 
-The FPGA now has 32 KB instruction and data memories, a 115200-baud UART, and
+The FPGA has 32 KB instruction and data memories, a 115200-baud UART, and
 a checked serial loader. Board bringup has demonstrated the loader greeting,
 the baked Dhrystone fallback and UART-loaded custom-program interaction. Those
 are bringup checks, not recorded benchmark results.

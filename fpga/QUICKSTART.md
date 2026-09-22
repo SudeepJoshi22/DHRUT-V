@@ -178,5 +178,6 @@ An existing compatible ELF can be uploaded with `make -C fpga elf-upload`.
 - No heartbeat LED after configuration: investigate bitstream, clock, USB/JTAG
   and pin assignment before debugging software.
 
-Physical-board UART acceptance is still pending in the repository record, so
-retain the first successful logs and JSON files as the hardware evidence.
+The UART path supports the loader greeting, Dhrystone fallback and uploaded
+`hello_uart` interaction on the board. Retain logs and JSON files for benchmark
+measurements.

@@ -70,9 +70,8 @@ so they stay on the older lane.
     instruction into a `uop_t`. Reports back how many slots it consumed.
 4.  **Issue (IS)**: The heart of the core.
     - Contains the **Architectural Register File** (4 read, 2 write).
-    - **Scoreboard**: per-register outstanding-write counters. Live and
-      load-bearing since the MDU arrived -- the first unit whose result is not
-      on the bypass network, so its consumers genuinely have to wait.
+    - **Scoreboard**: per-register outstanding-write counters track pending
+      results. Consumers of an outstanding MDU result wait for writeback.
     - **Forwarding**: age-ordered bypass, 4 consumers x 5 producers.
     - **Dual-issue rules** (`issue_hazard.sv`): lane-1 class check plus
       intra-bundle RAW/WAW.
@@ -235,8 +234,9 @@ DHRUT-V/
       behind the scoreboard. **riscof M compliance 8/8**, and the unit is
       formally verified against a reference model.
 - [ ] **Benchmarking and Performance Enhancements**: Dhrystone and CoreMark
-      run in simulation and on the board; steady-state, rule-valid measurements
-      and a simulation-to-hardware cycle cross-check remain.
+      have simulation validation and UART upload support. Dhrystone runs on the
+      board; CoreMark hardware validation, steady-state measurements and a
+      simulation-to-hardware cycle cross-check remain.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.
 
 ---
