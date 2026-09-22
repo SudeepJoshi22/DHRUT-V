@@ -1,12 +1,14 @@
 # Fitting DHRUT-V onto the Tang Nano 20K
 
-How `cpu_top` went from 3.4x over the GW2AR-18 to placing with room to spare,
-what each change was actually worth, which ideas backfired, and where the
-remaining headroom is.
+How the original 8 KB `cpu_top` build went from 3.4x over the GW2AR-18 to
+placing with room to spare, what each change was actually worth, which ideas
+backfired, and where its remaining headroom was. This is a historical record of
+the 2026-09-14 pre-RV32M, pre-UART configuration. The current 32 KB/UART build
+uses 17,054 LUT4 and reaches 28.33 MHz routed Fmax; see [README.md](README.md).
 
 ## Result
 
-| resource | first synthesis | now | budget | |
+| resource | first synthesis | optimized 8 KB build | budget | |
 |---|---:|---:|---:|---|
 | **LUT4** (nextpnr) | — | **15,385** | 20,736 | **74%** |
 | LUT4 (yosys stat) | 70,507 | 14,257 | 20,736 | 69% |
@@ -15,8 +17,8 @@ remaining headroom is.
 | LUT-RAM (RAM16SDP4) | 0 | 15 | 648 | 2% |
 | MUX2_LUT5..8 | 23,854 | 0 | — | — |
 
-`fpga/cpu_top.fs` builds, places and routes, and **meets timing at 27 MHz**
-(Fmax 33.06 MHz, ~22% margin).
+That build placed, routed and **met timing at 27 MHz** (Fmax 33.06 MHz, about
+22% margin).
 
 **LUT4 down ~76%, flip-flops down ~83%.** No ISA behaviour changed: every step
 was gated on the retired-instruction trace against Spike, and the two rewrites
@@ -220,19 +222,19 @@ it.
 CSRs including 64-bit `mcycle`/`minstret` pairs. Narrowing the counters is
 visible to software and would need a decision, not a silent change.
 
-**`scoreboard.sv`.** CLAUDE.md records it as *inert today* -- bypass always
-covers, and an LSU stall freezes everything -- but required by the MDU/load-queue
-roadmap. An FPGA-only build could omit it. Read its header first.
+**`scoreboard.sv`.** It was inert in this pre-RV32M build because bypass always
+covered the fixed-latency producers. It is live in the current core: the
+non-blocking MDU has no bypass path, so consumers of its destination must wait.
 
 **Further synthesis flow tuning.** `-nowidelut` is already in use and was the
 single largest win of the whole exercise; `-noabc9` changed nothing. An
-area-oriented ABC script is still untried and remains zero-RTL-risk -- with
-33 MHz Fmax against a 27 MHz target there is timing slack to trade for area.
+area-oriented ABC script remains a low-RTL-risk experiment, but must be judged
+against the current 28.33 MHz routed result rather than the historical 33 MHz.
 
-**Timing margin is now the thing to watch, not area.** At 74% LUT4 and 22% FF
-there is plenty of room, but Fmax is 33 MHz against a 27 MHz requirement. Any
-future change that lengthens a combinational path (merging mux levels, widening
-the ALU, deeper forwarding) costs margin that is scarcer than the LUTs.
+**Timing margin is the thing to watch, not area.** The current 32 KB/UART build
+has less headroom than this historical 74%-LUT result: routed Fmax is 28.33 MHz
+against a 27 MHz requirement. Any future change that lengthens a combinational
+path costs margin that is scarcer than LUTs.
 
 ## Measuring
 

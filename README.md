@@ -59,7 +59,7 @@ so they stay on the older lane.
 ### Pipeline Breakdown
 
 1.  **Fetch (IF)**: One access returns the **two instructions** of an 8-byte
-    aligned block. A **BPU** (32-entry BTB, 10-bit tags, 2-bit counters,
+    aligned block. A **BPU** (16-entry BTB, 10-bit tags, 2-bit counters,
     backward-taken/forward-not-taken allocation) and an 8-entry **RAS** predict
     control flow; Issue re-resolves every branch and redirects on a mismatch,
     so no prediction can reach architectural state.
@@ -228,13 +228,15 @@ DHRUT-V/
       forwarding, per-register scoreboard.
 - [x] **Branch prediction**: BTB with 2-bit counters plus a return-address stack.
 - [x] **FPGA Deployment**: runs bare-metal code on a **Sipeed Tang Nano 20K**
-      (Gowin GW2AR-18). 74% LUT4, meets timing at 27 MHz; program in BSRAM,
-      status on the six onboard LEDs. See [`fpga/README.md`](fpga/README.md).
+      (Gowin GW2AR-18). The 32 KB instruction/data-memory UART build uses
+      17,054/20,736 LUT4 (82%) and meets 27 MHz with 28.33 MHz routed Fmax;
+      programs load into BSRAM over USB UART. See [`fpga/README.md`](fpga/README.md).
 - [x] **RV32M (mul/div)**: multiply on a hard DSP, radix-2 divide, non-blocking
       behind the scoreboard. **riscof M compliance 8/8**, and the unit is
       formally verified against a reference model.
 - [ ] **Benchmarking and Performance Enhancements**: Dhrystone and CoreMark
-      ports exist and can now use M.
+      run in simulation and on the board; steady-state, rule-valid measurements
+      and a simulation-to-hardware cycle cross-check remain.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.
 
 ---

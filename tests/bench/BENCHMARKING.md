@@ -170,17 +170,20 @@ buffer, consistent flags and unmodified protected sources. Keep compiler,
 flags, iterations, memory configuration, platform and validation status beside
 any published figure.
 
-## Deferred hardware work
+## Hardware status and remaining work
 
-1. Grow the FPGA's current 8 KB instruction/data memories to 32 KB each and
-   check synthesis utilization and timing. Check the full linked image,
-   data/BSS and reserved stack against the address map, not only `.text` size.
-2. Implement [the UART and serial loader](../../fpga/UART_PLAN.md) to load
-   programs and retrieve results without rebuilding the bitstream each time.
-3. Sweep Dhrystone iterations on hardware (1, 100, 1,000, 10,000, 50,000) and
-   examine convergence. Choose CoreMark iterations from measured duration so
-   the final run lasts at least ten seconds; 400 is not inherently sufficient.
-   At 27 MHz ten seconds corresponds to 270 million timed cycles. Use the
-   actual clock frequency for `CLOCKS_PER_SEC`, not the simulation bypass.
-4. Compare a low-iteration board run with this fixed-mode simulation before
-   publishing any equivalence claim. Run and record both CoreMark seed sets.
+The FPGA now has 32 KB instruction and data memories, a 115200-baud UART, and
+a checked serial loader. Board bringup has demonstrated the loader greeting,
+the baked Dhrystone fallback and UART-loaded custom-program interaction. Those
+are bringup checks, not recorded benchmark results.
+
+Remaining work before quoting a hardware score:
+
+1. Sweep Dhrystone iterations on hardware (1, 100, 1,000, 10,000, 50,000) and
+   record convergence. Use the converged result, not a cold-start run.
+2. Choose CoreMark iterations from measured board duration so the timed interval
+   is at least ten seconds. At 27 MHz this is 270 million cycles. Run and record
+   both required seed sets using the actual clock frequency, not the simulation
+   bypass.
+3. Compare one low-iteration board run with this fixed-mode simulation before
+   claiming cycle equivalence.

@@ -34,7 +34,6 @@ active. [QUICKSTART.md](QUICKSTART.md) shows where to switch environments.
 # Shell 1: configure the FPGA once
 source tools/oss-cad-suite/environment
 make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
-deactivate
 
 # Shell 2: select and UART-load programs without re-synthesis
 source venv/bin/activate
@@ -355,11 +354,11 @@ Diagnosing a dark board:
 
 ## Known rough edges
 
-- **The auxiliary LED/button pin numbers in `cpu_top.cst` are unverified.**
-  `led[1..5]` and `rst_btn` were extrapolated from a known-good `led0 = 15`.
-  UART TX/RX use the board's documented pins 69/70. Wrong auxiliary pins show
-  up as dark LEDs or a dead button, not as a build error.
-- **The serial hardware path still needs a physical-board acceptance run.**
-  No `/dev/ttyUSB*`, `/dev/ttyACM*` or `/dev/serial/by-id/*` device was attached
-  during implementation, so loopback and full RTL simulation validate the
-  protocol while actual USB serial upload remains the final hardware check.
+- **The auxiliary LED pins in `cpu_top.cst` remain unverified.** `led[1..5]`
+  were extrapolated from a known-good `led0 = 15`. The reset button and UART
+  path have been exercised on the board; UART TX/RX use documented pins 69/70.
+  Wrong auxiliary LED pins show up as dark LEDs, not as a build error.
+- **The serial hardware path has passed board bringup.** The loader greeting,
+  baked Dhrystone fallback and UART-loaded `hello_uart` echo program all ran
+  over the onboard USB bridge. Reproducible benchmark sweeps and a
+  simulation-to-hardware cycle comparison remain separate work.

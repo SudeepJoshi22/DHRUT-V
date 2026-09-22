@@ -45,7 +45,6 @@ There are two separate operations:
 ```bash
 source tools/oss-cad-suite/environment
 make -C fpga benchmark-flash BENCH=dhrystone ITERATIONS=1
-deactivate
 ```
 
 This SRAM flash lasts until power-off. `flash-nv` writes persistent flash.
