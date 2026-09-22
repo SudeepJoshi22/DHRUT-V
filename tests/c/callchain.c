@@ -1,5 +1,4 @@
-/* Minimal repro for the Phase 1b fetch bug: deep, repeated call/return
- * chains (jalr-heavy), which assembly tests barely exercise. */
+/* Exercise repeated nested calls and returns. */
 static int leaf(int x)  { return x + 1; }
 static int mid(int x)   { return leaf(x) + leaf(x + 1); }
 static int outer(int x) { return mid(x) + mid(x + 2); }

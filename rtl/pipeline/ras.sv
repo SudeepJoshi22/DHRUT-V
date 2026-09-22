@@ -1,46 +1,9 @@
-// =================================================================
-// ras - Return Address Stack
-// =================================================================
-// Predicts the target of a JALR that is a function return.
-//
-// WHY: JALR is the only control transfer the core cannot predict at
-// all. issue.sv used to hardcode a redirect for every one of them, so
-// every function return cost a full pipeline flush - and at 2-wide issue
-// each flush throws away twice as many issue slots as it used to. In
-// call-heavy code (Dhrystone is nothing but calls) returns are the
-// single largest source of mispredicts.
-//
-// A JALR's target is rs1 + imm, and rs1 is not known at fetch. But for a
-// RETURN the value in the link register is one the fetch stage itself
-// produced earlier - it is the address after the call. Remembering those
-// in a stack turns an unpredictable indirect jump into an almost always
-// correct prediction.
-//
-// CALL/RETURN IDENTIFICATION follows the RISC-V spec's JALR hint rules
-// (link registers are x1 and x5):
-//
-//   rd     rs1    rd==rs1  action
-//   -----  -----  -------  ------------------
-//   !link  !link  -        none  (computed jump)
-//   !link  link   -        pop   (return)
-//   link   !link  -        push  (call)
-//   link   link   no       pop, then push  (co-routine swap)
-//   link   link   yes      push
-//
-// JAL with a link rd is also a call and pushes.
-//
-// SPECULATION: this is updated at FETCH, on the predicted path, so a
-// mispredict can leave the stack out of step with the true call depth -
-// wrong-path fetch may push or pop before the flush arrives. That is a
-// PREDICTION ACCURACY issue only, never a correctness one: Issue
-// recomputes every JALR target from the real rs1 and redirects on any
-// mismatch, exactly as it does today. There is deliberately no
-// checkpoint/restore of the stack pointer yet - it is the obvious next
-// refinement if measurement shows the drift matters.
-//
-// The stack wraps rather than saturating, and `o_valid` is low until at
-// least one entry has been pushed, so a return with an empty stack falls
-// back to the old behaviour (no prediction, Issue redirects).
+// Return-address prediction stack, updated by fetch on the predicted path.
+// JAL with link rd pushes. JALR hint actions (link registers x1/x5):
+//   non-link rd, link rs1: pop; link rd, non-link rs1: push;
+//   distinct link rd/rs1: pop then push; identical link rd/rs1: push.
+// The stack wraps and has no speculative checkpoint restore. Empty stacks
+// provide no prediction; Issue resolves each JALR target.
 
 module ras #(
   parameter int DEPTH = 8,             // entries, must be a power of 2

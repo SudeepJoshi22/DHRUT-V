@@ -1,5 +1,4 @@
 # A taken branch and dependent operations after divide must observe its result.
-# UART integer formatting exposed the original out-of-order write-back bug.
 .section .text
 .globl _start
 _start:

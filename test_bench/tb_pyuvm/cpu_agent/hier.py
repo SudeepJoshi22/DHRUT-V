@@ -1,17 +1,5 @@
-"""
-hier.py - DUT hierarchy resolution for testbench components.
-
-The CPU pipeline signals used to live directly under `tb_top` (tb_top.ALU,
-tb_top.if_id_valid, ...). They now live inside a `cpu_core` instance
-(tb_top.CORE.ALU, ...), and superscalar work will likely relocate them
-again. Rather than hardcoding a path in every component, signal lookups go
-through here: they are tried against the core scope first, then the top
-level, so genuinely top-level signals (clk, imem_if, dmem_if) keep working
-unchanged.
-
-Override the core instance name with the DUT_CORE_HIER environment
-variable; set it to an empty string for a flat (pre-cpu_core) hierarchy.
-"""
+"""Resolve pipeline signals within DUT_CORE_HIER (default CORE), then at top level.
+Set DUT_CORE_HIER to an empty string for a flat hierarchy."""
 
 import os
 

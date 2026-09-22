@@ -1,62 +1,9 @@
 #!/usr/bin/env python3
-"""
-Per-module FPGA area report for cpu_top on the Tang Nano 20K (GW2AR-18).
+"""Report FPGA resource totals and module costs using complete Gowin synthesis.
 
-WHY THIS EXISTS
----------------
-Area work on this design was steered for a while by cell counts taken from an
-early synthesis stage, and it produced a wrong answer: shrinking the fetch
-queue from depth 8 to 4 removed 2,771 cells in the pre-techmap stat and then
-ADDED 2,750 LUTs once ABC9 had run. Pre-map cell counts do not predict
-post-ABC9 LUT usage. Only a full `synth_gowin` does.
-
-So this script always runs synthesis to completion, and `--compare` shows what
-a change did per module rather than in aggregate, which is what makes that
-class of mistake visible instead of silent.
-
-USAGE
------
-  ./area_report.py                      # synthesise and rank modules
-  ./area_report.py --save base.json     # ... and record it as a baseline
-  ./area_report.py --compare base.json  # ... and show the per-module delta
-  ./area_report.py --flat-only          # just the budget verdict (one pass, faster)
-
-TWO NUMBERS, TWO PURPOSES
--------------------------
-The script runs synthesis twice:
-
-  flat  - the ordinary build. This is the VERDICT: what must fit the part.
-  hier  - built with hierarchy preserved, to attribute area to modules.
-          This is for TARGETING only.
-
-They do not agree, and are not meant to. Keeping hierarchy blocks
-cross-module optimisation, so the per-module numbers sum to more than the flat
-total. Use the ranking to choose what to work on; use the flat total to decide
-whether it fits.
-
-COUNTING RULES
---------------
-From tools/oss-cad-suite/share/yosys/gowin/cells_sim.v:
-
-  LUT4 = LUT1 + LUT2 + LUT3 + LUT4
-      A LUT1 is not cheaper than a LUT4 -- each occupies one physical LUT4,
-      with the unused inputs tied off.
-
-  ALU is counted SEPARATELY, not as a LUT
-      A real nextpnr run reports ALU against its own 15,552-cell budget
-      (6% used), not against the 20,736 LUT4s. Folding it into the LUT
-      count -- as this script originally did -- overstates LUT pressure.
-
-  MUX2_LUT5..8 are EXCLUDED
-      These use dedicated mux hardware inside the slice to combine LUT4
-      outputs into wider functions. The LUT4s they combine are already
-      counted, so adding the muxes would double-count.
-
-  FF    = DFF* (every flavour: N=negedge, S/R=sync set/reset,
-          P/C=async preset/clear, E=clock enable)
-  BSRAM = SP | SPX9 | SDP | SDPX9   (block RAM)
-  LUTRAM= RAM16*                    (distributed RAM)
-"""
+Flat synthesis estimates device use; hierarchy-preserving synthesis attributes
+cost to modules. LUT4, ALU, flip-flop, block-RAM and LUT-RAM budgets are separate.
+Use --save/--compare for measurements and --flat-only for a single synthesis pass."""
 
 import argparse
 import json
@@ -70,20 +17,10 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 
-# GW2AR-LV18QN88C8/I7: 2,592 CLUs, each 8 LUT4 + 6 DFF; 46 BSRAM blocks.
-# The 4:3 LUT:FF ratio is why flip-flops can run out before LUTs do.
-# Confirmed against a real nextpnr-himbaechel run (see `make bitstream`):
-#   LUT4 20736 | ALU 15552 (SEPARATE pool) | DFF 15552 | BSRAM 46
-#   MUX2_LUT5 10368 | RAM16SDP4 648 (distributed RAM -- currently unused)
-# ALU cells do NOT compete for LUT4 slots: nextpnr reports them against their
-# own 15,552 budget, so counting them as LUTs (as this script first did)
-# overstates LUT pressure.
+# Device budgets; LUT4 and ALU cells occupy separate resource pools.
 BUDGET = {"lut": 20736, "alu": 15552, "ff": 15552, "bsram": 46, "lutram": 648}
 
-# Must match fpga/Makefile's SYNTH_OPTS, or the report measures a different
-# design than `make bitstream` builds. -nowidelut maps to plain LUT4s instead
-# of the MUX2_LUT5..8 tree: smaller here (17,015 -> 14,257) and far easier to
-# route, since wide LUTs tie LUT4s into clusters that must be placed together.
+# Keep synthesis options consistent with fpga/Makefile.
 SYNTH_OPTS = os.environ.get("SYNTH_OPTS", "-nowidelut")
 
 LUT_CELLS = re.compile(r"^LUT[1-4]$")

@@ -1,36 +1,7 @@
-// =================================================================
-// forward_unit - operand bypass network for 2-wide issue
-// =================================================================
-// Four consumers (lane0.rs1, lane0.rs2, lane1.rs1, lane1.rs2) against
-// five producers, resolved strictly by AGE - youngest match wins.
-//
-// This is the part of the 1-wide design that does not survive
-// widening. The old network (inline in issue.sv) had priority
-// ALU > RETIRE > LSU, i.e. ordered by UNIT. That was only ever correct
-// because exactly one instruction was in flight per unit, which made
-// unit order and age order accidentally the same thing. With two lanes
-// in flight, an older LSU load and a younger ALU op can present a
-// result for the same rd in the same cycle, and unit order picks the
-// wrong one. Hence the explicit age ladder below.
-//
-// Age ladder, youngest first (dispatch of the bundle = cycle N):
-//
-//   1. ALU1        lane 1 of the bundle dispatched at N-1   (cycle N)
-//   2. ALU0 | LSU  lane 0 of that same bundle               (cycle N)
-//   3. RETIRE1     lane 1, one bundle older                 (cycle N+1)
-//   4. RETIRE0     lane 0, one bundle older                 (cycle N+1)
-//   5. ARF         anything older still
-//
-// ALU0 and LSU sit at the same rung and never conflict: lane 0
-// dispatches to exactly one of them, and both stall in lockstep, so
-// they cannot hold different live instructions at the same time.
-// cpu_core.sv asserts this.
-//
-// Every producer input must already be qualified by its own valid
-// (alu_stage.sv gates its o_alu_fwd_* on valid_q; lsu.sv gates
-// o_lsu_fwd_valid on completion AND is_load; retire.sv zeroes uop_q
-// when nothing valid arrives, which zeroes writes_rd). x0 is excluded
-// here rather than trusted to the producers.
+// Operand bypass for four source operands. Youngest matching producer wins:
+// ALU1 > ALU0/LSU > RETIRE1 > RETIRE0 > ARF.
+// ALU0 and LSU completions are mutually exclusive. Producer inputs must be
+// qualified by valid; x0 never forwards. Issue blocks pending MDU destinations.
 
 module forward_unit (
   // ── Producers, youngest first ──
@@ -71,10 +42,7 @@ module forward_unit (
   output logic [31:0] o_rs1_1,
   output logic [31:0] o_rs2_1,
 
-  // ── Did the bypass network supply this operand? ──
-  // Paired with the scoreboard's busy bits to decide operand readiness:
-  // a register with a write in flight is still readable THIS cycle if
-  // some producer is presenting it here. See rtl/pipeline/scoreboard.sv.
+  // Report bypass hits for scoreboard operand-readiness checks.
   output logic        o_hit_rs1_0,
   output logic        o_hit_rs2_0,
   output logic        o_hit_rs1_1,

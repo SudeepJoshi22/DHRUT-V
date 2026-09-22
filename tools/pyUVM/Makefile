@@ -27,13 +27,7 @@ export PYTHONPATH := $(REPO_ROOT)/test_bench:$(PYTHONPATH)
 # per field, each writing only its own disjoint member of the shared
 # field_combo/field_storage packed struct (rtl/csr/generated/) - legal SV,
 # but Verilator flags it at whole-variable granularity. Known false positive.
-# --assert +define+SIMULATION: the RTL's SVA checks (ifetch.sv,
-# fetch_queue.sv, bpu.sv) are wrapped in `ifdef SIMULATION`, and nothing
-# used to define it - so every one of them was dead code in the normal
-# flow. That mattered: fetch_queue's assert_no_overflow would have caught
-# the queue-overflow bug (an instruction silently dropped) the moment it
-# happened. Both flags are needed - the define compiles the assertions
-# in, --assert makes Verilator actually evaluate them.
+# +define+SIMULATION includes RTL assertions; --assert enables their evaluation.
 # VCD tracing is the dominant cost on long runs -- CoreMark is millions of
 # cycles and the dump grows into the gigabytes -- so it is optional. Waves are
 # on by default because they are what you want while debugging; turn them off

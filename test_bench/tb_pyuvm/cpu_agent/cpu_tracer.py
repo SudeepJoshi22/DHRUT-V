@@ -1,69 +1,10 @@
-"""
-cpu_tracer.py - Spike-style per-retired-instruction trace (cpu_trace.log)
+"""Emit Spike-style instruction traces from decode handshakes and completion events.
 
-Produces a two-line-per-retired-instruction trace matching the layout used
-by Spike's --log-commits output (see tests/build/*.spike.log):
-
-    core 0: 0x<pc8> (0x<instr8>) <mnemonic> <operands>
-    core 0: 3 0x<pc8> (0x<instr8>) [x<rd> 0x<value8>] [mem 0x<addr8>]
-
-The register-write field ([xN 0x...]) is present only when the instruction
-actually writes a register; the memory field ([mem 0x...]) is present only
-for loads/stores.
-
-Why a software queue: this pipeline's uop_t (rtl/include/riscv_uop_pkg.sv)
-does not carry the PC past decode, so the PC (and the raw instruction
-word alongside it) has to be captured earlier and carried forward in
-software, keyed to the instruction that eventually completes execution in
-ALU/LSU.
-
-Where it is captured: at the Decode -> Issue hand-off, driven by
-`issue_accept_cnt` (rtl/cpu_core.sv) -- the exact number of decode slots
-Issue consumed this cycle. That count is the handshake the RTL itself
-uses, so it cannot disagree with what actually entered the pipeline. It
-replaces an older heuristic ("IF valid and the PC changed"), which a
-2-wide decode breaks in two ways: more than one instruction can leave the
-queue in a single cycle, and a self-targeting jump (`j .`) re-presents the
-same PC without it being the same dynamic instruction.
-
-The pipeline is in-order, and (per rtl/cpu_core.sv) only IF/decode/issue
-are squashed on `mispredict` -- ALU0/ALU1/LSU/RETIRE0/RETIRE1 all run
-i_flush=1'b0, so once dispatched an instruction always completes. That
-invariant is upheld by Issue refusing to dispatch lane 1 alongside a
-redirecting lane 0 (issue.sv: `issue_en1` is gated on `!o_mispredict`),
-so no wrong-path uop ever enters an ALU. It means "retirement" can be
-detected directly off the units' o_valid without waiting an extra cycle
-for the retire_wb_* registers, and the associated PC/uop read straight
-from ALUn.pc_q/uop_q or LSU.pc_q/uop_q.
-
-Two issue lanes, so up to TWO instructions retire per cycle. They are
-emitted in program order within the cycle: lane 0's completion (ALU0 or
-LSU -- mutually exclusive, asserted in cpu_core.sv) before lane 1's
-(ALU1). Order matters more than it looks: _pop_matching consumes the
-queue by PC and silently drops anything in front of the match, so
-emitting a younger instruction first would discard the older one as
-"flushed" and corrupt the queue for the rest of the run.
-
-Note the branch case is a stage EARLIER than the others -- it is caught
-at Issue via the BPU-update pulse, not at completion -- so a branch seen
-in cycle N belongs to a YOUNGER bundle than an ALU/LSU completion seen in
-the same cycle. It is therefore emitted last.
-
-Hierarchy: these pipeline signals live inside the cpu_core instance
-(tb_top.CORE.*), reached via hier.get_core() rather than a hardcoded path
-so further hierarchy changes (e.g. superscalar rework) don't silently
-break tracing again.
-
-Flush handling: entries pushed at IF for instructions that are later
-squashed in IF/decode/issue (before ever being dispatched to ALU/LSU) must
-never produce a trace line. Rather than trying to replicate the exact
-flush timing/depth, the queue is consumed by PC match: on every
-ALU/LSU retirement event we pop from the front of the FIFO and, if its PC
-doesn't match the retiring PC, we scan forward and silently drop any
-stale (flushed) entries in front of the real match. This is robust to
-repeated PCs (loops) because the queue is strictly in program order and we
-always match the oldest still-queued entry.
-"""
+Queue both accepted decode slots with their PCs and instruction words. Match
+completion PCs against the oldest queued entries, dropping flushed entries.
+Emit completions in program order, followed by younger Issue branch events.
+Dispatched instructions must complete; Issue suppresses wrong-path dispatch.
+Resolve pipeline handles through hier.get_core()."""
 
 import logging
 import os
@@ -97,31 +38,11 @@ BRANCH_NAMES = {0: "beq", 1: "bne", 4: "blt", 5: "bge", 6: "bltu", 7: "bgeu"}
 LOAD_NAMES = {0: "lb", 1: "lh", 2: "lw", 4: "lbu", 5: "lhu"}
 STORE_NAMES = {0: "sb", 1: "sh", 2: "sw"}
 
-# Total width of uop_t, needed to slice a slot out of the packed 2-wide
-# decode bundle (idg_uop). Keep in sync with riscv_uop_pkg.sv.
-# TOTAL width of uop_t, used to index slots in the packed decode-group bus
-# (uop_bus >> UOP_W*slot). Unlike the UOP_BITS offsets below, this one DOES
-# have to change every time a field is added, even at the top of the struct:
-# get it wrong and slot 1 is read one bit off, which shows up as retired
-# instructions whose encoding is a bit-shifted version of the real one.
-# Currently: is_mdu 146 | way 145 | valid 144 | ... | instr_bits 31:0.
+# Packed uop width for lane extraction; keep synchronized with riscv_uop_pkg.sv.
 UOP_W = 147
 
-# Bit positions of uop_t fields within the packed 147-bit struct, used as a
-# fallback when per-field handles aren't exposed by the simulator.
-# Derived from rtl/include/riscv_uop_pkg.sv - in a packed struct the FIRST
-# declared field occupies the MSBs. `way` was added at the very top
-# precisely so it takes bit 145 and leaves every offset below it alone:
-#   way 145 | valid 144 | opcode 143:137 | alu_op 136:127 | rs1 126:122 | rs2 121:117
-#   rd 116:112 | funct3 111:109 | imm 108:77 | uses_rs1 76 | uses_rs2 75
-#   writes_rd 74 | is_immediate 73 | is_branch 72 | is_jump 71 | is_load 70
-#   is_store 69 | lsu_sign_extend 68 | lsu_access_size 67:66 | pred_taken 65
-#   pred_target 64:33 | is_illegal 32 | instr_bits 31:0
-# is_mdu is the newest field and sits ABOVE these at bit 146 (way 145,
-# valid 144), which is why every offset below is still correct -- new
-# fields go at the top of the packed struct precisely so this table does
-# not have to be renumbered.
-# Keep in sync with riscv_uop_pkg.sv if the struct changes.
+# Packed field offsets used when the simulator lacks individual field handles.
+# Keep synchronized with riscv_uop_pkg.sv; first declared field occupies MSBs.
 UOP_BITS = {
     "is_mdu":       (146, 146),
     "valid":        (144, 144),

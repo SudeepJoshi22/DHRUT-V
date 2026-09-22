@@ -10,13 +10,7 @@ from pyuvm import uvm_driver
 from ..bram_responder import run_bram_responder
 
 class IMemDriver(uvm_driver):
-    """
-    Simple pre-loaded IMem Slave Driver
-    - Hard-coded instruction memory (like your old working version)
-    - Random stalls (0-2 cycles)
-    - Directly drives s_ready and s_rdata
-    - No sequence loading needed for now
-    """
+    """Serve preloaded instruction memory with selectable response timing."""
 
     def load_verilog_hex(self,path):
         mem = {}

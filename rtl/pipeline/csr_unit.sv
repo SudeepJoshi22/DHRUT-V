@@ -1,14 +1,8 @@
 import riscv_uop_pkg::*;
 import csr_regfile_gen_pkg::*;
 
-// CSR + trap/mret resolution, split out of Issue so Issue stays a pure
-// issuer (register read, forwarding, dispatch). Unlike ALU/LSU (dispatched
-// through a pipelined interface, resolved a cycle later), this unit
-// resolves combinationally in the SAME cycle Issue holds a SYSTEM uop -
-// same timing as branch/jump resolution, just factored into its own module
-// instead of living inline in issue.sv. Wraps the PeakRDL-generated
-// csr_regfile_gen (rtl/csr/generated/) - see rtl/csr/README.md for the
-// CSR#/offset addressing scheme and the --cpuif passthrough rationale.
+// Resolve CSR access, traps and mret in the Issue cycle.
+// Wrap the PeakRDL CSR register file; see rtl/csr/README.md for addressing.
 module csr_unit (
   input  logic        clk,
   input  logic        rst_n,

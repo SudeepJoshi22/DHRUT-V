@@ -36,7 +36,7 @@ SPIKE_DIR="$TOOLS_DIR/spike"
 
 # Verilator – fixed: define install dir ALWAYS (even when skipping)
 VERILATOR_DIR="$TOOLS_DIR/verilator"
-VERILATOR_INSTALL_DIR="$TOOLS_DIR/verilator-install"   # ←←← MOVED HERE (fixes the bug)
+VERILATOR_INSTALL_DIR="$TOOLS_DIR/verilator-install"
 
 mkdir -p "$TOOLS_DIR" "$INSTALL_PREFIX"
 
@@ -166,7 +166,7 @@ fi
 SPIKE_BIN="$SPIKE_DIR/bin"
 
 # -------------------------------------------------------------------
-# 4. Verilator (now safe even when already installed)
+# 4. Verilator
 # -------------------------------------------------------------------
 if [ ! -d "$VERILATOR_INSTALL_DIR/bin" ]; then
     echo -e "${YELLOW}Building latest Verilator from git (may take an 30mins or more)...${NC}"

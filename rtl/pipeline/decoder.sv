@@ -1,19 +1,7 @@
 import riscv_uop_pkg::*;
 
-// =================================================================
-// decoder - purely combinational RV32I_Zicsr instruction decoder
-// =================================================================
-// One instruction word in, one uop_t out. No clock, no state, no
-// stall/flush handling: everything sequential lives in decode_stage
-// (rtl/pipeline/decode.sv), which instantiates one of these per decode
-// lane. Splitting it out is what makes a 2-wide decode possible without
-// duplicating 150 lines of case statement.
-//
-// `i_valid` gates the whole decode: with it low the output is all-zero
-// (uop.valid == 0), so a bubble can never look like an instruction.
-//
-// The `way` field of uop_t is deliberately NOT set here - the decoder
-// doesn't know which lane it is. decode_stage stamps it.
+// Combinational RV32IM_Zicsr decoder: one instruction produces one uop.
+// i_valid=0 produces a bubble. decode_stage assigns the lane index.
 
 module decoder (
   input  logic        i_valid,
@@ -170,16 +158,8 @@ module decoder (
           o_uop.uses_rs2     = 1'b1;
           o_uop.writes_rd    = (rd != 5'd0);
 
-          // RV32M is the same opcode distinguished only by funct7: the
-          // whole extension is funct7 = 0000001, with funct3 selecting
-          // which of the eight operations. Issue routes on is_mdu and the
-          // MDU re-reads funct3, so alu_op above is simply unused for
-          // these -- no separate decode of the operation is needed here.
-          //
-          // funct7 values other than 0000000 and 0100000 (add/sub, srl/sra)
-          // and 0000001 are not defined for OP. They are left alone rather
-          // than flagged illegal, which is the behaviour that was already
-          // here before M existed.
+          // RV32M uses funct7=0000001; funct3 selects the MDU operation.
+          // Other unrecognized OP funct7 values are not flagged illegal here.
           o_uop.is_mdu = (funct7 == 7'b0000001);
         end
 

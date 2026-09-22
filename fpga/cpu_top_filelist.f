@@ -1,15 +1,5 @@
-# File list for cpu_top synthesis (Yosys -f format: one file per line,
-# '#' for comments). Order matters — packages and interfaces must appear
-# before anything that imports/instantiates them.
-#
-# This is the FPGA top: cpu_top wraps cpu_core, whose interface ports
-# (mem_if.master imem_if/dmem_if) cannot be a synthesis top by themselves.
-# Use cpu_filelist.f only for elaborating cpu_core in isolation.
-#
-# MAINTENANCE: this list is hand-written and must track rtl/pipeline/. A module
-# added there but not listed here fails elaboration as an unresolved instance.
-# Whole-line comments only -- the Makefile's BUILD_FILES strips '^\s*#' lines,
-# so a trailing comment after a filename would be passed to slang as a filename.
+# FPGA wrapper and CPU sources in dependency order.
+# cpu_top supplies BRAM and scalar board ports.
 
 ../rtl/include/riscv_uop_pkg.sv
 ../rtl/csr/generated/csr_regfile_gen_pkg.sv

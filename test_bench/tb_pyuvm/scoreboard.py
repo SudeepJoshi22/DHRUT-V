@@ -95,9 +95,7 @@ class Scoreboard(uvm_component):
                     self.logger.debug(f"Signature updated at 0x{(addr+i):08x} with 0x{byte:02x}")
 
     async def run_phase(self):
-        # Pre-load memory from HEX file to capture initial values (required for some signature lines)
-        # Doing it in run_phase ensures it happens after reset/initialization if needed, 
-        # but build_phase was also fine. Let's keep it here for clarity.
+        # Load initial HEX bytes for signature locations that the test leaves unwritten.
         hex_file = os.getenv("TEST_HEX")
         if hex_file:
             self.load_verilog_hex(hex_file)

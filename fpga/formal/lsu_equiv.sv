@@ -1,6 +1,4 @@
-// Exhaustive equivalence for the LSU align/extend datapath: the ORIGINAL
-// per-(size,offset) case arms vs the shared-shifter rewrite, over every
-// combination of data, address offset, access size and sign-extend flag.
+// Compare case-based and shared-shifter LSU datapaths for all inputs.
 module lsu_dp_equiv (
   input logic [31:0] data,
   input logic [1:0]  off,
@@ -8,7 +6,7 @@ module lsu_dp_equiv (
   input logic        sx,
   input logic        is_store
 );
-  // ── OLD store path ────────────────────────────────────────────────
+  // Reference store path.
   logic [31:0] o_wdata; logic [3:0] o_wstrb;
   always_comb begin
     o_wstrb = 4'b0000;
@@ -38,7 +36,7 @@ module lsu_dp_equiv (
     end
   end
 
-  // ── NEW store path ────────────────────────────────────────────────
+  // Shared-shifter store path.
   logic [31:0] n_wdata; logic [3:0] n_wstrb;
   logic h_aligned; assign h_aligned = (off[0] == 1'b0);
   logic [31:0] store_masked; logic [3:0] strb_base; logic [1:0] shift_off;
@@ -61,7 +59,7 @@ module lsu_dp_equiv (
   assign n_wdata = is_store ? (store_masked << {shift_off, 3'b000}) : data;
   assign n_wstrb = is_store ? (strb_base   <<  shift_off)           : 4'b0000;
 
-  // ── OLD load path ─────────────────────────────────────────────────
+  // Reference load path.
   logic [31:0] o_ld;
   always_comb begin
     o_ld = data;
@@ -86,7 +84,7 @@ module lsu_dp_equiv (
     endcase
   end
 
-  // ── NEW load path ─────────────────────────────────────────────────
+  // Shared-shifter load path.
   logic [31:0] n_ld, load_shifted;
   assign load_shifted = data >> {off, 3'b000};
   always_comb begin

@@ -1,11 +1,4 @@
-# File list for cpu_core synthesis (Yosys -f format: one file per line,
-# '#' for comments). Order matters — packages and interfaces must appear
-# before anything that imports/instantiates them.
-#
-# MAINTENANCE: this list is hand-written and must track rtl/pipeline/. A module
-# added there but not listed here fails elaboration as an unresolved instance.
-# Whole-line comments only -- the Makefile's BUILD_FILES strips '^\s*#' lines,
-# so a trailing comment after a filename would be passed to slang as a filename.
+# CPU sources in dependency order: packages/interfaces precede their users.
 
 ../rtl/include/riscv_uop_pkg.sv
 ../rtl/csr/generated/csr_regfile_gen_pkg.sv

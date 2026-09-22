@@ -31,20 +31,10 @@ package riscv_uop_pkg;
     ALU_AND     = 10'b0_111
   } alu_op_t;
 
-  // Micro-op structure (will grow later)
-  //
-  // NOTE ON FIELD ORDER: the testbench tracer bit-slices this struct by
-  // hardcoded offsets (test_bench/tb_pyuvm/cpu_agent/cpu_tracer.py,
-  // UOP_BITS). In a packed struct the FIRST member occupies the MSBs, so a
-  // new field added at the TOP leaves every existing offset untouched -
-  // which is why `way` goes here rather than next to the fields it relates
-  // to. Anything inserted lower down must be mirrored in UOP_BITS.
+  // Packed micro-op. Keep field offsets and total width synchronized with
+  // UOP_BITS and UOP_W in cpu_tracer.py; the first member occupies the MSBs.
   typedef struct packed {
-    // RV32M multiply/divide. One bit is enough: funct3 (already carried
-    // below) selects which of the eight operations it is, exactly as it
-    // does for loads and stores. Declared FIRST so it occupies the new
-    // high bit and every existing field keeps its offset -- see the note
-    // on this struct in CLAUDE.md and UOP_BITS in cpu_tracer.py.
+    // RV32M operation flag; funct3 selects multiply/divide variant.
     logic        is_mdu;
     logic        way;             // decode/issue lane this uop came from (0 = older)
     logic        valid;           // valid decoded instruction

@@ -1,48 +1,12 @@
-// =================================================================
-// mdu - RV32M multiply / divide unit
-// =================================================================
-// Deliberately knows nothing about uop_t, the issue interfaces or the
-// scoreboard: it takes funct3 and two operands and hands back a result.
-// That keeps it verifiable on its own -- the pipeline integration is a
-// separate wrapper, so a bug in one cannot be mistaken for a bug in the
-// other.
+// RV32M execution unit; accepts funct3 and two operands.
+// i_valid && o_ready accepts one operation; o_valid qualifies o_result.
+// i_flush cancels the outstanding operation.
 //
-// HANDSHAKE
-//   i_valid && o_ready  -> operation accepted this cycle
-//   o_valid             -> o_result holds that operation's answer
-//   i_flush             -> abandon whatever is in flight
-// One operation in flight at a time; o_ready is low while busy.
-//
-// ALGORITHMS -- ideas from Ibex and PicoRV32, no code copied.
-//
-//   MULTIPLY: one 33x33 signed multiply covers all four forms. Each
-//   operand is extended to 33 bits with its OWN signedness, so MULHSU
-//   falls out of the same hardware by flipping one extension bit rather
-//   than needing a second multiplier. synth_gowin maps `*` onto the
-//   GW2AR's hard MULT18X18 blocks automatically (mul2dsp.v +
-//   gowin/dsp_map.v, on unless -nodsp) and this part has 48 unused, so
-//   this costs DSPs rather than LUTs. That is why Ibex's
-//   three-17x17-plus-accumulator arrangement is not reproduced: it exists
-//   to force inference on toolchains that will not infer, and ours does.
-//
-//   DIVIDE: restoring long division, one quotient bit per cycle, XLEN
-//   iterations. Radix-2 keeps the per-cycle logic to a 33-bit subtract,
-//   which matters because this design has ~22% timing margin at 27 MHz
-//   and far more spare LUTs than spare Fmax. Signed operands are made
-//   positive up front and the signs reapplied at the end, so the loop
-//   itself is purely unsigned.
-//
-// RISC-V SEMANTICS THAT ARE EASY TO GET WRONG (unprivileged spec; all
-// exercised by the riscof M suite):
-//   * divide by zero does NOT trap -- DIV/DIVU give all-ones (-1),
-//     REM/REMU give the dividend unchanged.
-//   * signed overflow -2^31 / -1 does NOT trap -- quotient is -2^31
-//     (wraps, unrepresentable), remainder is 0.
-//   * MULHSU is SIGNED rs1 times UNSIGNED rs2. Not both signed, not
-//     both unsigned.
-// Both divide special cases skip the loop and answer immediately, so a
-// divide by zero costs 2 cycles rather than 32 wasted ones.
-// =================================================================
+// Multiply extends operands independently for signed/unsigned high products.
+// Restoring division computes one quotient bit per cycle for XLEN iterations.
+// Divide by zero returns all-ones quotient and unchanged dividend remainder.
+// Signed overflow returns the minimum signed quotient and zero remainder.
+// Special division cases bypass the iteration loop.
 module mdu #(
   parameter int XLEN = 32
 ) (

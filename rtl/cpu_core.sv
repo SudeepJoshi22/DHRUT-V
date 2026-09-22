@@ -45,15 +45,7 @@ module cpu_core (
   // How many uops actually issued this cycle (0..2) -> minstret.
   logic [1:0]  issue_instret_cnt;
 
-  // ───────────────────────────────────────────────
-  // Execution lanes
-  // ───────────────────────────────────────────────
-  // Two ALUs, one per issue lane. Deliberately two INSTANCES of alu_stage
-  // rather than one module with [1:0]-wide registers: Verilator's VPI
-  // presents a packed array as a single flat vector, so a widened
-  // ALU.pc_q would hand cpu_tracer.py a concatenated 64-bit value that
-  // looks plausible and is wrong. Separate instances keep CORE.ALU0.pc_q
-  // and CORE.ALU1.pc_q addressable as plain scalars.
+  // Execution lanes use separate instances to expose scalar monitor signals.
   alu_issue_if alu0_if(clk, rst_n);
   alu_issue_if alu1_if(clk, rst_n);
 
@@ -92,12 +84,7 @@ module cpu_core (
   logic        mispredict;
   logic [31:0] redirect_pc;
 
-  // ───────────────────────────────────────────────
-  // Operand forwarding sources, youngest first
-  // ───────────────────────────────────────────────
-  // See rtl/pipeline/forward_unit.sv for the age ladder. ALU1 is younger
-  // than ALU0/LSU (same bundle, later lane); the two Retire lanes are one
-  // bundle older than both.
+  // Forwarding sources: ALU1 is younger than ALU0/LSU; retire follows.
   logic [4:0]  fwd_alu0_rd;
   logic [31:0] fwd_alu0_data;
   logic        fwd_alu0_writes_rd;
@@ -121,16 +108,8 @@ module cpu_core (
   // Downstream stall (status view; the counts above are the real handshakes)
   logic        issue_to_decode_stall;
 
-  // ───────────────────────────────────────────────
-  // Slot-0 scalar taps
-  // ───────────────────────────────────────────────
-  // The pipeline itself runs on the wide buses above. These narrow views
-  // of slot 0 exist purely so the testbench's per-stage display
-  // (test_bench/tb_pyuvm/cpu_agent/monitor_config.yaml) keeps resolving
-  // the signal names it always has. They are NOT sufficient for tracing:
-  // with a 2-wide decode more than one instruction can leave the queue in
-  // a cycle, so cpu_tracer.py reads the wide buses plus issue_accept_cnt
-  // instead.
+  // Slot-0 taps support the stage display. Instruction tracing uses the full
+  // bundle and issue_accept_cnt to observe both lanes.
   logic        if_id_valid;
   logic [31:0] if_id_pc;
   logic [31:0] if_id_instr;
@@ -171,31 +150,11 @@ module cpu_core (
     .o_if_pred_target (ifg_pred_target)
   );
 
-  // ───────────────────────────────────────────────
-  // Branch Prediction Unit (BPU)
-  // ───────────────────────────────────────────────
-  // TABLE_DEPTH is sized for the FPGA, not for peak IPC. bpu.sv holds a
-  // 66-bit entry (32-bit tag + 32-bit target + 2-bit counter) in a PACKED
-  // array with an async reset over every entry, so it can never infer as
-  // BSRAM or LUT-RAM: it becomes flip-flops plus two TABLE_DEPTH:1 x 66-bit
-  // read mux trees and a TABLE_DEPTH-way write decoder. At the 256-entry
-  // default that is 16,896 FFs -- 85% of the entire design's registers --
-  // and the mux trees dominate LUT usage. cpu_top came out 3.4x over the
-  // GW2AR-18's 20,736 LUTs almost entirely because of this one array.
-  //
-  // Shrinking the table cannot change ISA behaviour: a predictor only
-  // affects how often the redirect path corrects a guess, never the
-  // architectural result, so the retired-instruction trace stays identical
-  // to Spike. Only IPC moves. Raise it again on a larger part.
+  // Branch predictor: 16 entries mapped to FPGA distributed RAM.
   bpu #(
     .TABLE_DEPTH (16),
     .INDEX_WIDTH (4),     // must remain $clog2(TABLE_DEPTH)
-    // 10-bit tag instead of the full 32-bit PC. Two branches now collide
-    // only if they share an index AND their PC[16:7] match -- i.e. they are
-    // 128 KB apart -- which no program this part can hold will do. It drops
-    // 22 bits per entry from both the storage and the read mux tree, and
-    // the mux tree is what actually costs: the BPU synthesised to 9,598
-    // muxes against only 2,112 flip-flops.
+    // Partial tags reduce storage; Issue resolves targets to correct aliasing.
     .TAG_WIDTH   (10)
   ) BPU (
     .clk                 (clk),
@@ -230,25 +189,13 @@ module cpu_core (
     .o_pop_cnt       (decode_pop_cnt)
   );
 
-  // ───────────────────────────────────────────────
-  // Issue Stage (2-wide)
-  // ───────────────────────────────────────────────
-  // ───────────────────────────────────────────────
-  // RV32M multiply / divide unit
-  // ───────────────────────────────────────────────
-  // Lane 0 only, like the LSU. Non-blocking: a divide runs for 32 cycles
-  // while Issue keeps dispatching independent work, and the scoreboard
-  // holds back anything that reads the pending destination. That is the
-  // case rtl/pipeline/scoreboard.sv was written for and, until now, the
-  // reason it never actually blocked.
+  // Lane-0 multiply/divide unit. Issue serializes younger instructions while
+  // an MDU operation is outstanding to preserve writeback order.
   logic        mdu_dispatch_valid, mdu_ready, mdu_result_valid;
   uop_t        mdu_dispatch_uop;
   logic [31:0] mdu_op1, mdu_op2, mdu_result;
 
-  // mdu.sv is deliberately uop-free so it can be formally verified on its
-  // own (fpga/formal/mdu_equiv.sby), so the uop is parked here for the
-  // duration instead of travelling through it. One in flight at a time,
-  // enforced by mdu_ready, so a single register suffices.
+  // Retain the uop for the single outstanding MDU operation.
   uop_t mdu_inflight_uop_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n)                 mdu_inflight_uop_q <= '0;
@@ -324,23 +271,12 @@ module cpu_core (
   assign bpu_update_taken  = branch_taken;
   assign bpu_update_target = branch_target;
 
-  // ───────────────────────────────────────────────
-  // ALU lane 0
-  // ───────────────────────────────────────────────
-  // i_flush stays tied low: Issue never dispatches a wrong-path uop
-  // (issue.sv gates lane 1 on !o_mispredict, and lane 0 is by definition
-  // on the correct path), so nothing in an ALU ever needs killing. That
-  // invariant - once dispatched, always completes - is what cpu_tracer.py's
-  // retirement model is built on.
+  // ALU lane 0. Dispatched instructions complete without branch-flush killing.
   alu_stage ALU0 (
     .clk             (clk),
     .rst_n           (rst_n),
     .issue_if        (alu0_if),
-    // Held when the MDU is retiring this cycle: its result takes the
-    // lane-0 retire port (retire.sv checks i_mdu_valid first), so ALU0's
-    // result waits in its own output register and retires next cycle.
-    // Program order is preserved because the multiply/divide was
-    // dispatched earlier than whatever ALU0 is holding.
+    // MDU completion owns retire lane 0; hold any ALU0 result for the next cycle.
     .i_stall         (lsu_if.s_stall_from_lsu || mdu_result_valid),
     .i_flush         (1'b0),
     .o_alu_fwd_writes_rd    (fwd_alu0_writes_rd),
@@ -384,15 +320,8 @@ module cpu_core (
       .o_lsu_uop            (lsu_uop_forward)
     );
 
-  // ───────────────────────────────────────────────
-  // Retire lane 0 (ALU0 or LSU)
-  // ───────────────────────────────────────────────
-  // Lane 0 dispatches to exactly one of ALU0/LSU, and both stall in
-  // lockstep, so the two can never present a completion in the same cycle.
-  // That is what makes retire's fixed ALU-over-LSU priority harmless here -
-  // at 1-wide it was an unchecked assumption that silently DROPPED the LSU
-  // result if it ever broke. Now it is enforced by construction and checked
-  // by assert_lane0_units_exclusive below.
+  // Retire lane 0 accepts ALU0, LSU or MDU results.
+  // ALU0 and LSU completions are mutually exclusive.
   retire RETIRE0 (
     .clk             (clk),
     .rst_n           (rst_n),
@@ -415,12 +344,7 @@ module cpu_core (
     .o_wb_data       (retire0_wb_data)
   );
 
-  // ───────────────────────────────────────────────
-  // Retire lane 1 (ALU1 only)
-  // ───────────────────────────────────────────────
-  // Lane 1 is a bare ALU, so its LSU port is tied off. Instantiating the
-  // same retire module twice - rather than widening it - keeps
-  // CORE.RETIRE0.* / CORE.RETIRE1.* as scalar signals for the testbench.
+  // Retire lane 1 accepts ALU1 only; unused result ports are tied off.
   retire RETIRE1 (
     .clk             (clk),
     .rst_n           (rst_n),
@@ -451,12 +375,7 @@ module cpu_core (
     !(alu0_retire_valid && lsu_valid)
   ) else $error("CORE ERROR: ALU0 and LSU both completed in the same cycle - a result is being dropped");
 
-  // The MDU is the exception to the rule above: because it is multi-cycle
-  // it CAN complete on a cycle ALU0 also has a result, and retire.sv gives
-  // it priority. That is only safe because ALU0 is stalled on the same
-  // cycle, so its result is held rather than dropped. Check exactly that:
-  // an ALU0 result coinciding with an MDU result must still be there next
-  // cycle.
+  // An ALU0 result coinciding with MDU completion must remain valid next cycle.
   assert_alu0_held_when_mdu_retires: assert property (
     @(posedge clk) disable iff (!rst_n)
     (alu0_retire_valid && mdu_result_valid) |=> alu0_retire_valid

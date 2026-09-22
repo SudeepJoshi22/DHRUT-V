@@ -10,14 +10,8 @@ module lsu (
   // To data memory
   mem_if.master       dmem_if,
 
-  // Load Data Forward to ISSUE - valid only for completed LOADS. Stores
-  // also complete via o_valid/o_lsu_uop below (for Retire, which already
-  // gates on uop_q.writes_rd itself), but a store's uop_q.rd is not a
-  // real destination register - decode.sv extracts rd from instr[11:7]
-  // unconditionally, which for S-type instructions is actually imm[4:0].
-  // Forwarding that unqualified onto rs1/rs2 matches can corrupt operands
-  // whenever a store's own immediate happens to numerically collide with
-  // a later instruction's source register.
+  // Forward only completed loads. Store instruction bits in the rd field
+  // are not a register destination.
   output logic        o_lsu_fwd_valid,
   output logic [4:0]  o_lsu_fwd_rd,
   output logic [31:0] o_lsu_fwd_result,
@@ -89,18 +83,8 @@ module lsu (
   logic [31:0] wdata_aligned;
   logic [3:0]  wstrb;
 
-  // One barrel shifter, not one per access size. Written as a case arm per
-  // size, each with its own `<<`, this inferred a separate 32-bit shifter
-  // for the byte path and another for the halfword path. The shift amount
-  // is the same expression in both, so the datapath is: mask the operand to
-  // its size, then shift once.
-  //
-  // The strobe is likewise a single shift. A byte store is 4'b0001 shifted
-  // by the byte offset; a halfword is 4'b0011 shifted by the same offset,
-  // which yields 4'b0011 at offset 0 and 4'b1100 at offset 2 -- exactly the
-  // old table, and 4'b0110 / 4'b1000 at the misaligned offsets 1 and 3,
-  // which the old code mapped to 4'b0000 via `default`. That difference is
-  // preserved explicitly by h_aligned below rather than left to chance.
+  // Mask store data to access width, then shift data and strobes by byte offset.
+  // Misaligned halfword stores have zero strobes.
   logic [1:0]  byte_off;
   logic [31:0] store_masked;
   logic [3:0]  strb_base;
@@ -126,8 +110,7 @@ module lsu (
     endcase
   end
 
-  // Word accesses are not shifted (the old code never shifted them), so
-  // the shift amount is forced to zero for size 2'b10.
+  // Word accesses use a zero shift offset.
   logic [1:0] shift_off;
   assign shift_off = (uop_q.lsu_access_size == 2'b10) ? 2'b00 : byte_off;
 
@@ -143,17 +126,7 @@ module lsu (
   assign dmem_if.m_addr   = mem_addr;
   assign dmem_if.m_wdata  = wdata_aligned;
   assign dmem_if.m_wstrb  = wstrb;
-  // The data side never withdraws a request: this stage has no flush input,
-  // and valid_q only clears on s_ready, so a request stays up until the
-  // slave answers it. m_flush therefore ties low -- but it must be DRIVEN,
-  // not left dangling. Undriven, it is a don't-care that synthesis is free
-  // to fold to 1, which makes the slave's `accept = m_valid && !m_flush`
-  // constant-false and lets opt delete the entire data memory as dead. That
-  // is exactly what happened to fpga/rtl/bram_slave.sv's DMEM instance: the
-  // 2048x32 array vanished before the memory passes ever saw it, so loads
-  // would have returned a constant on hardware. Simulation could not catch
-  // it -- the cocotb dmem driver never reads m_flush, and bram_slave is not
-  // instantiated in the sim testbench at all.
+  // Data requests remain valid until the slave responds; m_flush is tied low.
   assign dmem_if.m_flush  = 1'b0;
 
   // ───────────────────────────────────────────────
@@ -167,15 +140,8 @@ module lsu (
   // ───────────────────────────────────────────────
   assign o_valid = valid_q && dmem_if.s_ready;
 
-  // ───────────────────────────────────────────────
-  // Load data handling (sign/zero extension)
-  // ───────────────────────────────────────────────
-  // Mirror of the store path: ONE right-shift aligns the addressed lane to
-  // bit 0, then one extension stage. Previously each (size, offset) pair
-  // was its own case arm with its own slice and its own sign-extend, so the
-  // byte path alone built four 32-bit result muxes.
-  //
-  // The misaligned-halfword result (offset 1 or 3) stays 32'b0, as before.
+  // Align load bytes with one right shift, then apply sign or zero extension.
+  // Misaligned halfword loads return zero.
   logic [31:0] load_shifted;
   logic        sx;
 
@@ -183,7 +149,7 @@ module lsu (
   assign sx           = uop_q.lsu_sign_extend;
 
   always_comb begin
-    // Default matches the old code's untaken-if fall-through.
+    // Default load value when no extension case applies.
     o_load_data = dmem_if.s_rdata;
 
     if (uop_q.is_load && o_valid) begin

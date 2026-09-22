@@ -1,33 +1,8 @@
 import riscv_uop_pkg::*;
 
-// =================================================================
-// decode_stage - 2-wide instruction decode
-// =================================================================
-// Holds a 2-entry, program-ordered, compacting buffer of fetched
-// instructions and presents both of them, decoded, to Issue every
-// cycle. This is the IF/ID pipeline register generalised from one
-// entry to two.
-//
-// Every cycle the buffer:
-//   1. drops the `i_accept_cnt` oldest entries (what Issue consumed),
-//   2. shifts what is left down to slot 0 (so slot 0 is always the
-//      oldest live instruction and there is never a hole),
-//   3. refills the freed slots from the fetch queue heads, reporting
-//      how many it took on `o_pop_cnt`.
-//
-// Because refill happens in the same cycle as the accept, a steady
-// stream keeps both slots occupied and both decoders busy.
-//
-// Backpressure: there is no stall signal. `i_accept_cnt == 0` IS the
-// stall - the buffer simply keeps what it holds and pops nothing, which
-// backs pressure up into the fetch queue exactly as the old
-// o_stall_to_if chain did.
-//
-// Phase 2 note: Issue is still 1-wide, so i_accept_cnt is only ever 0
-// or 1 today. Slot 1 is nevertheless decoded for real every cycle, and
-// assert_decode_lanes_agree below checks lane 1's result against lane
-// 0's when that same instruction shifts down - so the second lane is
-// live and verified before Phase 3 starts consuming it.
+// Two-wide decode with a compacting, program-ordered buffer.
+// Consume i_accept_cnt oldest entries, shift remaining entries toward slot 0,
+// and refill available slots from the fetch queue using o_pop_cnt.
 
 module decode_stage (
   input  logic        clk,
@@ -201,12 +176,7 @@ module decode_stage (
   ) else $error("DECODE ERROR: Issue accepted %0d uops, decode held only %0d",
                 i_accept_cnt, id_v_q[0] + id_v_q[1]);
 
-  // 3. The two lanes must be the same decoder. When slot 1 shifts down to
-  //    slot 0 (accept of exactly 1), lane 0 re-decodes the very instruction
-  //    lane 1 decoded last cycle; the two results must be bit-identical.
-  //    Until Issue goes 2-wide nothing downstream reads o_uop[1], so this
-  //    is what keeps lane 1 honest - and what stops the simulator from
-  //    optimising it away as dead logic.
+  // An instruction shifted from slot 1 to slot 0 must decode identically.
   assert_decode_lanes_agree: assert property (
     @(posedge clk) disable iff (!rst_n || i_flush)
     (id_v_q[1] && (i_accept_cnt == 2'd1)) |=> (dec_uop[0] == $past(dec_uop[1]))

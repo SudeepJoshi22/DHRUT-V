@@ -1,20 +1,5 @@
-# Self-checking load-use hazard / LSU forwarding test.
-# - All data stored in .data section
-# - Uses la to get address (tests la pseudo-instruction expansion)
-# - Immediate dependency after each lw -> stresses load-use hazard
-# - Also directly regression-tests the store-rd forwarding bug: a
-#   store's own imm[4:0] was being misread as a bogus destination
-#   register and incorrectly forwarded to a later instruction that
-#   happened to read the same register number (see git history for
-#   rtl/pipeline/lsu.sv's o_lsu_fwd_valid).
-#
-#   The dmem model (test_bench/tb_pyuvm/dmem_agent/dmem_driver.py) applies
-#   a random 1-5 cycle stall per access, so whether the two stores below
-#   actually land on the exact colliding cycle is seed-dependent - this
-#   ran clean against the pre-fix RTL on several seeds and only reliably
-#   caught the bug (FAIL: tohost=0x2f, fail_7) with `simulate.sh
-#   lsu_forward 1`. Run with that seed when specifically regression-
-#   testing this bug; a random/default seed may not trigger it.
+# Check load-use forwarding and exclude store immediate bits from rd forwarding.
+# Use seed 1 to exercise the store-completion/source-register collision.
 
 .section .text
 .globl _start

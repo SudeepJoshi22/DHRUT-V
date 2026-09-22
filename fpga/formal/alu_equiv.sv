@@ -1,9 +1,5 @@
-// Exhaustive equivalence: the shared-datapath alu.sv against the original
-// one-operator-per-arm version, over every (op1, op2, alu_op).
-//
-// Both versions are inlined here rather than pulled from rtl/, so the proof
-// stays runnable after rtl/pipeline/alu.sv moves on. alu_ref is the ORIGINAL
-// as it stood before the area work; alu_dut must track the current file.
+// ALU equivalence over all operands and operations.
+// The reference and DUT are inlined; keep alu_dut consistent with rtl/pipeline/alu.sv.
 
 typedef enum logic [9:0] {
     A_ADD  = 10'b0_000, A_SUB  = 10'b1_000,
@@ -13,7 +9,7 @@ typedef enum logic [9:0] {
     A_OR   = 10'b0_110, A_AND  = 10'b0_111
 } aop_t;
 
-// ── ORIGINAL: one operator per case arm ───────────────────────────────
+// Reference: one operator per case arm.
 module alu_ref (input logic [31:0] i_op1, i_op2, input aop_t i_alu_op,
                 output logic [31:0] o_result);
   always_comb begin
@@ -34,7 +30,7 @@ module alu_ref (input logic [31:0] i_op1, i_op2, input aop_t i_alu_op,
   end
 endmodule
 
-// ── REWRITE: one shared adder, one shared right-shifter ───────────────
+// DUT: shared arithmetic and shift datapaths.
 module alu_dut (input logic [31:0] i_op1, i_op2, input aop_t i_alu_op,
                 output logic [31:0] o_result);
   logic do_sub; logic [32:0] sum_ext; logic [31:0] sum;

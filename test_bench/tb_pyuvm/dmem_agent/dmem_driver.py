@@ -17,19 +17,8 @@ class DMemDriver(uvm_driver):
 
     def _stall_cycles(self):
         """
-        Injected response latency, in cycles.
-
-        MEM_STALL_MODE=random (default): 1-5 cycles, as before. Randomized
-        timing is deliberate - it shakes out handshake/backpressure bugs
-        that a fixed-latency model would hide.
-
-        MEM_STALL_MODE=zero: no injected stalls. Used to measure the core's
-        *intrinsic* IPC without synthetic memory latency dominating the
-        result, e.g. when deciding where microarchitectural effort should
-        go. Not a substitute for the random mode in functional regressions.
-
-        MEM_STALL_MODE=fixed uses run_bram_responder instead of this delay:
-        it models the FPGA's registered response and mandatory return to IDLE.
+        Inject zero stalls in zero mode or 1-5 cycles in random mode.
+        Fixed mode uses run_bram_responder for the registered BRAM protocol.
         """
         mode = os.getenv("MEM_STALL_MODE", "random")
         if mode == "zero":

@@ -1,35 +1,6 @@
-// On-chip block-RAM slave for mem_if.
-//
-// Replaces the cocotb imem/dmem drivers for FPGA builds. The handshake
-// contract it has to honour, taken from the masters:
-//
-//   ifetch.sv : fetch_fire = m_valid && s_ready, and instr0/instr1 are
-//               taken straight from s_rdata on that same cycle.
-//   lsu.sv    : o_valid = valid_q && s_ready, o_load_data from s_rdata,
-//               again same cycle.
-//
-// So s_rdata MUST already hold the data on the cycle s_ready is high --
-// this is not a "ready now, data next cycle" bus.
-//
-// Gowin BSRAM is synchronous (address in on a clock edge, data out the
-// cycle after), so the response cannot be combinational. The FSM below
-// therefore runs one wait state: the request is captured (and the BRAM
-// read issued) in IDLE, and answered in RESP when dout is valid. Both
-// masters hold m_addr stable while waiting -- ifetch's pc_q only advances
-// on fetch_fire, and lsu's valid_q only clears on s_ready -- so holding a
-// request across a cycle is safe.
-//
-// Withdrawal: s_ready is qualified on the master still asserting m_valid
-// for the SAME address and not flushing, mirroring the "don't answer a
-// fetch the core has withdrawn" rule in imem_driver.py. Without it, a
-// mispredict flush during the wait state would hand back data fetched for
-// the old block while pc_q has already moved -- the core would pair the
-// new PC with the old instruction. There is no combinational loop: m_valid
-// depends only on registered state (i_flush, fq_full), never on s_ready.
-//
-// Addressing: only the low bits of m_addr index the array, so the upper
-// bits alias. That is what puts the 0x8000_0000 link address at index 0
-// with no decoder. It also means the image must fit in DEPTH entries.
+// Synchronous block-RAM slave. IDLE captures a request; RESP returns its data.
+// s_ready requires a valid, unflushed request at the captured address.
+// Only low address bits index storage; upper addresses alias.
 module bram_slave #(
   parameter int    DATA_W    = 32,     // 64 for imem (2 instr/access), 32 for dmem
   parameter int    DEPTH     = 2048,   // entries, must be a power of two
@@ -87,29 +58,11 @@ module bram_slave #(
     end
   end
 
-  // Storage. Two shapes, because Yosys' Gowin BRAM rules
-  // (tools/oss-cad-suite/share/yosys/gowin/brams.txt) have no mapping for a
-  // read combined with a BYTE-MASKED PARTIAL write of a wider word. Written
-  // that way the whole array falls into fabric -- a 2048x32 dmem costs a few
-  // thousand LUT4s of storage plus a ~2048:1 address mux per output bit.
-  // Splitting it into byte-wide arrays, each written as a WHOLE word under
-  // its own strobe, is the form the rules do match.
-  //
-  // A non-loadable ROM keeps the single-array shape. Loadable IMEM uses
-  // byte lanes too, so a received byte writes through the same single port.
-  //
-  // Both paths preserve what inference depends on -- synchronous read, and
-  // NO reset anywhere on the array -- and both keep the original timing: a
-  // store commits at capture time, which is safe because lsu.sv has no flush
-  // input and so never withdraws a store.
+  // Writable/loadable memory uses byte lanes for block-RAM inference.
+  // Arrays have synchronous reads and no reset; writes commit on capture.
   generate
     if (WRITABLE || LOADABLE) begin : g_ram
-      // Each lane loads its OWN image. Splitting a word-wide $readmemh into
-      // lanes in an initial block does not elaborate ("evaluation does not
-      // resolve to a constant in design initialization"), so fpga/mkmem.py
-      // emits one file per lane: INIT_FILE "dmem_init.hex" is read here as
-      // "dmem_init_b0.hex" .. "b3.hex". INIT_STEM carries the name without
-      // its .hex suffix so the lane index can be appended.
+      // Initialize each byte lane from the corresponding INIT_STEM_bN.hex file.
       for (genvar b = 0; b < BYTES; b++) begin : g_lane
         logic [7:0] mem_b [0:DEPTH-1];
         logic [7:0] rd_q;

@@ -23,7 +23,7 @@ module retire (
   // Flush from downstream (e.g. exception) or upstream (branch mispredict)
   input  logic        i_flush,
 
-  // Stall from downstream (rare in in-order, but for future)
+  // Stall holds the current result.
   input  logic        i_stall,
 
   // Operand forward to ISSUE 
@@ -58,14 +58,7 @@ module retire (
       result_q  <= '0;
     end
     else if (!i_stall) begin
-      // In-order: only one should be valid.
-      //
-      // The MDU is checked FIRST, and that ordering is load-bearing. Its
-      // result appears several cycles after dispatch, so it can land on a
-      // cycle when ALU0 also has one. cpu_core resolves that by stalling
-      // ALU0 whenever the MDU completes: ALU0's result is held in its own
-      // output register and retires the cycle after, which preserves
-      // program order because the multiply/divide was dispatched first.
+      // MDU has priority; cpu_core holds any coincident ALU0 result.
       if (i_mdu_valid) begin
         valid_q   <= 1'b1;
         uop_q     <= i_mdu_uop;

@@ -1,32 +1,6 @@
-// =================================================================
-// fetch_queue - decoupling instruction queue between IF and ID
-// =================================================================
-// A synchronous, power-of-two-depth FIFO holding completed fetches
-// (PC + instruction word + the branch prediction that was made for
-// that instruction at fetch time).
-//
-// Its only job is to decouple the fetch engine from the rest of the
-// pipeline: fetch may keep issuing imem requests while the queue has
-// room, so an imem stall drains the queue instead of immediately
-// starving decode/issue, and a downstream stall fills the queue
-// instead of immediately idling the fetch engine.
-//
-// Behaviour notes:
-//   * Read is "first-word fall-through" and TWO entries wide: the head
-//     and head+1 entries are presented combinationally on the o_*[0] and
-//     o_*[1] outputs, each with its own valid, so the consumer sees an
-//     entry the cycle after it is pushed (same latency as the single
-//     instruction buffer this replaces) and can take a pair at once.
-//     The consumer says how many it took on i_pop_cnt (0..2).
-//   * Simultaneous push+pop is supported in every occupancy state,
-//     including when full: the pop frees the slot that the push
-//     writes in the same cycle. The combinational head read returns
-//     the pre-update contents of that slot, so the entry being popped
-//     is unaffected by the push overwriting it.
-//   * i_flush clears the whole queue in a single cycle (mispredict
-//     redirect). Flush has priority over push and pop.
-//
-// Entry payload: {pc[31:0], instr[31:0], pred_taken, pred_target[31:0]}
+// Two-push/two-pop FIFO of {pc, instruction, prediction} between fetch and decode.
+// Combinational head reads expose entries after the push edge. Simultaneous
+// push/pop reads the pre-update head. Flush takes priority over both.
 
 module fetch_queue #(
   parameter int DEPTH = 8    // number of entries, must be a power of 2 (>= 2)
@@ -102,12 +76,7 @@ module fetch_queue #(
   assign o_valid[0] = (occupancy >= (PTR_W + 1)'(1));
   assign o_valid[1] = (occupancy >= (PTR_W + 1)'(2));
 
-  // "Full" means this queue cannot accept a full 2-instruction group THIS
-  // cycle. It accounts for the slots a simultaneous pop frees, so the
-  // producer does not need (and must not use) its own `|| pop` override:
-  // at occupancy DEPTH a 1-entry pop frees only one slot, which is still
-  // not enough for a pair, and pushing anyway would silently drop an
-  // instruction.
+  // Full means fewer than two free entries after accounting for simultaneous pops.
   assign free_slots = (PTR_W + 1)'(DEPTH) - occupancy + (PTR_W + 1)'(pop_count);
   assign o_full     = (free_slots < (PTR_W + 1)'(2));
 
@@ -160,12 +129,7 @@ module fetch_queue #(
     // reset, so nothing can read a stale entry (o_empty is asserted).
   end
 
-  // =================================================================
-  // Pointers
-  // =================================================================
-  // i_flush is a synchronous clear, kept out of the async-reset condition --
-  // see the note in alu_stage.sv. Emptying the queue by zeroing both pointers
-  // is what the flush did before; only the branch structure changed.
+  // Pointers clear on asynchronous reset or synchronous flush.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       wr_ptr_q <= '0;

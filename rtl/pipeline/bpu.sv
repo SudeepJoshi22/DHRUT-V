@@ -83,13 +83,8 @@ module bpu #(
         bhu_state_t       state;
     } bhu_entry_t;
 
-    // Table storage. UNPACKED, deliberately: a packed array is one wide
-    // vector, which synthesis can only build from flip-flops plus mux trees,
-    // never from a RAM primitive. Unpacked + a single synchronous write port
-    // + asynchronous reads is exactly the shape Gowin's distributed RAM
-    // (RAM16SDP4, see tools/oss-cad-suite/share/yosys/gowin/lutrams.txt)
-    // matches, and the part has 648 of those sitting completely unused while
-    // this table was costing thousands of LUT4s.
+    // Unpacked table with one synchronous write port and asynchronous reads
+    // for distributed-RAM inference.
     bhu_entry_t bhu [TABLE_DEPTH];
 
     // Prediction index and hit
@@ -157,27 +152,8 @@ module bpu #(
         endcase
     end
 
-    // ONE write port, by construction.
-    //
-    // There were two writers -- a resolved update and a new allocation --
-    // and previously both could commit in the same cycle as long as they
-    // targeted different indices. Two write ports rule out every RAM
-    // primitive on this part, so they are serialised here: the update wins
-    // and the allocation is dropped whenever they coincide, not merely when
-    // they collide on one index.
-    //
-    // This is a prediction-quality change and nothing more. An allocation is
-    // a guess about an instruction that has not executed yet; dropping one
-    // means the next fetch of that branch misses and allocates then. A
-    // resolved update is fact, so it is the one that must never be lost.
-    // Issue re-resolves every branch and redirects on a mismatch (see the
-    // note at the top of this file), so no BPU decision can reach
-    // architectural state -- only the cycle count moves.
-    //
-    // On the update path the tag is rewritten with the value it already
-    // holds: upd_fire implies upd_hit, which means the stored tag already
-    // equals this PC's tag slice. That keeps the write a whole-entry write
-    // (no read-modify-write on the stored tag) without changing what lands.
+    // Resolved updates take priority over allocations on the single write port.
+    // Write the complete entry, including its matching tag.
     logic                        wr_en;
     logic [INDEX_WIDTH-1:0]      wr_idx;
     bhu_entry_t                  wr_data;
@@ -197,11 +173,8 @@ module bpu #(
         end
     end
 
-    // No reset on the array: a reset that touches every entry forces
-    // flip-flops and blocks RAM inference outright. The table is initialised
-    // instead, which synthesis bakes into the RAM's INIT and simulation
-    // applies at time zero -- the same all-zero tags and WNT counters the
-    // old reset produced.
+    // Initialize the table at configuration/time zero for RAM inference.
+    // Reset does not clear table entries.
     initial begin
         for (int i = 0; i < TABLE_DEPTH; i++) begin
             bhu[i].tag       = '0;

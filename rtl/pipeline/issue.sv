@@ -1,27 +1,8 @@
 import riscv_uop_pkg::*;
 
-// =================================================================
-// issue_stage - 2-wide in-order issue
-// =================================================================
-// Holds one bundle (up to two uops, lane 0 the older), reads four ARF
-// ports, resolves operands through the bypass network, and dispatches:
-//
-//   lane 0 -> ALU0, or the LSU, or resolved in place (branch / CSR)
-//   lane 1 -> ALU1 only
-//
-// Lane 1 is deliberately a bare ALU. Every instruction class it cannot
-// take needs a unit that exists exactly once (LSU + dmem port, branch
-// resolver + BPU update port, CSR file). Keeping lane 1 narrow is what
-// lets this stage widen without touching lsu.sv, csr_unit.sv or bpu.sv
-// at all. See rtl/pipeline/issue_hazard.sv for the full rule set.
-//
-// The 3-state FSM (S_IDLE/S_READY/S_WAITING) that used to live here is
-// gone. `state_q == S_IDLE` was exactly `!buf_valid_q`, so the state
-// register carried no information the valid bit did not already have -
-// widening it to two lanes would have doubled dead state. Its one
-// remaining use, the `(state_q == S_IDLE) || dispatch_en` term in
-// `latch_new`, reduces to a tautology once `!downstream_stall` is
-// factored out, so it disappears entirely rather than being replaced.
+// Two-wide in-order issue with a program-ordered bundle buffer.
+// Lane 0 dispatches to ALU0, LSU or MDU and resolves branches/CSRs.
+// Lane 1 accepts simple ALU operations; issue_hazard checks pairing.
 
 module issue_stage (
   input logic clk,
@@ -88,10 +69,7 @@ module issue_stage (
   // Issued to LSU (with back-pressure) - lane 0 only
   lsu_issue_if.issuer lsu_if,
 
-  // Issued to the RV32M unit - lane 0 only, like the LSU.
-  // Plain ports rather than an interface: mdu.sv is deliberately uop-free
-  // so it can be verified standalone, so the uop travels alongside rather
-  // than through it (cpu_core holds it for the duration).
+  // Lane-0 MDU interface. cpu_core retains the associated uop until completion.
   output logic        o_mdu_valid,
   output uop_t        o_mdu_uop,
   output logic [31:0] o_mdu_op1,
@@ -100,14 +78,7 @@ module issue_stage (
   input  logic        i_mdu_result_valid  // MDU completing THIS cycle
 );
 
-  // ───────────────────────────────────────────────
-  // 1. Bundle buffer
-  // ───────────────────────────────────────────────
-  // Deliberately two sets of scalar registers rather than one packed
-  // `uop_t [1:0]`: Verilator's VPI presents a packed array as a single
-  // flat vector, so the testbench (cpu_tracer.py, monitor_config.yaml)
-  // could not read one lane without knowing the struct width. Scalars
-  // keep ISSUE.buf_uop0_q / ISSUE.buf_uop1_q directly addressable.
+  // Scalar bundle registers expose each lane to the simulation monitor.
   logic        buf_valid0_q;
   uop_t        buf_uop0_q;
   logic [31:0] buf_pc0_q;
@@ -151,14 +122,7 @@ module issue_stage (
     .o_waw_hazard    (haz_waw)
   );
 
-  // ───────────────────────────────────────────────
-  // 3. Issue / dispatch enables
-  // ───────────────────────────────────────────────
-  // Lane 0 is the oldest instruction in the machine: it issues whenever
-  // it is held and nothing downstream is stalling.
-  // Operand readiness from the scoreboard + bypass network. Declared here
-  // because the issue enables below need them; driven in section 4b,
-  // next to the scoreboard instance they come from.
+  // Dispatch requires valid operands and downstream capacity.
   logic lane0_ops_ready, lane1_ops_ready;
 
   logic issue_en0;
@@ -167,37 +131,14 @@ module issue_stage (
   logic dispatch_en;              // lane 0 leaves this cycle
   assign dispatch_en = issue_en0;
 
-  // Lane 1 additionally requires that lane 0 does not redirect control
-  // flow this cycle. This is the whole reason a branch in lane 0 is safe
-  // to pair with: on a correct prediction lane 1 is exactly the
-  // instruction fetch already followed to, so it is on the right path;
-  // on a mispredict (or a CSR trap/mret) lane 1 is wrong-path and must
-  // not execute. Holding it back here - rather than flushing it out of
-  // the ALU afterwards - is what preserves the invariant that ONCE
-  // DISPATCHED, AN INSTRUCTION ALWAYS COMPLETES. alu_stage's i_flush
-  // stays tied off, and cpu_tracer.py's retirement model stays valid.
+  // Suppress lane 1 when lane 0 redirects to prevent wrong-path execution.
   logic issue_en1;
-  // issue_en0 is a REQUIREMENT, not an optimisation: lane 1 is younger, so
-  // letting it go while lane 0 is held breaks program order outright.
-  //
-  // This was previously implicit. Lane 0 could only be held by
-  // lane0_ops_ready, and that never went low because the bypass network
-  // covered every cycle the scoreboard marked busy -- the situation
-  // scoreboard.sv's header describes. The MDU is the first unit whose
-  // result is NOT on the bypass network, so lane 0 can now genuinely wait
-  // on the scoreboard while lane 1's operands are ready, and the
-  // assert_lane1_needs_lane0 assertion below fires. It is a real
-  // violation, not a false alarm: making the dependency explicit is the
-  // fix.
+  // Lane 1 may issue only alongside the older lane 0 instruction.
   assign issue_en1 = issue_en0 && buf_valid1_q && operands_ready
                      && lane1_ops_ready && !o_mispredict;
 
-  // Decode handshake: the single condition under which Issue takes a new
-  // bundle. Used both to load the buffer and to report o_accept_cnt, so
-  // the two cannot drift apart and drop or replay an instruction.
-  // A new bundle may only be taken when the held one is leaving (or there
-  // is none). With the scoreboard able to hold lane 0 back, "not stalled
-  // downstream" is no longer sufficient on its own.
+  // Use the same acceptance condition for buffer loading and decode consumption.
+  // Replace a bundle only when it is empty or dispatching.
   logic latch_new;
   assign latch_new = i_dec_valid[0] && !downstream_stall && !i_flush
                      && (!buf_valid0_q || dispatch_en);
@@ -205,9 +146,7 @@ module issue_stage (
   assign o_accept_cnt  = latch_new ? (pair_ok ? 2'd2 : 2'd1) : 2'd0;
   assign o_instret_cnt = {1'b0, issue_en0} + {1'b0, issue_en1};
 
-  // i_flush is a synchronous clear, kept out of the async-reset condition --
-  // see the note in alu_stage.sv. Both buffer slots are invalidated on flush
-  // exactly as before.
+  // Flush invalidates both buffer slots synchronously.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       buf_valid0_q <= 1'b0;
@@ -307,14 +246,8 @@ module issue_stage (
     .o_hit_rs2_1      (fwd_hit_rs2_1)
   );
 
-  // ───────────────────────────────────────────────
-  // 4b. Scoreboard: outstanding writes + operand readiness
-  // ───────────────────────────────────────────────
-  // See rtl/pipeline/scoreboard.sv for what this is and why it exists
-  // before it is strictly needed. Set ports come from the DISPATCH
-  // handshakes below, not from writes_rd, so that anything which never
-  // reaches write-back (an illegal CSR access, say) never leaves a
-  // counter stranded. Clear ports are the two retire write-backs.
+  // Scoreboard sets follow dispatch; clears follow retire writeback.
+  // Trapping instructions that do not dispatch must not allocate a writer.
   logic [1:0]      sb_set_en;
   logic [1:0][4:0] sb_set_rd;
   logic [1:0]      sb_clr_en;
@@ -323,11 +256,7 @@ module issue_stage (
   logic [3:0]      sb_query_busy;
   logic [31:0]     sb_busy;
 
-  // Lane 0 dispatches to exactly one of ALU0/LSU; lane 1 only to ALU1.
-  // Lane 0 can dispatch to exactly one of ALU0, the LSU or the MDU, so
-  // these three terms are mutually exclusive. The MDU one is what finally
-  // gives the scoreboard something to do: its result is not on the bypass
-  // network, so a consumer of its rd stays blocked here until write-back.
+  // Lane 0 selects one of ALU0, LSU or MDU; lane 1 selects ALU1.
   assign sb_set_en[0] = (alu0_if.m_valid && alu0_if.m_uop.writes_rd) ||
                         (lsu_if.m_valid  && lsu_if.m_uop.writes_rd)  ||
                         (o_mdu_valid     && o_mdu_uop.writes_rd);
@@ -359,38 +288,14 @@ module issue_stage (
     .o_busy       (sb_busy)
   );
 
-  // An operand is ready if it is not needed, is x0, has no write in
-  // flight, or has one that the bypass network can supply RIGHT NOW.
-  // The serialized MDU still uses this bookkeeping to hold its destination
-  // until write-back. A future non-blocking unit can use the same mechanism.
+  // Operands are ready when unused, x0, not busy, or supplied by forwarding.
   function automatic logic op_ready(input logic uses, input logic busy, input logic hit);
     return !uses || !busy || hit;
   endfunction
 
-  // ── The MDU's destination must ignore the bypass network ─────────
-  //
-  // op_ready above trusts `hit` to mean "the newest value for this
-  // register is available now". That is true only while every producer is
-  // one cycle and in order, because then the newest write is always the
-  // one sitting in the bypass network. The MDU breaks it: the bypass
-  // network matches on rd alone and has no notion of age, so an OLDER
-  // producer's live entry masks the busy bit for the newer, slower write.
-  //
-  // riscof mul-01 caught exactly this:
-  //     addi x31, x31, 1285   -> x31 = 0xb505, and into the bypass network
-  //     mul  x31, x31, x31    -> dispatched to the MDU, 2 cycles out
-  //     sw   x31, 0(x1)       -> bypass hit on the addi, stored 0xb505
-  // The store read a value that was already stale.
-  //
-  // Since the MDU is not on the bypass network at all, ANY hit on its
-  // destination is necessarily from an older instruction, so the answer
-  // is simply to ignore `hit` for that one register. Issue is in order,
-  // so nothing younger than the multiply can be the true producer.
-  //
-  // One MDU operation is in flight at a time (enforced by
-  // mdu_struct_stall and asserted in cpu_core.sv), so a single rd plus a
-  // valid bit is the whole of the state needed.
-  // A younger branch redirect must not clear this older pending result.
+  // Ignore bypass hits for the pending MDU destination: they can contain an
+  // older writer's value. Track one destination until MDU writeback; redirects
+  // must not discard the outstanding result.
   logic       mdu_pending_q;
   logic [4:0] mdu_pending_rd_q;
 
@@ -514,21 +419,8 @@ module issue_stage (
         o_branch_taken  = actual_taken;
         o_branch_target = actual_target;
 
-        // Indirect jumps are now predicted for the case that matters:
-        // a function return, via the return address stack in fetch
-        // (rtl/pipeline/ras.sv). Redirect only when that prediction was
-        // absent or wrong - exactly the same test as JAL uses.
-        //
-        // This used to be an unconditional `branch_mispredict_r = 1'b1`,
-        // i.e. a guaranteed full flush on every JALR, including every
-        // function return. At 2-wide issue each of those flushes costs
-        // twice as many issue slots as it did at 1-wide, which is what
-        // made this the highest-value prediction work left.
-        //
-        // A JALR the RAS cannot predict (a computed jump, or a return
-        // with an empty/stale stack) simply arrives with pred_taken low
-        // and redirects as before - no correctness dependence on the
-        // stack being right.
+        // JALR redirects when its resolved target differs from the RAS prediction
+        // or no prediction is available.
         if (!buf_uop0_q.pred_taken || (actual_target != buf_uop0_q.pred_target)) begin
           branch_mispredict_r  = 1'b1;
           branch_redirect_pc_r = actual_target;
@@ -612,11 +504,8 @@ module issue_stage (
         end
       end
       else if (buf_uop0_q.is_mdu) begin
-        // RV32M. Checked BEFORE the generic ALU arm below, because these
-        // share opcode OP and would otherwise fall through to ALU0 and be
-        // executed as whatever funct3 happens to decode to. Accepting is
-        // safe here: downstream_stall already includes mdu_struct_stall,
-        // so dispatch_en cannot be high unless the MDU is idle.
+        // Check MDU before generic ALU dispatch because both use opcode OP.
+        // The downstream stall guarantees that the MDU is ready.
         o_mdu_valid     = 1'b1;
         o_mdu_uop       = buf_uop0_q;
         alu0_if.m_valid = 1'b0;

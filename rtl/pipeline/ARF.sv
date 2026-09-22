@@ -1,17 +1,6 @@
-// =================================================================
-// ARF - architectural register file, 4 read ports / 2 write ports
-// =================================================================
-// Two read ports and one write port per issue lane. Lane 0 is the
-// older instruction of a bundle, lane 1 the younger.
-//
-// Write conflicts: the two write ports must never target the same
-// non-zero rd in the same cycle. Issue's hazard check forbids
-// intra-bundle WAW (rtl/pipeline/issue_hazard.sv), and the two retire
-// lanes only ever carry instructions from the same bundle, so this
-// cannot happen - it is checked by assertion below. The priority
-// encoding (lane 1 wins, being younger in program order) exists so a
-// violation degrades to "architecturally correct anyway" rather than
-// to an X or a lost write.
+// Architectural register file with four read ports and two write ports.
+// x0 always reads zero. Issue prohibits simultaneous writes to the same
+// nonzero register; lane 1 has priority if a write conflict occurs.
 
 module ARF (
   input  logic       clk,
@@ -77,10 +66,7 @@ module ARF (
   assign o_rs2_data1 = (i_rs2_1 == 5'd0 || !i_re1) ? 32'd0 : base_reg[i_rs2_1];
 
 `ifdef SIMULATION
-  // The two write ports carry the two lanes of ONE bundle, and Issue
-  // forbids intra-bundle WAW. If this fires, either the hazard check is
-  // broken or the two retire lanes have drifted out of step - both mean
-  // a register is getting an unpredictable value.
+  // The two write ports must not target the same nonzero register.
   assert_no_write_conflict: assert property (
     @(posedge clk) disable iff (!rst_n)
     !(wr0_en && wr1_en && (i_rd0 == i_rd1))

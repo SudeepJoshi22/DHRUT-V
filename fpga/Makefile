@@ -1,68 +1,14 @@
-# Open-source build flow for the Sipeed Tang Nano 20K (GW2AR-18 / GW2AR-LV18QN88C8/I7)
-# Requires OSS CAD Suite tools on your PATH: yosys, nextpnr-himbaechel, gowin_pack, openFPGALoader
-#
-# ---- Quick resource/synthesis check (no PnR, no .cst needed) --------------
-#   make check TOP=<top_module> FILELIST=<file.f>
-#     e.g. make check TOP=blink   FILELIST=blink.f
-#          make check TOP=cpu_top FILELIST=cpu_top_filelist.f
-#     NOT cpu_core: it has interface ports and cannot be a top (see below).
-#   -> elaborates + maps to Gowin primitives + prints `stat` (LUT/FF/BRAM/DSP).
-#      Use this for anything that doesn't have physical top-level ports yet.
-#
-#   make synth TOP=<top_module> FILELIST=<file.f>
-#     Same as `check`, but also writes <top_module>.json (the netlist),
-#     in case you want to inspect it or feed it to PnR later.
-#
-# A <name>.f file lists RTL source files one per line (Yosys `-f` filelist
-# format; '#' comments allowed). Order matters: packages/interfaces must
-# come before files that import/instantiate them.
-#
-# ---- Full board flow: synth + PnR + pack + flash ---------------------------
-#   make bitstream TOP=<top_module> FILELIST=<file.f> CST=<pins.cst>
-#     e.g. make bitstream TOP=blink FILELIST=blink.f CST=tangnano20k.cst
-#   make flash    TOP=... FILELIST=... CST=...   -> flash to SRAM (temporary)
-#   make flash-nv TOP=... FILELIST=... CST=...   -> flash to onboard flash
-#
-#   make clean TOP=<top_module>   -> remove that top's generated files
-#
-# ---- CPU on hardware -------------------------------------------------------
-# cpu_core has SystemVerilog *interface* ports (mem_if.master imem_if/dmem_if),
-# so it cannot be a synthesis top on its own -- there is no parent to
-# instantiate the interfaces, and a .cst can only constrain flat scalar ports.
-# rtl/cpu_top.sv is the wrapper: it instantiates the two mem_if instances at
-# the right widths (imem 64-bit, dmem 32-bit), hooks cpu_core onto them, backs
-# both with BSRAM, and exposes clk/rst_n_btn/led.
-#
-#   make mem TEST=add                                   # program image -> *.hex
-#   make check     TOP=cpu_top FILELIST=cpu_top_filelist.f
-#   make bitstream TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
-#   make flash     TOP=cpu_top FILELIST=cpu_top_filelist.f CST=cpu_top.cst
-#
-# Hardware benchmarks use the same Makefile entry point:
-#   make benchmark BENCH=dhrystone ITERATIONS=50000
-#   make benchmark-upload BENCH=dhrystone ITERATIONS=50000 PORT=/dev/serial/by-id/...
-#   make benchmark-flash BENCH=coremark ITERATIONS=1000
-#
-# Run `make mem` FIRST: cpu_top's $readmemh reads imem_init.hex/dmem_init.hex
-# from this directory at elaboration time, so synthesis needs them present.
+# Tang Nano 20K build, flash and UART workflow. See fpga/README.md.
+# Requires OSS CAD Suite. Generate memory images before CPU synthesis.
 
 DEVICE     = GW2AR-LV18QN88C8/I7
 FAMILY     = GW2A-18C
 
-# Locate the repository-installed cross compiler even when OSS CAD Suite is
-# the active environment. This lets benchmark-flash compose firmware building
-# and FPGA synthesis without asking users to mix the simulation venv into the
-# OSS CAD PATH. Fall back to the caller's PATH for a system installation.
-# The second pattern supports this repository's documented two-clone setup,
-# where the stable DHRUT-V clone owns the shared simulation toolchain.
+# Find the cross compiler in this clone or the adjacent stable clone; fall back to PATH.
 RISCV_BIN  := $(firstword $(wildcard ../tools/toolchain/xpack-riscv-none-elf-gcc-*/bin ../../DHRUT-V/tools/toolchain/xpack-riscv-none-elf-gcc-*/bin))
 RISCV_PATH := $(if $(RISCV_BIN),$(abspath $(RISCV_BIN)):,)
 
-# The Tang Nano 20K's oscillator. WITHOUT this nextpnr assumes 12 MHz, reports
-# "PASS at 12.00 MHz", and never checks the design against the clock it will
-# actually run at -- the Fmax it prints is then an informational by-product
-# rather than a met constraint. Set it so timing is genuinely verified, and so
-# the placer optimises for the real target.
+# Place-and-route clock constraint matches the 27 MHz board oscillator.
 FREQ_MHZ   = 27
 PNR_OPTS   ?=
 
@@ -76,24 +22,10 @@ JSON       = $(TOP).json
 PACK_JSON  = $(TOP).pack.json
 BITSTREAM  = $(TOP).fs
 
-# ---- Synthesis-only: resource check, no PnR, no CST required ---------------
-# Turns a .f filelist into a space-separated file list, fed to `read_slang`
-# in ONE call (the slang-based frontend, via the sv-elab plugin bundled in
-# OSS CAD Suite). Unlike Yosys's built-in -sv frontend, read_slang is a
-# full SystemVerilog elaborator — it handles unpacked structs/arrays,
-# interfaces, etc. correctly, so generated code (e.g. PeakRDL output)
-# doesn't need to be patched to work here.
+# Read source files in dependency order using the SystemVerilog slang frontend.
 BUILD_FILES = FILES=$$(grep -v '^[[:space:]]*\#' $(FILELIST) | grep -v '^[[:space:]]*$$' | tr '\n' ' ');
 
-# -nowidelut: map to plain LUT4s instead of the MUX2_LUT5..8 wide-LUT tree.
-# Counter-intuitively this is smaller AND easier to route on this design:
-#   default     LUT4 17015  MUX2_LUT 5706
-#   -nowidelut  LUT4 14257  MUX2_LUT    0
-# Wide LUTs also tie groups of LUT4s into clusters that must be placed
-# adjacently, and at 87% utilisation that congestion stopped nextpnr's router
-# converging (overused wires climbed 18 -> 426 over 136k iterations). Removing
-# them drops utilisation to ~69% and frees the placer.
-# Override with SYNTH_OPTS= to compare.
+# Map to LUT4s without wide-LUT mux clusters.
 SYNTH_OPTS ?= -nowidelut
 
 check:
@@ -102,13 +34,7 @@ check:
 synth:
 	$(BUILD_FILES) yosys -m slang -p "read_slang $$FILES --top $(TOP); synth_gowin -top $(TOP) $(SYNTH_OPTS) -json $(JSON); stat"
 
-# ---- Full flow: synth -> PnR -> pack -> (optionally) flash -----------------
-# The netlist depends on every source the filelist NAMES, not just on the
-# filelist itself. Depending on $(FILELIST) alone meant that editing RTL
-# without touching the list left a stale .json in place: make skipped
-# synthesis and nextpnr ran on the old netlist. That surfaced as a baffling
-# "ERROR: Unconstrained IO:rst_n_btn_IBUF_I" after a port was renamed -- the
-# netlist still had the old port name while the .cst had the new one.
+# Rebuild the netlist when the filelist, RTL or memory images change.
 SRCS = $(shell grep -v '^[[:space:]]*\#' $(FILELIST) 2>/dev/null | grep -v '^[[:space:]]*$$')
 
 # Program contents are baked into the netlist; changing make mem must rebuild it.
@@ -152,12 +78,7 @@ flash-cpu-nv:
 	@test -f "$(CPU_BITSTREAM)" || { echo "CPU bitstream not found: $(CPU_BITSTREAM). Run benchmark-flash once first." >&2; exit 2; }
 	openFPGALoader -b tangnano20k -f "$(CPU_BITSTREAM)"
 
-# ---- Program image for cpu_top's BSRAMs ------------------------------------
-# Converts a test built by tools/simulate.sh into the two $readmemh files
-# cpu_top instantiates its BSRAMs with. mkmem.py also prints the program's real
-# .tohost address, which tests/linker.ld floats after .text -- pass it through
-# as TOHOST_ADDR if it differs from cpu_top.sv's default, or the PASS LED will
-# never light.
+# Generate BRAM images from a test ELF/hex pair; report its tohost address.
 TEST ?= add
 TEST_DIR = ../tests/build/$(TEST)
 
@@ -314,17 +235,7 @@ clean-all: clean-mem
 	@rm -rf formal/*/
 	@echo "Done. Sources untouched."
 
-# ---- Per-module area report -------------------------------------------------
-# Ranks every module by LUT usage so area work can be aimed rather than
-# guessed. Always runs synthesis to completion: cell counts taken before
-# techmap do NOT predict post-ABC9 LUTs (shrinking the fetch queue once looked
-# like -2,771 cells pre-map and turned out to be +2,750 LUTs after).
-#
-#   make area                     -> rank modules, print the budget verdict
-#   make area ARGS="--save b.json"    -> record a baseline
-#   make area ARGS="--compare b.json" -> per-module delta vs that baseline
-# FILELIST defaults to blink.f for the other targets, which is not what you
-# want here -- area work is always about the CPU.
+# Report full-synthesis resource totals and per-module costs for the CPU.
 AREA_FILELIST ?= cpu_top_filelist.f
 area:
 	./area_report.py --filelist $(AREA_FILELIST) $(ARGS)

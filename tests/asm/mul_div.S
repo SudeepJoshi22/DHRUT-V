@@ -1,19 +1,4 @@
-# Self-checking RV32M test: all eight operations plus the corner cases the
-# spec calls out and implementations routinely get wrong.
-#
-# Three groups, and the last two matter most:
-#   1. ordinary values, including the four MUL forms
-#   2. divide by zero -- does NOT trap; DIV/DIVU give -1, REM/REMU give the
-#      dividend unchanged
-#   3. signed overflow -2^31 / -1 -- does NOT trap; quotient wraps to
-#      -2^31, remainder is 0
-#
-# Also exercises the pipeline behaviour, not just the arithmetic:
-#   * back-to-back dependent M ops (the scoreboard must hold the consumer
-#     back -- the MDU is not on the bypass network)
-#   * independent ALU work immediately after an M op, checking that the
-#     serialized MDU boundary resumes cleanly
-#   * a divide whose result is consumed many instructions later
+# Check all eight RV32M operations, divide special cases and pipeline dependencies.
 
 .section .text
 .globl _start
@@ -170,13 +155,7 @@ _start:
     li   x4, 10
     bne  x11, x4, fail
 
-    # ── Pipeline: consumer reads an MDU dest that is ALSO live in the
-    #    bypass network from an OLDER producer. This is the exact shape
-    #    riscof mul-01 failed on, and it is the one a naive
-    #    "busy || bypass_hit" readiness rule gets wrong: the addi below
-    #    puts x31 into the bypass network, the mul then targets the SAME
-    #    register, and a consumer that trusts the bypass hit reads the
-    #    addi's stale value instead of the product.
+    # A consumer must read the MDU result despite an older bypass value for rd.
     lui  x31, 0xb
     addi x31, x31, 1285      # x31 = 0xb505, now live in the bypass network
     mul  x31, x31, x31       # same register, multi-cycle -> not bypassable

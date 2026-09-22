@@ -1,23 +1,9 @@
 #!/usr/bin/env python3
-"""
-Turn a test's Verilog byte-hex image into $readmemh files for cpu_top's BSRAMs.
+"""Convert objcopy Verilog byte hex into word and byte-lane BRAM images.
 
-tools/simulate.sh produces the program image with `objcopy -O verilog`, which
-emits "@ADDR" lines followed by space-separated bytes. $readmemh, though, wants
-one entry per line at the array's own width -- 64 bits for imem (ifetch.sv gets
-two instructions per access) and 32 bits for dmem. This script does that split.
-
-Both files are written from the SAME image, matching the testbench, where
-imem_driver.py and dmem_driver.py each load TEST_HEX into their own dict.
-
-Indices are computed exactly as bram_slave.sv computes them --
-(addr >> shift) & (depth-1) -- so the upper-bit aliasing that maps the
-0x8000_0000 link address to index 0 is reproduced here rather than assumed.
-
-Usage:
-  ./mkmem.py <image.hex> [--elf <prog.elf>] [--outdir .]
-             [--imem-depth 4096] [--dmem-depth 8192]
-"""
+Instruction and data arrays use the same image. Low address bits index each
+array; validate ELF data, BSS and stack bounds to prevent capacity overflow.
+Usage: mkmem.py image.hex --elf program.elf --outdir directory"""
 
 import argparse
 import pathlib
@@ -160,14 +146,7 @@ def main():
     write_hex(ipath, imem, 8)
     write_hex(dpath, dmem, 4)
 
-    # Per-byte-lane dmem images. fpga/rtl/bram_slave.sv splits the writable
-    # array into BYTES byte-wide memories so that each is written as a WHOLE
-    # word under its own strobe -- Yosys' Gowin BRAM rules have no mapping
-    # for a read plus a byte-masked PARTIAL write, and without the split the
-    # entire 2048x32 array lands in fabric instead of BSRAM. Each lane loads
-    # its own file because splitting a word-wide $readmemh inside an initial
-    # block does not elaborate. dmem_init.hex above is kept for reference and
-    # for any consumer that still wants the word-wide view.
+    # Generate a separate initialization file for each BRAM byte lane.
     for name, words, lanes in (("imem", imem, 8), ("dmem", dmem, 4)):
         for b in range(lanes):
             lane = [(w >> (8 * b)) & 0xFF for w in words]

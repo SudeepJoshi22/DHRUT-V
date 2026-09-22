@@ -1,21 +1,6 @@
-// Synthesis top for the Sipeed Tang Nano 20K.
-//
-// cpu_core cannot be a synthesis top on its own: its ports are SystemVerilog
-// interfaces (mem_if.master imem_if / dmem_if), and an interface is not a set
-// of wires until somebody instantiates it. With no parent, Yosys has nothing
-// to bind them to -- hence "top-level module 'cpu_core' has unconnected
-// interface port 'imem_if'" -- and it cannot resolve mem_if's DATA_W either,
-// which would silently give imem the 32-bit default when the Phase-1b fetch
-// path needs 64. tb_top.sv solves this for simulation; this file is the
-// equivalent for hardware, and additionally terminates both buses in BSRAM
-// and exposes scalar ports that tangnano20k.cst can actually constrain (a
-// .cst can only reference flat ports, never an interface).
-//
-// Memory model matches the testbench: imem and dmem are SEPARATE arrays both
-// initialised from the same program image, exactly as imem_driver.py and
-// dmem_driver.py each load TEST_HEX into their own dict. The loader writes both
-// arrays before releasing reset; CPU stores land only in dmem, so
-// self-modifying code remains unsupported just as it is in simulation.
+// Tang Nano 20K top: CPU, BRAM, UART, serial loader and status LEDs.
+// Instruction and data memories use the same initial image. The loader writes
+// both memories; CPU stores update data memory only.
 module cpu_top #(
   // 32 KB each. imem is 64 bits wide (one access returns the two instructions
   // ifetch.sv expects in s_rdata[31:0] and s_rdata[63:32]), dmem is 32.
@@ -35,17 +20,7 @@ module cpu_top #(
   parameter logic [31:0] LED_ADDR    = 32'h8000_0000 + DMEM_DEPTH * 4 - 4,
   parameter int    HEARTBEAT_BIT     = 23,          // 27 MHz >> 2^23 ~= 1.6 Hz
   parameter int    ACTIVITY_BIT      = 21,          // fetch-rate blink
-  // External reset button (S1, pin 88).
-  //
-  // MEASURED ON HARDWARE, not assumed: the pinprobe design (fpga/pinprobe.v)
-  // mirrored this pin onto the known-good led0 and showed it reads 0 when the
-  // button is RELEASED and 1 when PRESSED. The button is therefore ACTIVE
-  // HIGH, which is the opposite of the usual pull-up/press-to-ground wiring
-  // this code originally assumed -- and that inversion held the core in reset
-  // permanently, so the CPU only ran while the button was held down.
-  //
-  // Hence RST_BTN_ACTIVE_LOW = 0. Set it to 1 only for a board where the pin
-  // idles high and the press pulls it to ground.
+  // S1 (pin 88) is active high: released=0, pressed=1.
   parameter bit    USE_RST_BTN        = 1'b1,
   parameter bit    RST_BTN_ACTIVE_LOW = 1'b0
 ) (
@@ -59,13 +34,7 @@ module cpu_top #(
   output logic [5:0] led       // onboard LEDs, active low
 );
 
-  // ───────────────────────────────────────────────
-  // Reset
-  // ───────────────────────────────────────────────
-  // The core resets asynchronously (always_ff @(posedge clk or negedge rst_n)),
-  // so the reset must assert asynchronously but release synchronously to avoid
-  // recovery/removal violations. A power-on counter also holds reset for the
-  // first 256 cycles so the design comes up without touching the button.
+  // Power-on reset asserts asynchronously and releases through a synchronizer.
   logic [7:0] por_cnt = 8'h00;
   always_ff @(posedge clk) begin
     if (!por_cnt[7]) por_cnt <= por_cnt + 8'd1;
@@ -161,27 +130,8 @@ module cpu_top #(
     .bus   (ram_if.slave)
   );
 
-  // ───────────────────────────────────────────────
-  // Bringup status panel
-  // ───────────────────────────────────────────────
-  // Everything observed here is taken from the two buses at this level, so
-  // cpu_core needs no debug ports added to it.
-  //
-  // Six LEDs have to cover four questions, so they are split 1+1+2+2:
-  //   is the bitstream alive?      -> heartbeat, independent of the core, so
-  //                                   "bad bitstream" and "stuck core" look
-  //                                   different rather than identical
-  //   is the core running or hung? -> fetch activity, which BLINKS while
-  //                                   fetching and FREEZES on a hang. Sticky
-  //                                   flags cannot show this: they say where a
-  //                                   run stopped, never whether it is alive
-  //   did it finish, and pass?     -> tohost stickies, the only indicator for
-  //                                   existing tests (add.S etc.) that predate
-  //                                   software-driven LEDs
-  //   what is the program doing?   -> two LEDs the CPU drives directly
-  //
-  // Trading the two tohost LEDs for more software-driven bits is a one-line
-  // change here if a given bringup session wants a wider pattern.
+  // Status LEDs: heartbeat, fetch activity, completion, pass and two software bits.
+  // CPU reset holds the status counters and completion flags clear.
   logic [HEARTBEAT_BIT:0] hb_cnt_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) hb_cnt_q <= '0;

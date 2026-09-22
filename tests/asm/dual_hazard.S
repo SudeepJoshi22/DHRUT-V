@@ -1,17 +1,4 @@
-# Dual-issue hazard test - the cases that must NOT pair.
-#
-# Every block below is a sequence the 2-wide issue stage has to refuse to
-# pair, and where pairing anyway would produce a specific wrong answer
-# (not just a timing difference). That is the point: each check fails
-# loudly if issue_hazard.sv lets the pair through.
-#
-# Covered:
-#   1. intra-bundle RAW via rs1
-#   2. intra-bundle RAW via rs2
-#   3. intra-bundle WAW
-#   4. lane-1-incapable classes (load, store, branch, jump, CSR)
-#   5. RAW through a load result (load-use)
-#   6. x0 is not a real dependency and must NOT block pairing
+# Check RAW, WAW, lane eligibility, load-use and x0 pairing rules.
 .section .text
 .globl _start
 

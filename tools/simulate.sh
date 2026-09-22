@@ -39,10 +39,7 @@ mkdir -p $TEST_OUT_DIR
 
 echo "▶ Building test: $TEST_NAME"
 echo "  Output dir: $TEST_OUT_DIR"
-# EXTRA_CFLAGS lets a test be built with a compile-time override, e.g.
-#   EXTRA_CFLAGS=-DDELAY_SHIFT=4 ./tools/simulate.sh fpga_blink
-# which shrinks fpga_blink.S's delay loop from ~4.2M iterations (sized to be
-# watchable on hardware) down to something simulable in seconds.
+# EXTRA_CFLAGS supplies compiler overrides, e.g. -DDELAY_SHIFT=4 for fpga_blink.
 riscv-none-elf-gcc -march=rv32im_zicsr -mabi=ilp32 \
     -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
     -T $TESTS_DIR/linker.ld \
@@ -57,11 +54,7 @@ echo "  ELF: $ELF"
 echo "  HEX: $HEX"
 echo "  DIS: $DIS"
 
-# BUILD_ONLY=1 stops here, before Spike and the simulator. Needed for the FPGA
-# flow: fpga/mkmem.py turns $HEX into BSRAM init images, and a program sized for
-# hardware (e.g. fpga_blink.S at its default DELAY_SHIFT=22, ~4.2M delay
-# iterations per step) is deliberately impractical to simulate. Without this the
-# only way to produce a hardware-sized image would be to sit through that run.
+# BUILD_ONLY=1 generates firmware artifacts without running Spike or RTL.
 if [ "${BUILD_ONLY:-0}" = "1" ]; then
     echo "▶ BUILD_ONLY=1 — skipping Spike and simulation."
     exit 0
@@ -121,14 +114,7 @@ cd $SIM_DIR
 make clean
 make SIM=verilator LOG_LEVEL=DEBUG COCOTB_TEST_MODULES=run_test
 
-# ----------------------------------------
-# COLLECT REMAINING ARTIFACTS
-# ----------------------------------------
-# The waveform dump (dump.vcd) is written by tb_top.sv with a hardcoded
-# relative filename, so it always lands in $SIM_DIR (make's cwd) rather
-# than respecting an env var. Move it (and any stray simulation.log that
-# fell back to the default path) into the per-test dir so nothing is left
-# scattered in $SIM_DIR after the run.
+# Collect simulator artifacts from the shared build directory.
 for f in dump.vcd dump.fst simulation.log; do
     if [ -f "$SIM_DIR/$f" ]; then
         mv "$SIM_DIR/$f" "$TEST_OUT_DIR/$f"

@@ -1,15 +1,4 @@
-# Dual-issue pairing test.
-#
-# Long runs of INDEPENDENT ALU ops, which is the case the 2-wide issue
-# stage exists for: every adjacent pair should satisfy all of
-# issue_hazard.sv's rules and go out together. The arithmetic is
-# deliberately trivial and fully self-checking - the point is the
-# scheduling, not the ALU, which add.S/arithmetic.S already cover.
-#
-# Correctness here is checked two ways: the tohost result below, and
-# (the real gate) a cpu_trace.log that matches Spike instruction for
-# instruction. If pairing ever drops or duplicates an instruction, the
-# trace diverges even when the final register values happen to agree.
+# Check independent ALU pairs and architectural results against tohost/Spike.
 .section .text
 .globl _start
 

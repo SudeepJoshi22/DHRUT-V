@@ -11,9 +11,7 @@ import riscv_uop_pkg::*;
 module if_stage (
   input  logic        clk,
   input  logic        rst_n,
-  // How many queue entries Decode consumed this cycle (0..2). This replaces
-  // the old i_stall input: a downstream stall is simply i_pop_cnt == 0, and
-  // fetch itself is gated on queue space rather than on decode's state.
+  // Number of queue entries consumed by Decode (0..2).
   input  logic [1:0]  i_pop_cnt,
   input  logic        i_flush,
   input  logic [31:0] i_redirect_pc,
@@ -38,10 +36,7 @@ module if_stage (
 
   parameter logic [31:0] RESET_PC = 32'h8000_0000;
 
-  // Depth of the decoupling fetch queue (must be a power of 2).
-  // This replaces the old single-entry instruction buffer: fetch keeps
-  // running ahead while the queue has room, so imem stalls drain the
-  // queue instead of starving decode immediately.
+  // Fetch queue depth; must be a power of two.
   parameter int FQ_DEPTH = 8;
 
   logic [31:0] pc_q;
@@ -135,9 +130,7 @@ module if_stage (
   logic        ras_push, ras_pop;
   logic [31:0] ras_push_pc;
 
-  // A return is only predicted when the stack actually holds something;
-  // otherwise this falls back to the old behaviour (no prediction, Issue
-  // resolves and redirects).
+  // Predict returns only when the RAS has a valid top entry.
   logic s0_ret_pred, s1_ret_pred;
   assign s0_ret_pred = s0_is_ret && ras_top_valid;
 
@@ -152,13 +145,8 @@ module if_stage (
   logic query_s0, query_s1;
 
   assign query_s0 = s0_is_branch;
-  // Only query for slot 1 if control actually reaches it. A JAL in slot 0
-  // redirects away, so slot 1 is not on the fetched path and querying it
-  // would train a BTB entry for an instruction we never execute - that
-  // pollution shows up later as bogus predicted-taken with a stale target.
-  // Gating on s0_is_jal (not s0_taken) keeps this combinationally safe:
-  // query_s1 already requires !s0_is_branch, so it never depends on the
-  // BPU's own response.
+  // Query slot 1 only when slot 0 permits sequential flow. Use decoded JAL
+  // classification to avoid a combinational dependency on the BPU response.
   assign query_s1 = !s0_is_branch && !s0_is_jal && s1_is_branch;
 
   assign o_bpu_pred_is_branch = query_s0 || query_s1;
@@ -298,17 +286,8 @@ module if_stage (
     end
   end
 
-  // =================================================================
-  // Memory Interface
-  // =================================================================
-  // Request whenever we aren't flushing and the queue can accept a full
-  // 2-instruction group. fq_full already accounts for a simultaneous pop,
-  // so there is deliberately no `|| pop` override here: at full occupancy
-  // a 1-entry pop frees only ONE slot, which is not enough for a pair, and
-  // pushing anyway silently drops an instruction.
-  // Deliberately not gated on any downstream stall: a stalled consumer
-  // fills the queue rather than stopping fetch, and an imem stall drains
-  // the queue rather than starving decode.
+  // Request when not flushing and the queue has space for two instructions.
+  // fq_full accounts for simultaneous pops.
   assign imem.m_valid = !i_flush && !fq_full;
   assign imem.m_addr  = aligned_addr;
   assign imem.m_wdata = '0;
@@ -348,17 +327,7 @@ module if_stage (
   // queue's two read ports; there is nothing left to assign here.
 
 `ifdef SIMULATION
-  // ───────────────────────────────────────────────────────────────────────────
-  // Assertions to catch duplicate PC issues
-  // ───────────────────────────────────────────────────────────────────────────
-  // Both checks below carry a "self redirect" exemption. A self-targeting
-  // control transfer (`j .`, or a backward branch to itself) legitimately
-  // makes pc_q keep its value across a fetch, so the same PC is fetched
-  // and dispatched repeatedly - that is architecturally correct, not the
-  // duplicate-handshake bug these assertions guard against. The exemption
-  // is precise: it only applies when the *previous* fetch/dispatch was
-  // itself predicted to redirect to its own PC. Because the fetch queue
-  // lets fetch run far ahead, such spin loops are now routinely reached.
+  // Duplicate-PC checks permit predicted self-targeting redirects.
 
   // 1. No Duplicate Fetch: don't re-request a PC we just fetched, unless
   //    that fetch was a self-targeting redirect.
@@ -381,11 +350,7 @@ module if_stage (
       last_fetch_self_q <= 1'b0;
     end
     else if (i_flush) begin
-      // A flush redirects pc_q, so the pre-flush history says nothing
-      // about whether the next request is a duplicate. Synchronous clear,
-      // kept out of the async-reset condition -- see alu_stage.sv. These
-      // blocks are `ifdef SIMULATION so slang never sees them today, but the
-      // pattern is the same defect and would surface the moment it did.
+      // Flush clears duplicate-fetch tracking synchronously.
       last_fetched_pc_q <= 32'hFFFFFFFF;
       last_fetch_self_q <= 1'b0;
     end
@@ -400,19 +365,8 @@ module if_stage (
     fetch_fire |-> ((imem.m_addr != last_fetched_pc_q) || last_fetch_self_q)
   ) else $error("FETCH ERROR: Duplicate memory request for PC=0x%h", imem.m_addr);
 
-  // 2. No Duplicate Dispatch: don't hand the same instruction to Decode
-  //    twice. With the queue, a dispatched entry is popped, so a repeat
-  //    can only come from a genuinely re-fetched PC. The previous form
-  //    compared against $past(o_if_pc) one cycle later; tracking the last
-  //    *dispatched* PC instead keeps the check alive across stall cycles
-  //    and across queue-empty gaps.
-  //
-  //    With a 2-wide pop the tracked value is the YOUNGEST entry taken
-  //    this cycle, and the check is against the OLDEST entry taken next
-  //    time - i.e. the two PCs that are adjacent in dispatch order. The
-  //    pair popped together is guaranteed distinct by the queue's
-  //    push-contiguity assertion, so there is nothing to check within a
-  //    group.
+  // Compare the youngest consumed PC with the next oldest consumed PC.
+  // Keep the tracked PC across stalls and empty-queue cycles.
   logic [31:0] last_dispatch_pc_q;
   logic        last_dispatch_self_q;
   logic [31:0] youngest_pop_pc;
@@ -456,10 +410,7 @@ module if_stage (
     fetch_fire |-> !fq_full
   ) else $error("FETCH ERROR: fetch completed with no queue slot (PC=0x%h)", imem.m_addr);
 
-  // 4. The queue's two ways of reporting "nothing to hand over" must agree:
-  //    o_empty (pointer equality) and the head port's own valid. A
-  //    disagreement would mean Decode either sees a phantom entry or misses
-  //    a real one.
+  // Queue empty and head-valid outputs must agree.
   assert_empty_matches_head_valid: assert property (
     @(posedge clk) disable iff (!rst_n)
     (o_if_valid[0] == !fq_empty)
