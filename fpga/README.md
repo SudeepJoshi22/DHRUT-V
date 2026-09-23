@@ -358,7 +358,8 @@ Diagnosing a dark board:
   were extrapolated from a known-good `led0 = 15`. The reset button and UART
   path have been exercised on the board; UART TX/RX use documented pins 69/70.
   Wrong auxiliary LED pins show up as dark LEDs, not as a build error.
-- **The serial hardware path has passed board bringup.** The loader greeting,
-  baked Dhrystone fallback and UART-loaded `hello_uart` echo program all ran
-  over the onboard USB bridge. Reproducible benchmark sweeps and a
-  simulation-to-hardware cycle comparison remain separate work.
+- **The serial hardware path has passed board bringup and benchmark execution.**
+  The loader greeting, baked Dhrystone fallback, UART-loaded `hello_uart`, and
+  CoreMark performance and validation runs all ran over the onboard USB bridge.
+  The remaining benchmark work is the full Dhrystone sweep and the
+  simulation-to-hardware cycle comparison.

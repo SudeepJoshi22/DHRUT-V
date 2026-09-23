@@ -121,9 +121,8 @@ counts match native Verilator runs of `cpu_top` with 32 KB per memory.
 This comparison covers RTL simulation. Board cycle equivalence requires a
 measurement using the same program and conditions.
 
-Both CoreMark seed configurations have Spike validation. The recorded DUT
-result covers the performance seeds; DUT validation-seed coverage remains
-outstanding.
+Both CoreMark seed configurations have Spike and DUT validation. The hardware
+results below use the same protected sources and compiler configuration.
 
 Verification includes memory-contract checks, protected-source hashes, five
 Spike cases, reporter rejection checks and a deliberate DUT watchdog timeout.
@@ -156,20 +155,26 @@ buffer, consistent flags and unmodified protected sources. Keep compiler,
 flags, iterations, memory configuration, platform and validation status beside
 any published figure.
 
-## Hardware status and remaining work
+## Hardware results
 
-The FPGA has 32 KB instruction and data memories, a 115200-baud UART, and
-a checked serial loader. Board bringup has demonstrated the loader greeting,
-the baked Dhrystone fallback and UART-loaded custom-program interaction. Those
-are bringup checks, not recorded benchmark results.
+The FPGA has 32 KB instruction and data memories, a 115200-baud UART, and a
+checked serial loader. The runs below were loaded over UART and timed by the
+CPU's `mcycle` counter at 27 MHz. The UART output is outside the measured
+interval.
 
-Remaining work before quoting a hardware score:
+| Benchmark | Iterations | Timed cycles | Derived result | Result |
+|---|---:|---:|---:|---|
+| Dhrystone | 1,000 | 742,022 | 0.767 DMIPS/MHz | PASS |
+| Dhrystone | 10,000 | 7,520,054 | 0.757 DMIPS/MHz | PASS |
+| CoreMark, performance seeds | 1,000 | 383,046,474 | 2.610649 CoreMark/MHz | PASS |
+| CoreMark, validation seeds | 1,000 | 384,258,223 | 2.602417 CoreMark/MHz | PASS |
+| CoreMark, validation seeds | 5,000 | 1,920,795,731 | 2.603088 CoreMark/MHz | PASS |
 
-1. Sweep Dhrystone iterations on hardware (1, 100, 1,000, 10,000, 50,000) and
-   record convergence. Use the converged result, not a cold-start run.
-2. Choose CoreMark iterations from measured board duration so the timed interval
-   is at least ten seconds. At 27 MHz this is 270 million cycles. Run and record
-   both required seed sets using the actual clock frequency, not the simulation
-   bypass.
-3. Compare one low-iteration board run with this fixed-mode simulation before
-   claiming cycle equivalence.
+The CoreMark runs each exceed ten seconds and both required seed sets pass.
+The reportable performance result is **2.610649 CoreMark/MHz**. These are
+self-measured hardware results; they are not EEMBC Certification Lab results.
+
+The Dhrystone sweep is partial. The 1,000- and 10,000-iteration runs show the
+startup cost is already small, but 1, 100 and 50,000 iterations remain before
+using a converged Dhrystone figure as the headline result. A low-iteration
+board run also remains to be compared directly with the fixed-mode simulation.

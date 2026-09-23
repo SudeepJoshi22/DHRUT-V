@@ -81,9 +81,9 @@ so they stay on the older lane.
     - **ALU x2**: one per lane, single cycle.
     - **LSU** (lane 0): loads and stores, sign/zero extension, byte/halfword/word.
     - **MDU** (lane 0): RV32M. Multiply is one 33x33 signed product covering all
-      four forms; divide is radix-2 restoring long division, ~34 cycles.
-      **Non-blocking** -- a divide does not stall issue, and the scoreboard
-      holds back only its true dependents.
+      four forms; divide is radix-2 restoring long division, ~34 cycles. The
+      scoreboard tracks its outstanding result, and younger issue waits until
+      the MDU operation writes back.
 6.  **Retire (RE) x2**: One per lane. Lane 0 arbitrates ALU0 / LSU / MDU, with
     the MDU taking priority (ALU0 is held for that cycle); lane 1 takes ALU1.
     Writes back to the ARF and feeds the forwarding network.
@@ -167,11 +167,11 @@ flow.
 ```
 
 Dhrystone and CoreMark are ported under `tests/bench/` (see each directory's
-`NOTICE.md` for provenance and the DHRUT-V-specific porting changes). Since
-the core has no UART yet, both benchmarks report through a handful of
-`dhrutv_final_*` globals instead of printed text; `tools/bench_report.py`
-recovers those values from the DMEM write trace after a run and prints
-CPI/IPC and the benchmark score:
+`NOTICE.md` for provenance and the DHRUT-V-specific porting changes). Simulation
+stores the measured values through the `dhrutv_final_*` globals; the FPGA port
+prints the same values through UART. `tools/bench_report.py` recovers the
+simulation values from the DMEM write trace and prints CPI/IPC and the
+benchmark score:
 
 ```bash
 ./tools/simulate_c.sh dhrystone tests/bench/dhrystone/dhrystone.c tests/bench/dhrystone/dhrystone_main.c tests/bench/dhrystone/port.c \
@@ -230,13 +230,13 @@ DHRUT-V/
       (Gowin GW2AR-18). The 32 KB instruction/data-memory UART build uses
       17,054/20,736 LUT4 (82%) and meets 27 MHz with 28.33 MHz routed Fmax;
       programs load into BSRAM over USB UART. See [`fpga/README.md`](fpga/README.md).
-- [x] **RV32M (mul/div)**: multiply on a hard DSP, radix-2 divide, non-blocking
-      behind the scoreboard. **riscof M compliance 8/8**, and the unit is
+- [x] **RV32M (mul/div)**: multiply on a hard DSP, radix-2 divide, with
+      outstanding results tracked by the scoreboard. **riscof M compliance 8/8**, and the unit is
       formally verified against a reference model.
-- [ ] **Benchmarking and Performance Enhancements**: Dhrystone and CoreMark
-      have simulation validation and UART upload support. Dhrystone runs on the
-      board; CoreMark hardware validation, steady-state measurements and a
-      simulation-to-hardware cycle cross-check remain.
+- [ ] **Benchmarking and Performance Enhancements**: hardware CoreMark now
+      passes both required seed sets at 2.610649 CoreMark/MHz. Dhrystone has
+      1,000- and 10,000-iteration board measurements. The full Dhrystone sweep
+      and a low-iteration simulation-to-hardware cycle cross-check remain.
 - [ ] **DOOM**: Porting a bare-metal Doom engine.
 
 ---
